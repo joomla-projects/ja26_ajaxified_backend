@@ -45,16 +45,6 @@ function handleSubmit(event) {
         return;
     }
 
-    const decision = SubmissionEligibility.evaluate(context);
-
-    window.console.debug(
-        'Submission Eligibility',
-        {
-            context,
-            decision,
-        },
-    );
-
 }
 
 document.addEventListener('submit', handleSubmit);
