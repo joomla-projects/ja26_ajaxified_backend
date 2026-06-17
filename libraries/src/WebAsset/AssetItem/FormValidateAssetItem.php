@@ -42,5 +42,17 @@ class FormValidateAssetItem extends WebAssetItem implements WebAssetAttachBehavi
         Text::script('JLIB_FORM_FIELD_REQUIRED_VALUE');
         Text::script('JLIB_FORM_FIELD_REQUIRED_CHECK');
         Text::script('JLIB_FORM_FIELD_INVALID_VALUE');
+        $doc->addScriptOptions(
+            'submission-eligibility',
+            [
+                'apply'      => 'ajax',
+                'save2copy'  => 'ajax',
+
+                'save'       => 'native',
+                'cancel'     => 'native',
+                'save2new'   => 'native',
+                'save2menu'  => 'native',
+            ]
+        );
     }
 }
