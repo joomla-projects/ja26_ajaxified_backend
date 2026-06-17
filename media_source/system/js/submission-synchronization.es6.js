@@ -13,8 +13,6 @@ export default class SubmissionSynchronization {
      * @returns {Promise<void>}
      */
     static async synchronize({ response, context }) {
-        console.log('SubmissionSynchronization invoked');
-
         /*
          * Phase 1:
          * Determine whether the response remains within
@@ -32,28 +30,6 @@ export default class SubmissionSynchronization {
          */
         const html = await response.text();
 
-        console.log(
-            html.includes('<?start')
-        );
-
-        console.log(
-            html.includes('<?end')
-        );
-
-        console.log(
-            html.indexOf('<?start')
-        );
-
-        console.log(
-            html.substring(
-                html.indexOf('system-message-container'),
-                html.indexOf('system-message-container') + 500
-            )
-        );
-
-        console.log('Response HTML length');
-        console.log(html.length);
-
         /*
          * Phase 3:
          * Create a detached representation of the
@@ -61,8 +37,10 @@ export default class SubmissionSynchronization {
          */
         const detachedDocument = this.createDetachedDocument(html);
 
-        console.log('Detached document created');
-        console.log(detachedDocument);
+        SubmissionSynchronization.synchronizeWorkspaceIdentity({
+            document: detachedDocument,
+            response,
+        });
 
         this.extractMessages(detachedDocument);
 
@@ -70,10 +48,6 @@ export default class SubmissionSynchronization {
             detachedDocument,
             'toolbar'
         );
-
-        console.log('Toolbar boundary extraction');
-
-        console.log(toolbar);
 
         if (toolbar) {
             await this.applyBoundary(
@@ -93,10 +67,6 @@ export default class SubmissionSynchronization {
             'messages'
         );
 
-        console.log('Messages boundary extraction');
-
-        console.log(messages);
-
         /*if (messages) {
             await this.applyBoundary(
                 'messages',
@@ -104,13 +74,6 @@ export default class SubmissionSynchronization {
             );
         }*/
 
-        /*
-         * Future phases:
-         *
-         * Toolbar extraction
-         * Template generation
-         * DPU reconciliation
-         */
     }
 
     /**
@@ -123,11 +86,6 @@ export default class SubmissionSynchronization {
      * @returns {boolean}
      */
     static isSynchronizableResponse(response, context) {
-        console.log('Synchronizable response check');
-
-        console.log(window.location.href);
-        console.log(response.url);
-
         return true;
     }
 
@@ -168,16 +126,8 @@ export default class SubmissionSynchronization {
         );
 
         if (!script) {
-            console.log(
-                '[Ajaxified Messages] No script options found'
-            );
-
             return null;
         }
-
-        console.log(
-            '[Ajaxified Messages] Script options found'
-        );
 
         try {
             const options = JSON.parse(script.textContent);
@@ -185,17 +135,8 @@ export default class SubmissionSynchronization {
             const messages = options['joomla.messages'];
 
             if (!messages) {
-                console.log(
-                    '[Ajaxified Messages] No messages found'
-                );
-
                 return null;
             }
-
-            console.log(
-                '[Ajaxified Messages] Replaying messages:',
-                messages
-            );
 
             /*
              * Remove any currently visible alerts
@@ -238,11 +179,9 @@ export default class SubmissionSynchronization {
     * @param {HTMLDocument} document
     * @param {string} boundaryName
     *
-    * @returns {Object|null}
-    */
+     * @returns {Object|null}
+     */
     static extractBoundary(document, boundaryName) {
-        console.log(`Searching boundary: ${boundaryName}`);
-
         const walker = document.createTreeWalker(
             document.body,
             NodeFilter.SHOW_PROCESSING_INSTRUCTION
@@ -256,14 +195,6 @@ export default class SubmissionSynchronization {
          * Locate the start processing instruction.
          */
         while ((node = walker.nextNode())) {
-            console.log({
-                nodeType: node.nodeType,
-                nodeName: node.nodeName,
-                target: node.target,
-                data: node.data,
-                value: node.nodeValue,
-            });
-
             if (
                 node.target === 'start'
                 && node.data.includes(`name="${boundaryName}"`)
@@ -275,8 +206,6 @@ export default class SubmissionSynchronization {
         }
 
         if (!startNode) {
-            console.log(`Boundary not found: ${boundaryName}`);
-
             return null;
         }
 
@@ -291,16 +220,7 @@ export default class SubmissionSynchronization {
             }
         }
 
-        console.log('Boundary markers');
-
-        console.log({
-            startNode,
-            endNode,
-        });
-
         if (!endNode) {
-            console.log(`End marker missing: ${boundaryName}`);
-
             return null;
         }
 
@@ -316,10 +236,6 @@ export default class SubmissionSynchronization {
 
             current = current.nextSibling;
         }
-
-        console.log('Extracted payload');
-
-        console.log(payload);
 
         return {
             startNode,
@@ -337,8 +253,6 @@ export default class SubmissionSynchronization {
      * @returns {Promise<void>}
      */
     static async applyBoundary(boundaryName, payload) {
-        console.log(`Applying boundary: ${boundaryName}`);
-
         let html = `<template for="${boundaryName}">`;
 
         payload.forEach((node) => {
@@ -353,10 +267,6 @@ export default class SubmissionSynchronization {
 
         html += '</template>';
 
-        console.log('Generated template HTML');
-
-        console.log(html);
-
         const stream = document.body.streamAppendHTMLUnsafe();
 
         const writer = stream.getWriter();
@@ -364,9 +274,52 @@ export default class SubmissionSynchronization {
         await writer.write(html);
 
         await writer.close();
+    }
 
-        console.log('Boundary streamed');
+    /**
+ * Synchronize workspace identity.
+ *
+ * @param {Document} document
+ * @param {Response} response
+ */
+    static synchronizeWorkspaceIdentity({
+        document,
+        response,
+    }) {
+        history.replaceState(
+            history.state,
+            '',
+            response.url,
+        );
 
-        console.log(boundaryName);
+        const detachedForm = document.querySelector('form[name="adminForm"]');
+        const liveForm = window.document.querySelector('form[name="adminForm"]');
+
+        liveForm.action = detachedForm.action;
+
+        const liveId = window.document.querySelector('[name="jform[id]"]');
+        const responseId = document.querySelector('[name="jform[id]"]');
+
+        liveId.value = responseId.value;
+
+        const liveAliasField = window.document.querySelector(
+            '[name="jform[alias]"]',
+        );
+
+        const responseAliasField = document.querySelector(
+            '[name="jform[alias]"]',
+        );
+
+        liveAliasField.value = responseAliasField.value;
+
+        const liveVersionField = window.document.querySelector(
+            '[name="jform[version]"]',
+        );
+
+        const responseVersionField = document.querySelector(
+            '[name="jform[version]"]',
+        );
+
+        liveVersionField.value = responseVersionField.value;
     }
 }
