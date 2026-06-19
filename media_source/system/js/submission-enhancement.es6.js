@@ -49,31 +49,26 @@ async function handleSubmit(event) {
 
     const decision = SubmissionEligibility.evaluate(context);
 
-    console.log('Submission eligibility');
-    console.log(decision);
-
     if (!decision.eligible) {
         return;
     }
 
     event.preventDefault();
 
-    console.log('Native submission prevented');
+    try {
+        const response = await SubmissionTransport.send(context);
 
-    console.log('Context created');
-    console.log(context);
+        await SubmissionSynchronization.synchronize({
+            response,
+            context,
+        });
+    } catch (error) {
+        if (error.name === 'SubmissionBlockedError') {
+            return;
+        }
 
-    console.log('Calling transport');
-
-    const response = await SubmissionTransport.send(context);
-
-    console.log('Transport response received');
-    console.log(response);
-
-    await SubmissionSynchronization.synchronize({
-        response,
-        context,
-    });
+        throw error;
+    }
 }
 
 document.addEventListener('submit', handleSubmit);

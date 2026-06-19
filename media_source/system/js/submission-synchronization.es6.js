@@ -3,6 +3,13 @@
  * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
+import AssetSynchronizer from './asset-synchronizer.es6.js';
+import BoundarySynchronizer from './boundary-synchronizer.es6.js';
+import ResponseSnapshot from './response-snapshot.es6.js';
+import RuntimeOptionsSynchronizer from './runtime-options-synchronizer.es6.js';
+import RuntimeLifecycleManager from './runtime-lifecycle-manager.es6.js';
+import WorkspaceSynchronizer from './workspace-synchronizer.es6.js';
+
 export default class SubmissionSynchronization {
     /**
      * Apply server-declared updates from a response.
@@ -25,55 +32,28 @@ export default class SubmissionSynchronization {
         }
 
         /*
-         * Phase 2:
-         * Resolve the canonical HTML response.
-         */
-        const html = await response.text();
-
-        /*
          * Phase 3:
-         * Create a detached representation of the
-         * server-rendered document.
-         */
-        const detachedDocument = this.createDetachedDocument(html);
+         * Interpret the response into an immutable snapshot.
+        */
 
-        SubmissionSynchronization.synchronizeWorkspaceIdentity({
-            document: detachedDocument,
-            response,
-        });
+        const snapshot = await ResponseSnapshot.from(response);
 
-        this.extractMessages(detachedDocument);
+        await AssetSynchronizer.synchronize(snapshot);
 
-        const toolbar = this.extractBoundary(
-            detachedDocument,
+        WorkspaceSynchronizer.synchronize(snapshot);
+
+        RuntimeOptionsSynchronizer.synchronize(snapshot);
+
+        const boundaryRoot = await BoundarySynchronizer.synchronize(
+            snapshot,
             'toolbar'
         );
 
-        if (toolbar) {
-            await this.applyBoundary(
-                'toolbar',
-                toolbar.payload
-            );
+        if (boundaryRoot) {
+            RuntimeLifecycleManager.activate(boundaryRoot);
         }
 
-
-
-        /*
-         * Phase 4:
-         * Discover server-declared synchronization boundaries.
-         */
-        const messages = this.extractBoundary(
-            detachedDocument,
-            'messages'
-        );
-
-        /*if (messages) {
-            await this.applyBoundary(
-                'messages',
-                messages.payload
-            );
-        }*/
-
+        this.replayMessages(snapshot.messages);
     }
 
     /**
@@ -99,227 +79,41 @@ export default class SubmissionSynchronization {
     }
 
     /**
-     * Create a detached HTML document.
+     * Replay Joomla messages using Joomla's native renderer.
      *
-     * @param {string} html
-     *
-     * @returns {HTMLDocument}
-     */
-    static createDetachedDocument(html) {
-        return new DOMParser().parseFromString(
-            html,
-            'text/html'
-        );
-    }
-
-    /**
-     * Extract Joomla messages from the detached document
-     * and replay Joomla's native renderer.
-     *
-     * @param {HTMLDocument} detachedDocument
+     * @param {Array|null} messages
      *
      * @returns {Array|null}
      */
-    static extractMessages(detachedDocument) {
-        const script = detachedDocument.querySelector(
-            'script.joomla-script-options'
-        );
-
-        if (!script) {
+    static replayMessages(messages) {
+        if (!messages) {
             return null;
         }
 
-        try {
-            const options = JSON.parse(script.textContent);
-
-            const messages = options['joomla.messages'];
-
-            if (!messages) {
-                return null;
-            }
-
-            /*
-             * Remove any currently visible alerts
-             * before replaying the new ones.
-             */
-            document
-                .querySelectorAll(
-                    '#system-message-container joomla-alert'
-                )
-                .forEach((alert) => {
-                    alert.remove();
-                });
-
-            /*
-             * Replay Joomla's native rendering loop.
-             */
-            messages.forEach((message) => {
-                Joomla.renderMessages(
-                    message,
-                    undefined,
-                    true,
-                    undefined
-                );
+        /*
+         * Remove any currently visible alerts
+         * before replaying the new ones.
+         */
+        window.document
+            .querySelectorAll(
+                '#system-message-container joomla-alert'
+            )
+            .forEach((alert) => {
+                alert.remove();
             });
 
-            return messages;
-        } catch (error) {
-            console.error(
-                '[Ajaxified Messages] Failed to parse script options',
-                error
+        /*
+         * Replay Joomla's native rendering loop.
+         */
+        messages.forEach((message) => {
+            Joomla.renderMessages(
+                message,
+                undefined,
+                true,
+                undefined
             );
-
-            return null;
-        }
-    }
-
-    /**
-    * Extract a server-declared synchronization boundary.
-    *
-    * @param {HTMLDocument} document
-    * @param {string} boundaryName
-    *
-     * @returns {Object|null}
-     */
-    static extractBoundary(document, boundaryName) {
-        const walker = document.createTreeWalker(
-            document.body,
-            NodeFilter.SHOW_PROCESSING_INSTRUCTION
-        );
-
-        let startNode = null;
-        let endNode = null;
-        let node;
-
-        /*
-         * Locate the start processing instruction.
-         */
-        while ((node = walker.nextNode())) {
-            if (
-                node.target === 'start'
-                && node.data.includes(`name="${boundaryName}"`)
-            ) {
-                startNode = node;
-
-                break;
-            }
-        }
-
-        if (!startNode) {
-            return null;
-        }
-
-        /*
-         * Continue walking until the matching end marker.
-         */
-        while ((node = walker.nextNode())) {
-            if (node.target === 'end') {
-                endNode = node;
-
-                break;
-            }
-        }
-
-        if (!endNode) {
-            return null;
-        }
-
-        /*
-         * Extract everything between the boundaries.
-         */
-        const payload = [];
-
-        let current = startNode.nextSibling;
-
-        while (current && current !== endNode) {
-            payload.push(current);
-
-            current = current.nextSibling;
-        }
-
-        return {
-            startNode,
-            endNode,
-            payload,
-        };
-    }
-
-    /**
-     * Apply a synchronization boundary using DPU.
-     *
-     * @param {string} boundaryName
-     * @param {Node[]} payload
-     *
-     * @returns {Promise<void>}
-     */
-    static async applyBoundary(boundaryName, payload) {
-        let html = `<template for="${boundaryName}">`;
-
-        payload.forEach((node) => {
-            const clone = node.cloneNode(true);
-
-            if (clone.nodeType === Node.ELEMENT_NODE) {
-                html += clone.outerHTML;
-            } else {
-                html += clone.textContent;
-            }
         });
 
-        html += '</template>';
-
-        const stream = document.body.streamAppendHTMLUnsafe();
-
-        const writer = stream.getWriter();
-
-        await writer.write(html);
-
-        await writer.close();
-    }
-
-    /**
- * Synchronize workspace identity.
- *
- * @param {Document} document
- * @param {Response} response
- */
-    static synchronizeWorkspaceIdentity({
-        document,
-        response,
-    }) {
-        history.replaceState(
-            history.state,
-            '',
-            response.url,
-        );
-
-        const detachedForm = document.querySelector('form[name="adminForm"]');
-        const liveForm = window.document.querySelector('form[name="adminForm"]');
-
-        liveForm.action = detachedForm.action;
-
-        const liveId = window.document.querySelector('[name="jform[id]"]');
-        const responseId = document.querySelector('[name="jform[id]"]');
-
-        liveId.value = responseId.value;
-
-        const liveAliasField = window.document.querySelector(
-            '[name="jform[alias]"]',
-        );
-
-        const responseAliasField = document.querySelector(
-            '[name="jform[alias]"]',
-        );
-
-        liveAliasField.value = responseAliasField.value;
-
-        const liveVersionField = window.document.querySelector(
-            '[name="jform[version]"]',
-        );
-
-        const responseVersionField = document.querySelector(
-            '[name="jform[version]"]',
-        );
-
-        liveVersionField.value = responseVersionField.value;
+        return messages;
     }
 }
