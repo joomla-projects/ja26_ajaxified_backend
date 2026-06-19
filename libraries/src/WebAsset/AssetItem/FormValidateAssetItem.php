@@ -45,13 +45,13 @@ class FormValidateAssetItem extends WebAssetItem implements WebAssetAttachBehavi
         $doc->addScriptOptions(
             'submission-eligibility',
             [
-                'apply'      => 'ajax',
-                'save2copy'  => 'ajax',
+                'apply'     => 'ajax',
+                'save2copy' => 'ajax',
 
-                'save'       => 'native',
-                'cancel'     => 'native',
-                'save2new'   => 'native',
-                'save2menu'  => 'native',
+                'save'      => 'native',
+                'cancel'    => 'native',
+                'save2new'  => 'native',
+                'save2menu' => 'native',
             ]
         );
     }
