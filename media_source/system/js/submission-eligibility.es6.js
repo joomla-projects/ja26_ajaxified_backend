@@ -8,6 +8,7 @@ const REASONS = {
     LIST_ACTION: 'list-action',
     WORKSPACE_EXIT: 'workspace-exit',
     UNSUPPORTED_EMPTY_TASK: 'unsupported-empty-task',
+    INSECURE_CONTEXT: 'insecure-context',
 };
 
 /**
@@ -41,6 +42,13 @@ export default class SubmissionEligibility {
      * @returns {{eligible: boolean, reason: string}}
      */
     static evaluate(context) {
+        if (!window.isSecureContext) {
+            return {
+                eligible: false,
+                reason: REASONS.INSECURE_CONTEXT,
+            };
+        }
+
         if (isEmptyTaskSubmission(context)) {
             return {
                 eligible: false,

@@ -22,7 +22,9 @@ const serializeBoundary = (boundaryName, payload) => {
 };
 
 const applyBoundary = async (boundaryName, payload) => {
-    const stream = document.body.streamAppendHTMLUnsafe();
+    const stream = document.body.streamAppendHTMLUnsafe({
+        runScripts: false,
+    });
 
     const writer = stream.getWriter();
 
