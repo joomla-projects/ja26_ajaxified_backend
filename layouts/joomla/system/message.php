@@ -69,4 +69,8 @@ if (is_array($msgList) && !empty($msgList)) {
     $document->addScriptOptions('joomla.messages', $messages);
 }
 ?>
-<div id="system-message-container" aria-live="polite"><?php echo $msgOutput; ?></div>
+<div id="system-message-container" aria-live="polite">
+    <?php echo '<?start name="messages"?>'; ?>
+    <?php echo $msgOutput; ?>
+    <?php echo '<?end?>'; ?>
+</div>

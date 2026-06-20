@@ -8,30 +8,8 @@ const REASONS = {
     LIST_ACTION: 'list-action',
     WORKSPACE_EXIT: 'workspace-exit',
     UNSUPPORTED_EMPTY_TASK: 'unsupported-empty-task',
+    INSECURE_CONTEXT: 'insecure-context',
 };
-
-const CONTEXT_PRESERVING_EDIT_ACTIONS = [
-    'apply',
-    'save2copy',
-];
-
-const WORKSPACE_EXIT_ACTIONS = [
-    'save',
-    'cancel',
-    'save2new',
-];
-
-const LIST_ACTIONS = [
-    'publish',
-    'unpublish',
-    'archive',
-    'trash',
-    'delete',
-    'checkin',
-    'saveorder',
-    'batch',
-    'runTransition',
-];
 
 /**
  * Determine whether a submission has no normalized action.
@@ -43,31 +21,14 @@ const LIST_ACTIONS = [
 const isEmptyTaskSubmission = (context) => !context.action;
 
 /**
- * Determine whether a submission preserves the current edit workspace.
+ * Retrieve the server-defined eligibility policy.
  *
- * @param {string|null} action
- *
- * @returns {boolean}
+ * @returns {Object<string, string>}
  */
-const isContextPreservingEdit = (action) => CONTEXT_PRESERVING_EDIT_ACTIONS.includes(action);
-
-/**
- * Determine whether a submission exits the current workspace.
- *
- * @param {string|null} action
- *
- * @returns {boolean}
- */
-const isWorkspaceExit = (action) => WORKSPACE_EXIT_ACTIONS.includes(action);
-
-/**
- * Determine whether a submission performs a list action.
- *
- * @param {string|null} action
- *
- * @returns {boolean}
- */
-const isListAction = (action) => LIST_ACTIONS.includes(action);
+const getEligibilityPolicy = () => Joomla.getOptions(
+    'submission-eligibility',
+    {}
+);
 
 /**
  * Evaluate submission eligibility.
@@ -81,6 +42,13 @@ export default class SubmissionEligibility {
      * @returns {{eligible: boolean, reason: string}}
      */
     static evaluate(context) {
+        if (!window.isSecureContext) {
+            return {
+                eligible: false,
+                reason: REASONS.INSECURE_CONTEXT,
+            };
+        }
+
         if (isEmptyTaskSubmission(context)) {
             return {
                 eligible: false,
@@ -88,21 +56,18 @@ export default class SubmissionEligibility {
             };
         }
 
-        if (isContextPreservingEdit(context.action)) {
+        const policy = getEligibilityPolicy();
+
+        const decision = policy[context.action];
+
+        if (decision === 'ajax') {
             return {
                 eligible: true,
                 reason: REASONS.CONTEXT_PRESERVING_EDIT,
             };
         }
 
-        if (isListAction(context.action)) {
-            return {
-                eligible: true,
-                reason: REASONS.LIST_ACTION,
-            };
-        }
-
-        if (isWorkspaceExit(context.action)) {
+        if (decision === 'native') {
             return {
                 eligible: false,
                 reason: REASONS.WORKSPACE_EXIT,
