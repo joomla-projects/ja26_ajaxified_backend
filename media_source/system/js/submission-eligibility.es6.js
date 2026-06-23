@@ -50,9 +50,13 @@ export default class SubmissionEligibility {
         }
 
         if (isEmptyTaskSubmission(context)) {
+            const decision = getEligibilityPolicy()[''];
+
             return {
-                eligible: false,
-                reason: REASONS.UNSUPPORTED_EMPTY_TASK,
+                eligible: decision === 'ajax',
+                reason: decision === 'ajax'
+                    ? REASONS.LIST_ACTION
+                    : REASONS.UNSUPPORTED_EMPTY_TASK,
             };
         }
 

@@ -30,7 +30,10 @@ use Joomla\Utilities\ArrayHelper;
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
 $wa->useScript('table.columns')
-    ->useScript('multiselect');
+    ->useScript('multiselect')
+    ->useScript('submission-enhancement');
+
+$this->getDocument()->addScriptOptions('submission-eligibility', ['' => 'ajax']);
 
 $app       = Factory::getApplication();
 $user      = $this->getCurrentUser();
@@ -78,6 +81,7 @@ $assoc = Associations::isEnabled();
 <form action="<?php echo Route::_('index.php?option=com_content&view=articles'); ?>" method="post" name="adminForm" id="adminForm">
     <div class="row">
         <div class="col-md-12">
+            <?php echo '<?start name="j-main-container"?>'; ?>
             <div id="j-main-container" class="j-main-container">
                 <?php
                 // Search tools bar
@@ -402,6 +406,7 @@ $assoc = Associations::isEnabled();
 
                 <?php echo $this->filterForm->renderControlFields(); ?>
             </div>
+            <?php echo '<?end?>'; ?>
         </div>
     </div>
 </form>
