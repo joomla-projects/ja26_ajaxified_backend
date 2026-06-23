@@ -34,25 +34,139 @@ export default class SubmissionSynchronization {
         /*
          * Phase 3:
          * Interpret the response into an immutable snapshot.
-        */
-
+         */
         const snapshot = await ResponseSnapshot.from(response);
 
-        await AssetSynchronizer.synchronize(snapshot);
+        const strategy = this.resolveSynchronizationStrategy(context);
 
-        WorkspaceSynchronizer.synchronize(snapshot);
+        await this.synchronizeAssets(snapshot);
 
-        RuntimeOptionsSynchronizer.synchronize(snapshot);
+        this.synchronizeWorkspace(snapshot, strategy);
 
-        const boundaryRoot = await BoundarySynchronizer.synchronize(
-            snapshot,
-            'toolbar'
-        );
+        this.synchronizeRuntimeOptions(snapshot);
 
-        if (boundaryRoot) {
-            RuntimeLifecycleManager.activate(boundaryRoot);
+        await this.synchronizeBoundaries(snapshot, strategy);
+
+        this.synchronizeMessages(snapshot);
+    }
+
+    /**
+     * Resolve the synchronization strategy based on the context.
+     *
+     * @param {SubmissionContext} context
+     *
+     * @returns {{synchronizeControls: boolean, boundaries: string[]}}
+     */
+    static resolveSynchronizationStrategy(context) {
+        if (!context.action) {
+            return {
+                synchronizeControls: false,
+                boundaries: [
+                    'toolbar',
+                    'j-main-container',
+                ],
+            };
         }
 
+        const policy = this.getSynchronizationPolicy();
+        const actionPolicy = policy[context.action];
+
+        if (!actionPolicy) {
+            return this.getDefaultSynchronizationStrategy();
+        }
+
+        return {
+            synchronizeControls: actionPolicy.synchronizeControls !== false,
+            boundaries: actionPolicy.boundaries || ['toolbar'],
+        };
+    }
+
+    /**
+     * Retrieve the default synchronization strategy.
+     *
+     * @returns {{synchronizeControls: boolean, boundaries: string[]}}
+     */
+    static getDefaultSynchronizationStrategy() {
+        return {
+            synchronizeControls: true,
+            boundaries: [
+                'toolbar',
+            ],
+        };
+    }
+
+    /**
+     * Retrieve the server-defined synchronization policy.
+     *
+     * @returns {Object}
+     */
+    static getSynchronizationPolicy() {
+        return Joomla.getOptions('submission-synchronization', {});
+    }
+
+    /**
+     * Synchronize server-declared assets.
+     *
+     * @param {ResponseSnapshot} snapshot
+     *
+     * @returns {Promise<void>}
+     */
+    static async synchronizeAssets(snapshot) {
+        await AssetSynchronizer.synchronize(snapshot);
+    }
+
+    /**
+     * Synchronize the workspace based on the strategy.
+     *
+     * @param {ResponseSnapshot} snapshot
+     * @param {{synchronizeControls: boolean}} strategy
+     *
+     * @returns {void}
+     */
+    static synchronizeWorkspace(snapshot, strategy) {
+        WorkspaceSynchronizer.synchronize(snapshot, strategy);
+    }
+
+    /**
+     * Synchronize Joomla runtime options.
+     *
+     * @param {ResponseSnapshot} snapshot
+     *
+     * @returns {void}
+     */
+    static synchronizeRuntimeOptions(snapshot) {
+        RuntimeOptionsSynchronizer.synchronize(snapshot);
+    }
+
+    /**
+     * Synchronize response boundaries based on the strategy.
+     *
+     * @param {ResponseSnapshot} snapshot
+     * @param {{boundaries: string[]}} strategy
+     *
+     * @returns {Promise<void>}
+     */
+    static async synchronizeBoundaries(snapshot, strategy) {
+        for (const boundaryName of strategy.boundaries) {
+            const boundaryRoot = await BoundarySynchronizer.synchronize(
+                snapshot,
+                boundaryName
+            );
+
+            if (boundaryRoot) {
+                RuntimeLifecycleManager.activate(boundaryRoot);
+            }
+        }
+    }
+
+    /**
+     * Replay messages.
+     *
+     * @param {ResponseSnapshot} snapshot
+     *
+     * @returns {void}
+     */
+    static synchronizeMessages(snapshot) {
         this.replayMessages(snapshot.messages);
     }
 

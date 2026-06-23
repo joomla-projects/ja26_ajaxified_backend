@@ -11,7 +11,7 @@ export default class WorkspaceSynchronizer {
      *
      * @returns {void}
      */
-    static synchronize(snapshot) {
+    static synchronize(snapshot, strategy = { synchronizeControls: true }) {
         const { document: detachedDocument, response } = snapshot;
 
         this.synchronizeHistory(response);
@@ -20,7 +20,10 @@ export default class WorkspaceSynchronizer {
         const liveForm = document.querySelector('form[name="adminForm"]');
 
         this.synchronizeFormAction(detachedForm, liveForm);
-        this.synchronizeFormControls(detachedForm, liveForm);
+
+        if (strategy.synchronizeControls) {
+            this.synchronizeFormControls(detachedForm, liveForm);
+        }
     }
 
     /**
