@@ -4,7 +4,7 @@
  */
 
 const serializeBoundary = (boundaryName, payload) => {
-    let html = `<template for="${boundaryName}">`;
+    let html = `<template for="${boundaryName}"><?start name="${boundaryName}"?>`;
 
     payload.forEach((node) => {
         const clone = node.cloneNode(true);
@@ -16,7 +16,7 @@ const serializeBoundary = (boundaryName, payload) => {
         }
     });
 
-    html += '</template>';
+    html += '<?end?></template>';
 
     return html;
 };
