@@ -50,6 +50,7 @@ final class Registry
         'list'            => Helpers\ListHelper::class,
         'menu'            => Helpers\Menu::class,
         'number'          => Helpers\Number::class,
+        'progressiveSynchronization' => Helpers\ProgressiveSynchronization::class,
         'searchtools'     => Helpers\SearchTools::class,
         'select'          => Helpers\Select::class,
         'sidebar'         => Helpers\Sidebar::class,
