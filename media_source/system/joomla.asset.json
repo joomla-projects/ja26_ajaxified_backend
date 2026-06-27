@@ -660,7 +660,8 @@
         "type": "module"
       },
       "dependencies": [
-        "core"
+        "core",
+        "webcomponent.core-loader"
       ]
     },
     {
