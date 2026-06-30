@@ -21,8 +21,7 @@ use Joomla\CMS\Session\Session;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect');
+$wa->useScript('multiselect');
 
 $user      = $this->getCurrentUser();
 $userId    = $user->id;
@@ -43,6 +42,7 @@ if ($saveOrder && !empty($this->items)) {
                 <?php
                 // Search tools bar
                 echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]);
+                echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#bannerList']);
                 ?>
                 <?php if (empty($this->items)) : ?>
                     <div class="alert alert-info">
