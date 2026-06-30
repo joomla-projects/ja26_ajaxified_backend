@@ -2,44 +2,29 @@
  * @copyright  (C) 2019 Open Source Matters, Inc. <https://www.joomla.org>
  * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
-let touchStartInitialized = false;
+// The container where the draggable will be enabled
+let url;
+let direction;
+let isNested;
+let dragElementIndex;
+let dropElementIndex;
+let container = document.querySelector('.js-draggable');
+let form;
+let formData;
 
-const enableTouchStartWorkaround = () => {
-  if (touchStartInitialized) {
-    return;
-  }
-
-  // IOS 10 BUG
-  document.addEventListener('touchstart', () => {}, false);
-  touchStartInitialized = true;
-};
-
-const findDraggableContainers = (root) => {
-  const containers = root.matches?.('.js-draggable')
-    ? [root]
-    : [...(root.querySelectorAll?.('.js-draggable') || [])];
-
-  if (containers.length) {
-    return containers.map((container) => ({
-      container,
-      options: null,
-    }));
-  }
-
+if (container) {
+  /** The script expects a form with a class js-form
+   *  A table with the tbody with a class js-draggable
+   *                         with a data-url with the ajax request end point and
+   *                         with a data-direction for asc/desc
+   */
+  url = container.dataset.url;
+  direction = container.dataset.direction;
+  isNested = container.dataset.nested;
+} else if (Joomla.getOptions('draggable-list')) {
   const options = Joomla.getOptions('draggable-list');
 
-  if (!options?.id) {
-    return [];
-  }
-
-  const container = root.matches?.(options.id)
-    ? root
-    : root.querySelector?.(options.id);
-
-  if (!container) {
-    return [];
-  }
-
+  container = document.querySelector(options.id);
   /**
    * This is here to make the transition to new forms easier.
    */
@@ -47,42 +32,21 @@ const findDraggableContainers = (root) => {
     container.classList.add('js-draggable');
   }
 
-  return [{
-    container,
-    options,
-  }];
-};
+  ({ url } = options);
+  ({ direction } = options);
+  isNested = options.nested;
+}
 
-const initializeDraggable = (container, options = null) => {
-  if (container.dataset.draggableInitialized) {
-    return;
-  }
-
-  /** The script expects a form with a class js-form
-   *  A table with the tbody with a class js-draggable
-   *                         with a data-url with the ajax request end point and
-   *                         with a data-direction for asc/desc
-   */
-  const url = options?.url || container.dataset.url;
-  const direction = options?.direction || container.dataset.direction;
-  const isNested = options?.nested || container.dataset.nested;
-  let dragElementIndex;
-  let dropElementIndex;
-
+if (container) {
   // Get the form
-  const form = container.closest('form');
-
-  if (!form) {
-    return;
-  }
-
+  form = container.closest('form');
   // Get the form data
-  const formData = new FormData(form);
+  formData = new FormData(form);
   formData.delete('task');
   formData.delete('order[]');
 
-  container.dataset.draggableInitialized = 'true';
-  enableTouchStartWorkaround();
+  // IOS 10 BUG
+  document.addEventListener('touchstart', () => {}, false);
 
   const getOrderData = (rows, inputRows, dragIndex, dropIndex) => {
     let i;
@@ -230,15 +194,4 @@ const initializeDraggable = (container, options = null) => {
     .on('drop', (el) => {
       saveTheOrder(el);
     });
-};
-
-const setup = (event = {}) => {
-  const target = event.detail?.target || event.target || document;
-
-  findDraggableContainers(target).forEach(({ container, options }) => {
-    initializeDraggable(container, options);
-  });
-};
-
-setup({ target: document });
-document.addEventListener('joomla:updated', setup);
+}
