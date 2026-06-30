@@ -6,111 +6,171 @@
 const LOADER_ID = 'joomla-submission-loader';
 const DELAY = 250;
 
-const getLoadingLabel = () => window.Joomla?.Text?._?.('JLOADING') || 'Loading';
+const activeTokens = new Set();
+const formCounts = new Map();
+
+let timer = null;
+let loader = null;
+
+const getLoader = () => {
+    if (loader?.isConnected) {
+        return loader;
+    }
+
+    loader = document.getElementById(LOADER_ID);
+
+    return loader;
+};
+
+const getLoadingText = () => window.Joomla?.Text?._?.('JLOADING') || 'Loading';
 
 /**
- * Coordinates visual busy state for enhanced submissions.
+ * Mark a form as busy while one or more submissions are active.
+ *
+ * @param {HTMLFormElement} form
+ *
+ * @returns {void}
  */
-class SubmissionProgress {
-    constructor() {
-        this.timer = null;
-        this.loader = null;
-        this.active = 0;
-        this.forms = new WeakMap();
+const setFormBusy = (form) => {
+    if (!(form instanceof HTMLFormElement)) {
+        return;
     }
 
-    /**
-     * Start tracking progress for a form submission.
-     *
-     * @param {HTMLFormElement} form
-     *
-     * @returns {void}
-     */
-    start(form) {
-        this.active += 1;
+    const count = formCounts.get(form) || 0;
 
-        if (form instanceof HTMLFormElement) {
-            this.forms.set(form, (this.forms.get(form) || 0) + 1);
-            form.setAttribute('aria-busy', 'true');
-        }
-
-        document.documentElement.classList.add('joomla-submission-active');
-
-        if (!this.timer && !this.loader) {
-            this.timer = window.setTimeout(() => {
-                this.timer = null;
-                this.show();
-            }, DELAY);
-        }
+    if (count === 0) {
+        form.setAttribute('aria-busy', 'true');
     }
 
-    /**
-     * Stop tracking progress for a form submission.
-     *
-     * @param {HTMLFormElement} form
-     *
-     * @returns {void}
-     */
-    stop(form) {
-        this.active = Math.max(0, this.active - 1);
+    formCounts.set(form, count + 1);
+};
 
-        if (form instanceof HTMLFormElement) {
-            const count = Math.max(0, (this.forms.get(form) || 0) - 1);
+/**
+ * Remove one busy reference from a form.
+ *
+ * @param {HTMLFormElement} form
+ *
+ * @returns {void}
+ */
+const unsetFormBusy = (form) => {
+    if (!(form instanceof HTMLFormElement) || !formCounts.has(form)) {
+        return;
+    }
 
-            if (count > 0) {
-                this.forms.set(form, count);
-            } else {
-                this.forms.delete(form);
-                form.removeAttribute('aria-busy');
+    const count = formCounts.get(form) - 1;
+
+    if (count > 0) {
+        formCounts.set(form, count);
+
+        return;
+    }
+
+    formCounts.delete(form);
+    form.removeAttribute('aria-busy');
+};
+
+/**
+ * Show the Joomla core loader.
+ *
+ * @returns {void}
+ */
+const showLoader = () => {
+    if (getLoader()) {
+        return;
+    }
+
+    const element = document.createElement('joomla-core-loader');
+
+    element.id = LOADER_ID;
+    element.setAttribute('role', 'status');
+    element.setAttribute('aria-live', 'polite');
+    element.setAttribute('aria-label', getLoadingText());
+
+    document.body.appendChild(element);
+
+    loader = element;
+};
+
+/**
+ * Hide the Joomla core loader.
+ *
+ * @returns {void}
+ */
+const hideLoader = () => {
+    if (timer) {
+        window.clearTimeout(timer);
+        timer = null;
+    }
+
+    getLoader()?.remove();
+    loader = null;
+
+    document.documentElement.classList.remove('joomla-submission-active');
+};
+
+/**
+ * Start tracking progress for a form submission.
+ *
+ * @param {HTMLFormElement} form
+ *
+ * @returns {Function}
+ */
+const start = (form) => {
+    const token = Symbol('submission-progress');
+    let stopped = false;
+
+    activeTokens.add(token);
+    setFormBusy(form);
+
+    document.documentElement.classList.add('joomla-submission-active');
+
+    if (!timer && !getLoader()) {
+        timer = window.setTimeout(() => {
+            timer = null;
+
+            if (activeTokens.size > 0) {
+                showLoader();
             }
-        }
-
-        if (this.active > 0) {
-            return;
-        }
-
-        if (this.timer) {
-            window.clearTimeout(this.timer);
-            this.timer = null;
-        }
-
-        document.documentElement.classList.remove('joomla-submission-active');
-
-        if (this.loader) {
-            this.loader.remove();
-            this.loader = null;
-        }
+        }, DELAY);
     }
 
-    /**
-     * Show the Joomla core loader.
-     *
-     * @returns {void}
-     */
-    show() {
-        if (this.active === 0) {
+    return () => {
+        if (stopped) {
             return;
         }
 
-        const existingLoader = document.getElementById(LOADER_ID);
+        stopped = true;
 
-        if (existingLoader) {
-            this.loader = existingLoader;
+        activeTokens.delete(token);
+        unsetFormBusy(form);
 
+        if (activeTokens.size > 0) {
             return;
         }
 
-        const loader = document.createElement('joomla-core-loader');
+        hideLoader();
+    };
+};
 
-        loader.id = LOADER_ID;
-        loader.setAttribute('role', 'status');
-        loader.setAttribute('aria-live', 'polite');
-        loader.setAttribute('aria-label', getLoadingLabel());
+/**
+ * Reset all progress state.
+ *
+ * @returns {void}
+ */
+const reset = () => {
+    activeTokens.clear();
 
-        document.body.appendChild(loader);
-
-        this.loader = loader;
+    for (const form of formCounts.keys()) {
+        form.removeAttribute('aria-busy');
     }
-}
 
-export default new SubmissionProgress();
+    formCounts.clear();
+    hideLoader();
+};
+
+window.addEventListener('pagehide', reset);
+
+export default {
+    start,
+    reset,
+};

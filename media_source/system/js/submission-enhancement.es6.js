@@ -56,7 +56,7 @@ async function handleSubmit(event) {
 
     event.preventDefault();
 
-    SubmissionProgress.start(context.form);
+    const stopProgress = SubmissionProgress.start(context.form);
 
     try {
         const response = await SubmissionTransport.send(context);
@@ -72,7 +72,7 @@ async function handleSubmit(event) {
 
         throw error;
     } finally {
-        SubmissionProgress.stop(context.form);
+        stopProgress();
     }
 }
 
