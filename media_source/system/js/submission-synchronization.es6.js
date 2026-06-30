@@ -62,8 +62,8 @@ export default class SubmissionSynchronization {
             return {
                 synchronizeControls: false,
                 boundaries: [
-                    'toolbar',
                     'j-main-container',
+                    'toolbar',
                 ],
             };
         }

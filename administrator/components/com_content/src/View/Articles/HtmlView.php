@@ -14,6 +14,7 @@ use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Multilanguage;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\Toolbar\Button\DropdownButton;
@@ -33,6 +34,8 @@ use Joomla\Component\Content\Administrator\Model\ArticlesModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of items
      *
@@ -138,6 +141,22 @@ class HtmlView extends BaseHtmlView
             if (!Multilanguage::isEnabled()) {
                 unset($this->activeFilters['language']);
                 $this->filterForm->removeField('language', 'filter');
+            }
+
+            if ($this->getLayout() !== 'emptystate') {
+                $this->addAjaxifiedListViewOptions(
+                    [
+                        'publish',
+                        'unpublish',
+                        'featured',
+                        'unfeatured',
+                        'archive',
+                        'trash',
+                        'checkin',
+                        'delete',
+                        'batch',
+                    ]
+                );
             }
         } else {
             // In article associations modal we need to remove language filter if forcing a language.
