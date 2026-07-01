@@ -33,7 +33,7 @@ class JoomlaColumnsToggle extends HTMLElement {
 
   /**
    * The "media query" class list to remove, which may prevent toggling from working.
-   * Can be overriden by the attribute "classlist-remove" with a comma separated list of classes.
+   * Can be overridden by the attribute "classlist-remove" with a comma separated list of classes.
    * Example:
    *    ['d-none', 'd-xs-table-cell', 'd-sm-table-cell', 'd-md-table-cell', 'd-lg-table-cell', 'd-xl-table-cell', 'd-xxl-table-cell']
    * @type {Array}
@@ -48,7 +48,7 @@ class JoomlaColumnsToggle extends HTMLElement {
 
   /**
    * The protected columns.
-   * Can be overriden by the attribute "protect-col" with a comma separated list of selectors.
+   * Can be overridden by the attribute "protect-col" with a comma separated list of selectors.
    * @type {Array}
    * @default ['th','.toggle-ignore']
    */
