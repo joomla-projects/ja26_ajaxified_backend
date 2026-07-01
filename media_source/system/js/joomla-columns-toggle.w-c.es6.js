@@ -228,7 +228,7 @@ class JoomlaColumnsToggle extends HTMLElement {
         title = title.split(':', 2)[1].trim();
       }
 
-      // Set inital values for disabled and checked
+      // Set initial values for disabled and checked
       let disabled = '';
       let checked = 'checked';
 
