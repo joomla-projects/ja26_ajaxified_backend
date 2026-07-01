@@ -13,6 +13,7 @@ namespace Joomla\Component\Guidedtours\Administrator\View\Tours;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Multilanguage;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
 use Joomla\Component\Guidedtours\Administrator\Model\ToursModel;
@@ -28,6 +29,8 @@ use Joomla\Component\Guidedtours\Administrator\Model\ToursModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of items
      *
@@ -96,6 +99,19 @@ class HtmlView extends BaseHtmlView
         }
 
         $this->addToolbar();
+
+        if ($this->getLayout() !== 'emptystate') {
+            $this->addAjaxifiedListViewOptions(
+                [
+                    'publish',
+                    'unpublish',
+                    'archive',
+                    'trash',
+                    'checkin',
+                    'delete',
+                ]
+            );
+        }
 
         // We do not need to filter by language when multilingual is disabled
         if (!Multilanguage::isEnabled()) {
