@@ -24,8 +24,7 @@ use Joomla\Component\Fields\Administrator\Helper\FieldsHelper;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect');
+$wa->useScript('multiselect');
 
 $app       = Factory::getApplication();
 $user      = $this->getCurrentUser();
@@ -62,8 +61,10 @@ if (count($this->filterForm->getField('context')->options) > 1) {
 <form action="<?php echo Route::_('index.php?option=com_fields&view=fields&context=' . $this->state->get('filter.context')); ?>" method="post" name="adminForm" id="adminForm">
     <div class="row">
         <div class="col-md-12">
+            <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
             <div id="j-main-container" class="j-main-container">
                 <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this, 'options' => $searchToolsOptions]); ?>
+                <?php echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#fieldList']); ?>
                 <?php if (empty($this->items)) : ?>
                     <div class="alert alert-info">
                         <span class="icon-info-circle" aria-hidden="true"></span><span class="visually-hidden"><?php echo Text::_('INFO'); ?></span>
@@ -213,6 +214,7 @@ if (count($this->filterForm->getField('context')->options) > 1) {
 
                 <?php echo $this->filterForm->renderControlFields(); ?>
             </div>
+            <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
         </div>
     </div>
 </form>
