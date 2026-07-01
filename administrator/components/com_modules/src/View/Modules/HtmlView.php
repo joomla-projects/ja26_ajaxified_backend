@@ -15,6 +15,7 @@ use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Helper\ModuleHelper;
 use Joomla\CMS\Language\Multilanguage;
 use Joomla\CMS\MVC\Model\ListModel;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\ListView;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -28,6 +29,8 @@ use Joomla\CMS\MVC\View\ListView;
  */
 class HtmlView extends ListView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * The client ID for the modules we're showing
      *
@@ -192,5 +195,20 @@ class HtmlView extends ListView
                 }
             }
         }
+
+        if ($this->getLayout() === 'emptystate') {
+            return;
+        }
+
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'trash',
+                'checkin',
+                'delete',
+                'batch',
+            ]
+        );
     }
 }
