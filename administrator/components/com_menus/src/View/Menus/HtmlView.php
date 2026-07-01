@@ -12,6 +12,7 @@ namespace Joomla\Component\Menus\Administrator\View\Menus;
 
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
 use Joomla\Component\Menus\Administrator\Model\MenusModel;
@@ -27,6 +28,8 @@ use Joomla\Component\Menus\Administrator\Model\MenusModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of items
      *
@@ -106,6 +109,11 @@ class HtmlView extends BaseHtmlView
         }
 
         $this->addToolbar();
+        $this->addAjaxifiedListViewOptions(
+            [
+                'delete',
+            ]
+        );
 
         parent::display($tpl);
     }

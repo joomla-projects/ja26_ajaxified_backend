@@ -16,6 +16,7 @@ use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Multilanguage;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
 use Joomla\Component\Menus\Administrator\Model\ItemsModel;
@@ -31,6 +32,8 @@ use Joomla\Component\Menus\Administrator\Model\ItemsModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * Array used for displaying the levels filter
      *
@@ -276,6 +279,19 @@ class HtmlView extends BaseHtmlView
             }
 
             $this->filterForm->addControlField('forcedLanguage', $forcedLanguage);
+        }
+
+        if ($this->getLayout() !== 'modal') {
+            $this->addAjaxifiedListViewOptions(
+                [
+                    'publish',
+                    'unpublish',
+                    'trash',
+                    'checkin',
+                    'delete',
+                    'batch',
+                ]
+            );
         }
 
         // Add form control fields
