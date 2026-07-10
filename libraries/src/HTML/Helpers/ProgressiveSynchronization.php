@@ -9,8 +9,6 @@
 
 namespace Joomla\CMS\HTML\Helpers;
 
-use InvalidArgumentException;
-
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
@@ -59,14 +57,14 @@ abstract class ProgressiveSynchronization
      *
      * @return  void
      *
-     * @throws  InvalidArgumentException
+     * @throws  \InvalidArgumentException
      *
      * @since   __DEPLOY_VERSION__
      */
     private static function assertValidBoundaryName(string $name): void
     {
         if (!preg_match('/^[A-Za-z][A-Za-z0-9_-]*$/', $name)) {
-            throw new InvalidArgumentException(sprintf('Invalid progressive synchronization boundary name "%s".', $name));
+            throw new \InvalidArgumentException(\sprintf('Invalid progressive synchronization boundary name "%s".', $name));
         }
     }
 }
