@@ -630,7 +630,6 @@
         "core"
       ],
       "attributes": {
-        "defer": true,
         "type": "module"
       }
     },

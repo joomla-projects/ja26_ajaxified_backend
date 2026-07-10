@@ -9,11 +9,17 @@
  */
 
 use Joomla\CMS\Factory;
+use Joomla\CMS\Language\Text;
 
 defined('_JEXEC') or die;
 
 $attributes = $displayData;
 $attributeOutput = [];
+$columnsLabel = $attributes['label-columns'] ?? $attributes['data-label-columns'] ?? Text::_('JGLOBAL_COLUMNS');
+
+if (!isset($attributes['label-columns']) && !isset($attributes['data-label-columns'])) {
+    $attributes['label-columns'] = $columnsLabel;
+}
 
 foreach ($attributes as $key => $value) {
     if (!preg_match('/^[a-zA-Z_:][a-zA-Z0-9:_.-]*$/', $key) || $value === null || $value === false) {
@@ -53,7 +59,8 @@ Factory::getApplication()->getDocument()->getWebAssetManager()
                 class="btn btn-primary btn-sm dropdown-toggle"
                 data-bs-toggle="dropdown" data-bs-auto-close="false"
                 aria-haspopup="true" aria-expanded="false">
-                0/0 Columns
+                <span data-column-toggle-count>0/0</span>
+                <span data-column-toggle-label><?php echo htmlspecialchars($columnsLabel, ENT_QUOTES, 'UTF-8'); ?></span>
             </button>
             <div class="dropdown-menu dropdown-menu-end" data-bs-popper="static">
                 <ul class="list-unstyled p-2 text-nowrap mb-0" data-column-list>

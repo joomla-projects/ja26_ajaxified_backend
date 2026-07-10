@@ -33,7 +33,7 @@ class JoomlaColumnsToggle extends HTMLElement {
 
   /**
    * The "media query" class list to remove, which may prevent toggling from working.
-   * Can be overriden by the attribute "classlist-remove" with a comma separated list of classes.
+   * Can be overridden by the attribute "classlist-remove" with a comma separated list of classes.
    * Example:
    *    ['d-none', 'd-xs-table-cell', 'd-sm-table-cell', 'd-md-table-cell', 'd-lg-table-cell', 'd-xl-table-cell', 'd-xxl-table-cell']
    * @type {Array}
@@ -48,7 +48,7 @@ class JoomlaColumnsToggle extends HTMLElement {
 
   /**
    * The protected columns.
-   * Can be overriden by the attribute "protect-col" with a comma separated list of selectors.
+   * Can be overridden by the attribute "protect-col" with a comma separated list of selectors.
    * @type {Array}
    * @default ['th','.toggle-ignore']
    */
@@ -161,6 +161,23 @@ class JoomlaColumnsToggle extends HTMLElement {
   }
 
   /**
+   * The translated columns label.
+   *
+   * @returns {string}
+   */
+  get columnsLabel() {
+    const label = this.getAttribute('label-columns') || this.getAttribute('data-label-columns');
+
+    if (label) {
+      return label;
+    }
+
+    return typeof Joomla !== 'undefined' && Joomla.Text && typeof Joomla.Text._ === 'function'
+      ? Joomla.Text._('JGLOBAL_COLUMNS', 'Columns')
+      : 'Columns';
+  }
+
+  /**
    * Refresh the column toggle controls.
    *
    * @returns {void}
@@ -228,7 +245,7 @@ class JoomlaColumnsToggle extends HTMLElement {
         title = title.split(':', 2)[1].trim();
       }
 
-      // Set inital values for disabled and checked
+      // Set initial values for disabled and checked
       let disabled = '';
       let checked = 'checked';
 
@@ -349,7 +366,19 @@ class JoomlaColumnsToggle extends HTMLElement {
    */
   updateCounter() {
     const countVisible = this.querySelectorAll('[data-column-list] input:checked').length;
-    this.counterDisplay.textContent = `${countVisible}/${this.colsTotal} ${Joomla.Text._('JGLOBAL_COLUMNS')}`;
+    const count = `${countVisible}/${this.colsTotal}`;
+    const label = this.columnsLabel;
+    const countElement = this.counterDisplay.querySelector('[data-column-toggle-count]');
+    const labelElement = this.counterDisplay.querySelector('[data-column-toggle-label]');
+
+    if (countElement && labelElement) {
+      countElement.textContent = count;
+      labelElement.textContent = label;
+
+      return;
+    }
+
+    this.counterDisplay.textContent = `${count} ${label}`;
   }
 
   /**
