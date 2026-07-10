@@ -622,6 +622,18 @@
       ]
     },
     {
+      "name": "joomla.columns.toggle",
+      "type": "script",
+      "class": "TableColumnsAssetItem",
+      "uri": "system/joomla-columns-toggle.js",
+      "dependencies": [
+        "core"
+      ],
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
       "name": "joomla.dialog",
       "type": "script",
       "uri": "system/joomla-dialog.min.js",

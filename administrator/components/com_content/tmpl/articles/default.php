@@ -29,8 +29,7 @@ use Joomla\Utilities\ArrayHelper;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect');
+$wa->useScript('multiselect');
 
 $app       = Factory::getApplication();
 $user      = $this->getCurrentUser();
@@ -83,6 +82,7 @@ $assoc = Associations::isEnabled();
                 <?php
                 // Search tools bar
                 echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this, 'options' => ['selectorFieldName' => 'featured']]);
+                echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#articleList']);
                 ?>
                 <?php if (empty($this->items)) : ?>
                     <div class="alert alert-info">
