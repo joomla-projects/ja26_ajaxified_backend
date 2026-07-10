@@ -51,7 +51,7 @@ $params     = $this->state->get('params') ?? new Registry();
                         <?php echo Text::_('JGLOBAL_NO_MATCHING_RESULTS'); ?>
                     </div>
                 <?php else : ?>
-                    <table class="table">
+                    <table class="table" id="clientList">
                         <caption class="visually-hidden">
                             <?php echo Text::_('COM_BANNERS_CLIENTS_TABLE_CAPTION'); ?>,
                             <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,

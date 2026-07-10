@@ -42,7 +42,7 @@ $wa->useScript('com_finder.filters')
                         <?php echo Text::_('COM_FINDER_NO_RESULTS_OR_FILTERS'); ?>
                     </div>
                 <?php else : ?>
-                <table class="table">
+                <table class="table" id="finderFilterList">
                     <caption class="visually-hidden">
                         <?php echo Text::_('COM_FINDER_FILTERS_TABLE_CAPTION'); ?>,
                             <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,
