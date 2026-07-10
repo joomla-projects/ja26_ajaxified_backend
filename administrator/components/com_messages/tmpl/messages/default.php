@@ -34,7 +34,7 @@ $listDirn  = $this->escape($this->state->get('list.direction'));
                 <?php echo Text::_('JGLOBAL_NO_MATCHING_RESULTS'); ?>
             </div>
         <?php else : ?>
-            <table class="table">
+            <table class="table" id="messageList">
                 <caption class="visually-hidden">
                     <?php echo Text::_('COM_MESSAGES_TABLE_CAPTION'); ?>,
                             <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,

@@ -45,7 +45,7 @@ $wa->useScript('com_finder.maps')
                         <?php echo Text::_('COM_FINDER_MAPS_NO_CONTENT'); ?>
                     </div>
                 <?php else : ?>
-                <table class="table">
+                <table class="table" id="finderMapList">
                     <caption class="visually-hidden">
                         <?php echo Text::_('COM_FINDER_MAPS_TABLE_CAPTION'); ?>,
                             <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,

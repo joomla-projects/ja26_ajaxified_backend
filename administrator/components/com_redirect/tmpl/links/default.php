@@ -78,7 +78,7 @@ if ($pluginEnabled && $collectUrlsEnabled) {
                 <?php echo Text::_('JGLOBAL_NO_MATCHING_RESULTS'); ?>
             </div>
         <?php else : ?>
-            <table class="table">
+            <table class="table" id="linkList">
                 <caption class="visually-hidden">
                     <?php echo Text::_('COM_REDIRECTS_TABLE_CAPTION'); ?>,
                             <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,
