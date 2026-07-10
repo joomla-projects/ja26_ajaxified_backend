@@ -23,8 +23,7 @@ use Joomla\CMS\Session\Session;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect');
+$wa->useScript('multiselect');
 
 $clientId  = (int) $this->state->get('client_id', 0);
 $user      = $this->getCurrentUser();
@@ -41,8 +40,10 @@ $assoc   = Associations::isEnabled() && $clientId == 0;
 
 ?>
 <form action="<?php echo Route::_('index.php?option=com_modules&view=modules&client_id=' . $clientId); ?>" method="post" name="adminForm" id="adminForm">
+    <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
     <div id="j-main-container" class="j-main-container">
         <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]); ?>
+        <?php echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#moduleList']); ?>
         <?php if ($this->total > 0) : ?>
             <table class="table" id="moduleList">
                 <caption class="visually-hidden">
@@ -222,4 +223,5 @@ $assoc   = Associations::isEnabled() && $clientId == 0;
 
         <?php echo $this->filterForm->renderControlFields(); ?>
     </div>
+    <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
 </form>

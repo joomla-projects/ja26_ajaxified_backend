@@ -13,6 +13,7 @@ namespace Joomla\Component\Tags\Administrator\View\Tags;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Multilanguage;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Button\DropdownButton;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -29,6 +30,8 @@ use Joomla\Component\Tags\Administrator\Model\TagsModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of items
      *
@@ -126,6 +129,20 @@ class HtmlView extends BaseHtmlView
             if (!Multilanguage::isEnabled()) {
                 unset($this->activeFilters['language']);
                 $this->filterForm->removeField('language', 'filter');
+            }
+
+            if ($this->getLayout() !== 'emptystate') {
+                $this->addAjaxifiedListViewOptions(
+                    [
+                        'publish',
+                        'unpublish',
+                        'archive',
+                        'trash',
+                        'checkin',
+                        'delete',
+                        'batch',
+                    ]
+                );
             }
         }
 

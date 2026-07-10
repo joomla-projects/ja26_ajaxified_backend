@@ -12,6 +12,7 @@ namespace Joomla\Component\Plugins\Administrator\View\Plugins;
 
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
 use Joomla\Component\Plugins\Administrator\Model\PluginsModel;
@@ -27,6 +28,8 @@ use Joomla\Component\Plugins\Administrator\Model\PluginsModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of items
      *
@@ -89,6 +92,14 @@ class HtmlView extends BaseHtmlView
             ->addControlField('boxchecked', '0');
 
         $this->addToolbar();
+
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'checkin',
+            ]
+        );
 
         parent::display($tpl);
     }
