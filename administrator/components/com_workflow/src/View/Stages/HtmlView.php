@@ -12,6 +12,7 @@ namespace Joomla\Component\Workflow\Administrator\View\Stages;
 
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Router\Route;
 use Joomla\CMS\Toolbar\Button\DropdownButton;
@@ -29,6 +30,8 @@ use Joomla\Component\Workflow\Administrator\Model\StagesModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of stages
      *
@@ -158,6 +161,16 @@ class HtmlView extends BaseHtmlView
             ->addControlField('extension', $this->extension);
 
         $this->addToolbar();
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'trash',
+                'checkin',
+                'delete',
+                'setDefault',
+            ]
+        );
 
         parent::display($tpl);
     }

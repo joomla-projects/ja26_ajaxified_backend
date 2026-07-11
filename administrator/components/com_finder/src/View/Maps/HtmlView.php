@@ -12,6 +12,7 @@ namespace Joomla\Component\Finder\Administrator\View\Maps;
 
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Button\DropdownButton;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -29,6 +30,8 @@ use Joomla\Component\Finder\Administrator\Model\MapsModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of items
      *
@@ -122,11 +125,21 @@ class HtmlView extends BaseHtmlView
 
         // Add form control fields
         $this->filterForm
-            ->addControlField('task', 'display')
+            ->addControlField('task')
             ->addControlField('boxchecked', '0');
 
         // Prepare the view.
         $this->addToolbar();
+
+        if (!$this->isEmptyState) {
+            $this->addAjaxifiedListViewOptions(
+                [
+                    'publish',
+                    'unpublish',
+                    'delete',
+                ]
+            );
+        }
 
         parent::display($tpl);
     }

@@ -12,6 +12,7 @@ namespace Joomla\Component\Workflow\Administrator\View\Workflows;
 
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Button\DropdownButton;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -28,6 +29,8 @@ use Joomla\Component\Workflow\Administrator\Model\WorkflowsModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of workflows
      *
@@ -129,6 +132,17 @@ class HtmlView extends BaseHtmlView
             ->addControlField('boxchecked', '0');
 
         $this->addToolbar();
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'trash',
+                'checkin',
+                'delete',
+                'setDefault',
+                'unsetDefault',
+            ]
+        );
 
         parent::display($tpl);
     }

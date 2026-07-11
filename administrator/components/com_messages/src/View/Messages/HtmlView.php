@@ -12,6 +12,7 @@ namespace Joomla\Component\Messages\Administrator\View\Messages;
 
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
 use Joomla\Component\Messages\Administrator\Model\MessagesModel;
@@ -27,6 +28,8 @@ use Joomla\Component\Messages\Administrator\Model\MessagesModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of items
      *
@@ -104,6 +107,17 @@ class HtmlView extends BaseHtmlView
             ->addControlField('boxchecked', '0');
 
         $this->addToolbar();
+
+        if (!$this->isEmptyState) {
+            $this->addAjaxifiedListViewOptions(
+                [
+                    'publish',
+                    'unpublish',
+                    'trash',
+                    'delete',
+                ]
+            );
+        }
 
         parent::display($tpl);
     }
