@@ -12,6 +12,7 @@ namespace Joomla\Component\Users\Administrator\View\Notes;
 
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Button\DropdownButton;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -30,6 +31,8 @@ use Joomla\Registry\Registry;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * A list of user note objects.
      *
@@ -125,6 +128,19 @@ class HtmlView extends BaseHtmlView
             ->addControlField('boxchecked', '0');
 
         $this->addToolbar();
+        if (!$this->isEmptyState) {
+            $this->addAjaxifiedListViewOptions(
+                [
+                    'publish',
+                    'unpublish',
+                    'archive',
+                    'trash',
+                    'checkin',
+                    'delete',
+                ]
+            );
+        }
+
         parent::display($tpl);
     }
 

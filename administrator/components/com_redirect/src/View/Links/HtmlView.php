@@ -13,6 +13,7 @@ namespace Joomla\Component\Redirect\Administrator\View\Links;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\GenericDataException;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Plugin\PluginHelper;
@@ -32,6 +33,8 @@ use Joomla\Component\Redirect\Administrator\Model\LinksModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * True if "System - Redirect Plugin" is enabled
      *
@@ -145,6 +148,20 @@ class HtmlView extends BaseHtmlView
             ->addControlField('boxchecked', '0');
 
         $this->addToolbar();
+
+        if (!$this->isEmptyState) {
+            $this->addAjaxifiedListViewOptions(
+                [
+                    'publish',
+                    'unpublish',
+                    'archive',
+                    'trash',
+                    'delete',
+                    'purge',
+                    'batch',
+                ]
+            );
+        }
 
         parent::display($tpl);
     }

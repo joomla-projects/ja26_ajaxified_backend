@@ -13,6 +13,7 @@ namespace Joomla\Component\Banners\Administrator\View\Clients;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Pagination\Pagination;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -29,6 +30,8 @@ use Joomla\Component\Banners\Administrator\Model\ClientsModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * The search tools form
      *
@@ -105,6 +108,19 @@ class HtmlView extends BaseHtmlView
         }
 
         $this->addToolbar();
+
+        if (!$this->isEmptyState) {
+            $this->addAjaxifiedListViewOptions(
+                [
+                    'publish',
+                    'unpublish',
+                    'archive',
+                    'trash',
+                    'checkin',
+                    'delete',
+                ]
+            );
+        }
 
         // Add form control fields
         $this->filterForm

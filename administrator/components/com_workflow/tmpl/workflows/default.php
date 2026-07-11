@@ -21,8 +21,7 @@ use Joomla\CMS\Session\Session;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect');
+$wa->useScript('multiselect');
 
 $listOrder = $this->escape($this->state->get('list.ordering'));
 $listDirn  = $this->escape($this->state->get('list.direction'));
@@ -58,10 +57,12 @@ $userId = $user->id;
                     } else {
                         echo 'col-md-12';
                     } ?>">
+            <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
             <div id="j-main-container" class="j-main-container">
                 <?php
                     // Search tools bar
                     echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this, 'options' => ['selectorFieldName' => 'extension']]);
+                    echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#workflowList']);
                 ?>
                 <?php if (empty($this->workflows)) : ?>
                     <div class="alert alert-info">
@@ -200,6 +201,7 @@ $userId = $user->id;
 
                 <?php echo $this->filterForm->renderControlFields(); ?>
             </div>
+            <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
         </div>
     </div>
 </form>
