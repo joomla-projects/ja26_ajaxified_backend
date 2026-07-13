@@ -113,6 +113,8 @@ class HtmlView extends BaseHtmlView
         $this->addAjaxifiedListViewOptions(
             [
                 'delete',
+                'setDefault',
+                'duplicate',
             ]
         );
 

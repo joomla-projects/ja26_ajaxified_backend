@@ -12,6 +12,7 @@ namespace Joomla\Component\Actionlogs\Administrator\View\Actionlogs;
 
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\ListView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
 use Joomla\Component\Actionlogs\Administrator\Helper\ActionlogsHelper;
@@ -27,6 +28,8 @@ use Joomla\Component\Actionlogs\Administrator\Helper\ActionlogsHelper;
  */
 class HtmlView extends ListView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * Setting if the IP column should be shown
      *
@@ -111,5 +114,12 @@ class HtmlView extends ListView
 
         $toolbar->preferences('com_actionlogs');
         $toolbar->help('User_Actions_Log');
+
+        $this->addAjaxifiedListViewOptions(
+            [
+                'delete',
+                'purge',
+            ]
+        );
     }
 }
