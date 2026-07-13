@@ -85,6 +85,7 @@ const showLoader = () => {
     element.setAttribute('role', 'status');
     element.setAttribute('aria-live', 'polite');
     element.setAttribute('aria-label', getLoadingText());
+    element.style.setProperty('--joomla-core-loader-fullscreen-size', '200px');
 
     document.body.appendChild(element);
 
