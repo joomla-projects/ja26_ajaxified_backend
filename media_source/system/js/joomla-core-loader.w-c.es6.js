@@ -61,8 +61,8 @@ class JoomlaCoreLoader extends HTMLElement {
         width: 100%;
         height: 100%;
         svg {
-          width: 345px;
-          height: 345px;
+          width: var(--joomla-core-loader-fullscreen-size, 345px);
+          height: var(--joomla-core-loader-fullscreen-size, 345px);
         }
       }
       @media (prefers-reduced-motion: reduce) {

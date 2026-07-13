@@ -5,6 +5,7 @@
 
 import SubmissionContext from './submission-context.es6.js';
 import SubmissionEligibility from './submission-eligibility.es6.js';
+import SubmissionProgress from './submission-progress.es6.js';
 import SubmissionSynchronization from './submission-synchronization.es6.js';
 import SubmissionTransport from './submission-transport.es6.js';
 
@@ -55,6 +56,8 @@ async function handleSubmit(event) {
 
     event.preventDefault();
 
+    const stopProgress = SubmissionProgress.start(context.form);
+
     try {
         const response = await SubmissionTransport.send(context);
 
@@ -68,6 +71,8 @@ async function handleSubmit(event) {
         }
 
         throw error;
+    } finally {
+        stopProgress();
     }
 }
 
