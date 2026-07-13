@@ -14,6 +14,7 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Router\Route;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -31,6 +32,8 @@ use Joomla\Component\Finder\Administrator\Model\SearchesModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * True if gathering search statistics is enabled
      *
@@ -139,6 +142,11 @@ class HtmlView extends BaseHtmlView
 
         // Prepare the view.
         $this->addToolbar();
+        $this->addAjaxifiedListViewOptions(
+            [
+                'reset',
+            ]
+        );
 
         parent::display($tpl);
     }
