@@ -126,6 +126,7 @@ class HtmlView extends BaseHtmlView
         $this->addAjaxifiedListViewOptions(
             [
                 'delete',
+                'purge',
             ]
         );
 
