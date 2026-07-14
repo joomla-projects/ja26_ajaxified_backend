@@ -12,6 +12,7 @@ namespace Joomla\Component\Cache\Administrator\View\Cache;
 
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\GenericDataException;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Pagination\Pagination;
@@ -29,6 +30,8 @@ use Joomla\Component\Cache\Administrator\Model\CacheModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * The search tools form
      *
@@ -111,6 +114,12 @@ class HtmlView extends BaseHtmlView
         $this->filterForm
             ->addControlField('task')
             ->addControlField('boxchecked', '0');
+
+        $this->addAjaxifiedListViewOptions([
+            'delete',
+            'deleteAll',
+            'purge',
+        ]);
 
         parent::display($tpl);
     }
