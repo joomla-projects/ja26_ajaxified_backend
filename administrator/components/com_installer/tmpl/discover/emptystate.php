@@ -10,6 +10,7 @@
 
 defined('_JEXEC') or die;
 
+use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Layout\LayoutHelper;
 use Joomla\CMS\Session\Session;
@@ -34,4 +35,9 @@ if ($this->showMessage) {
     echo $this->loadTemplate('message');
 }
 
-echo LayoutHelper::render('joomla.content.emptystate', $displayData);
+echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container');
+?>
+<div id="j-main-container" class="j-main-container">
+    <?php echo LayoutHelper::render('joomla.content.emptystate', $displayData); ?>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
