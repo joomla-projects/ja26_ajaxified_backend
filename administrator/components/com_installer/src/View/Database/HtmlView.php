@@ -13,6 +13,7 @@ namespace Joomla\Component\Installer\Administrator\View\Database;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\Pagination\Pagination;
 use Joomla\Component\Installer\Administrator\Model\DatabaseModel;
 use Joomla\Component\Installer\Administrator\View\Installer\HtmlView as InstallerViewDefault;
@@ -28,6 +29,8 @@ use Joomla\Component\Installer\Administrator\View\Installer\HtmlView as Installe
  */
 class HtmlView extends InstallerViewDefault
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * List of change sets
      *
@@ -109,6 +112,10 @@ class HtmlView extends InstallerViewDefault
         $this->filterForm
             ->addControlField('task')
             ->addControlField('boxchecked', '0');
+
+        $this->addAjaxifiedListViewOptions([
+            'fix',
+        ]);
 
         parent::display($tpl);
     }
