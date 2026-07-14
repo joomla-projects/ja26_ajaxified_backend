@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Installer\Administrator\View\Discover;
 
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\Component\Installer\Administrator\Model\DiscoverModel;
 use Joomla\Component\Installer\Administrator\View\Installer\HtmlView as InstallerViewDefault;
 
@@ -24,6 +25,8 @@ use Joomla\Component\Installer\Administrator\View\Installer\HtmlView as Installe
  */
 class HtmlView extends InstallerViewDefault
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of items
      *
@@ -98,6 +101,10 @@ class HtmlView extends InstallerViewDefault
         $this->filterForm
             ->addControlField('task')
             ->addControlField('boxchecked', '0');
+
+        $this->addAjaxifiedListViewOptions([
+            'refresh',
+        ]);
 
         parent::display($tpl);
     }

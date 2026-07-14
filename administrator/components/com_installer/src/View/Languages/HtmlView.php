@@ -14,6 +14,7 @@ use Joomla\CMS\Access\Exception\NotAllowed;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\LanguageHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\Component\Installer\Administrator\Model\LanguagesModel;
 use Joomla\Component\Installer\Administrator\View\Installer\HtmlView as InstallerViewDefault;
 
@@ -28,6 +29,8 @@ use Joomla\Component\Installer\Administrator\View\Installer\HtmlView as Installe
  */
 class HtmlView extends InstallerViewDefault
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * @var object item list
      */
@@ -84,6 +87,8 @@ class HtmlView extends InstallerViewDefault
             ->addControlField('install_url', '', ['id' => 'install_url'])
             ->addControlField('installtype', 'url')
             ->addControlField('package', 'language');
+
+        $this->addAjaxifiedListViewOptions([]);
 
         parent::display($tpl);
     }
