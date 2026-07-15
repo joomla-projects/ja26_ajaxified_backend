@@ -131,19 +131,17 @@ class HtmlView extends BaseHtmlView
                 $this->filterForm->removeField('language', 'filter');
             }
 
-            if ($this->getLayout() !== 'emptystate') {
-                $this->addAjaxifiedListViewOptions(
-                    [
-                        'publish',
-                        'unpublish',
-                        'archive',
-                        'trash',
-                        'checkin',
-                        'delete',
-                        'batch',
-                    ]
-                );
-            }
+            $this->addAjaxifiedListViewOptions(
+                [
+                    'publish',
+                    'unpublish',
+                    'archive',
+                    'trash',
+                    'checkin',
+                    'delete',
+                    'batch',
+                ]
+            );
         }
 
         parent::display($tpl);

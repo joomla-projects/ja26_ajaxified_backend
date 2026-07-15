@@ -111,10 +111,6 @@ class HtmlView extends ListView
     {
         parent::addToolbar();
 
-        if ($this->getLayout() === 'emptystate') {
-            return;
-        }
-
         $this->addAjaxifiedListViewOptions(
             [
                 'publish',
@@ -127,5 +123,9 @@ class HtmlView extends ListView
                 'batch',
             ]
         );
+
+        if ($this->getLayout() === 'emptystate') {
+            return;
+        }
     }
 }

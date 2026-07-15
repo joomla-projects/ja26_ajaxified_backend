@@ -10,6 +10,7 @@
 
 defined('_JEXEC') or die;
 
+use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Layout\LayoutHelper;
 
 /** @var \Joomla\Component\Content\Administrator\View\Articles\HtmlView $this */
@@ -29,4 +30,9 @@ if ($user->authorise('core.create', 'com_content') || count($user->getAuthorised
     $displayData['createURL'] = 'index.php?option=com_content&task=article.add';
 }
 
-echo LayoutHelper::render('joomla.content.emptystate', $displayData);
+echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container');
+?>
+<div id="j-main-container" class="j-main-container">
+    <?php echo LayoutHelper::render('joomla.content.emptystate', $displayData); ?>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

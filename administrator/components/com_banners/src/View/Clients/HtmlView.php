@@ -109,18 +109,16 @@ class HtmlView extends BaseHtmlView
 
         $this->addToolbar();
 
-        if (!$this->isEmptyState) {
-            $this->addAjaxifiedListViewOptions(
-                [
-                    'publish',
-                    'unpublish',
-                    'archive',
-                    'trash',
-                    'checkin',
-                    'delete',
-                ]
-            );
-        }
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'archive',
+                'trash',
+                'checkin',
+                'delete',
+            ]
+        );
 
         // Add form control fields
         $this->filterForm

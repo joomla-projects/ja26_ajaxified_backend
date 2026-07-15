@@ -108,16 +108,14 @@ class HtmlView extends BaseHtmlView
 
         $this->addToolbar();
 
-        if (!$this->isEmptyState) {
-            $this->addAjaxifiedListViewOptions(
-                [
-                    'publish',
-                    'unpublish',
-                    'trash',
-                    'delete',
-                ]
-            );
-        }
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'trash',
+                'delete',
+            ]
+        );
 
         parent::display($tpl);
     }

@@ -10,6 +10,7 @@
 
 defined('_JEXEC') or die;
 
+use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Layout\LayoutHelper;
 
 /** @var \Joomla\Component\Banners\Administrator\View\Clients\HtmlView $this */
@@ -27,4 +28,9 @@ if (count($this->getCurrentUser()->getAuthorisedCategories('com_banners', 'core.
     $displayData['createURL'] = 'index.php?option=com_banners&task=client.add';
 }
 
-echo LayoutHelper::render('joomla.content.emptystate', $displayData);
+echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container');
+?>
+<div id="j-main-container" class="j-main-container">
+    <?php echo LayoutHelper::render('joomla.content.emptystate', $displayData); ?>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
