@@ -128,18 +128,16 @@ class HtmlView extends BaseHtmlView
             ->addControlField('boxchecked', '0');
 
         $this->addToolbar();
-        if (!$this->isEmptyState) {
-            $this->addAjaxifiedListViewOptions(
-                [
-                    'publish',
-                    'unpublish',
-                    'archive',
-                    'trash',
-                    'checkin',
-                    'delete',
-                ]
-            );
-        }
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'archive',
+                'trash',
+                'checkin',
+                'delete',
+            ]
+        );
 
         parent::display($tpl);
     }

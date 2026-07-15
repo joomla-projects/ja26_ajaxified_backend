@@ -74,11 +74,11 @@ endif;
 $assoc = Associations::isEnabled();
 ?>
 
-<form action="<?php echo Route::_('index.php?option=com_content&view=articles'); ?>" method="post" name="adminForm" id="adminForm">
-    <div class="row">
-        <div class="col-md-12">
-            <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
-            <div id="j-main-container" class="j-main-container">
+<?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
+<div id="j-main-container" class="j-main-container">
+    <form action="<?php echo Route::_('index.php?option=com_content&view=articles'); ?>" method="post" name="adminForm" id="adminForm">
+        <div class="row">
+            <div class="col-md-12">
                 <?php
                 // Search tools bar
                 echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this, 'options' => ['selectorFieldName' => 'featured']]);
@@ -403,7 +403,7 @@ $assoc = Associations::isEnabled();
 
                 <?php echo $this->filterForm->renderControlFields(); ?>
             </div>
-            <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
         </div>
-    </div>
-</form>
+    </form>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

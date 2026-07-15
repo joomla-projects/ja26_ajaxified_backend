@@ -33,9 +33,9 @@ $urgentRequestDate = clone $now;
 $urgentRequestDate->sub(new DateInterval('P' . $this->urgentRequestAge . 'D'));
 
 ?>
-<form action="<?php echo Route::_('index.php?option=com_privacy&view=requests'); ?>" method="post" name="adminForm" id="adminForm">
-    <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
-    <div id="j-main-container">
+<?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
+<div id="j-main-container">
+    <form action="<?php echo Route::_('index.php?option=com_privacy&view=requests'); ?>" method="post" name="adminForm" id="adminForm">
         <?php
         echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]);
         echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#requestList']);
@@ -127,6 +127,6 @@ $urgentRequestDate->sub(new DateInterval('P' . $this->urgentRequestAge . 'D'));
         <?php endif; ?>
 
         <?php echo $this->filterForm->renderControlFields(); ?>
-    </div>
-    <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
-</form>
+    </form>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

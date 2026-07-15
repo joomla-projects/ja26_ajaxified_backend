@@ -143,21 +143,19 @@ class HtmlView extends BaseHtmlView
                 $this->filterForm->removeField('language', 'filter');
             }
 
-            if ($this->getLayout() !== 'emptystate') {
-                $this->addAjaxifiedListViewOptions(
-                    [
-                        'publish',
-                        'unpublish',
-                        'featured',
-                        'unfeatured',
-                        'archive',
-                        'trash',
-                        'checkin',
-                        'delete',
-                        'batch',
-                    ]
-                );
-            }
+            $this->addAjaxifiedListViewOptions(
+                [
+                    'publish',
+                    'unpublish',
+                    'featured',
+                    'unfeatured',
+                    'archive',
+                    'trash',
+                    'checkin',
+                    'delete',
+                    'batch',
+                ]
+            );
         } else {
             // In article associations modal we need to remove language filter if forcing a language.
             // We also need to change the category filter to show show categories with All or the forced language.

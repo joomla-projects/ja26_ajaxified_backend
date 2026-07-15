@@ -36,9 +36,9 @@ $stateMsgs  = [
 $this->getLanguage()->load('plg_system_privacyconsent', JPATH_ADMINISTRATOR);
 
 ?>
-<form action="<?php echo Route::_('index.php?option=com_privacy&view=consents'); ?>" method="post" name="adminForm" id="adminForm">
-    <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
-    <div id="j-main-container">
+<?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
+<div id="j-main-container">
+    <form action="<?php echo Route::_('index.php?option=com_privacy&view=consents'); ?>" method="post" name="adminForm" id="adminForm">
         <?php
         echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]);
         echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#consentList']);
@@ -127,6 +127,6 @@ $this->getLanguage()->load('plg_system_privacyconsent', JPATH_ADMINISTRATOR);
         <?php endif; ?>
 
         <?php echo $this->filterForm->renderControlFields(); ?>
-    </div>
-    <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
-</form>
+    </form>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

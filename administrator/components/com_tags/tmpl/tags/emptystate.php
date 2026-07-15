@@ -10,6 +10,7 @@
 
 defined('_JEXEC') or die;
 
+use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Layout\LayoutHelper;
 
 /** @var \Joomla\Component\Tags\Administrator\View\Tags\HtmlView $this */
@@ -27,4 +28,9 @@ if ($this->getCurrentUser()->authorise('core.create', 'com_tags')) {
     $displayData['createURL'] = 'index.php?option=com_tags&task=tag.add';
 }
 
-echo LayoutHelper::render('joomla.content.emptystate', $displayData);
+echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container');
+?>
+<div id="j-main-container" class="j-main-container">
+    <?php echo LayoutHelper::render('joomla.content.emptystate', $displayData); ?>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

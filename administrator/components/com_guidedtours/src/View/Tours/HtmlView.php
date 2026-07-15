@@ -100,18 +100,16 @@ class HtmlView extends BaseHtmlView
 
         $this->addToolbar();
 
-        if ($this->getLayout() !== 'emptystate') {
-            $this->addAjaxifiedListViewOptions(
-                [
-                    'publish',
-                    'unpublish',
-                    'archive',
-                    'trash',
-                    'checkin',
-                    'delete',
-                ]
-            );
-        }
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'archive',
+                'trash',
+                'checkin',
+                'delete',
+            ]
+        );
 
         // We do not need to filter by language when multilingual is disabled
         if (!Multilanguage::isEnabled()) {

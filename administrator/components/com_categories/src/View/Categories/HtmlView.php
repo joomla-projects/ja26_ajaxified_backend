@@ -137,19 +137,17 @@ class HtmlView extends BaseHtmlView
                 $this->filterForm->removeField('language', 'filter');
             }
 
-            if ($this->getLayout() !== 'emptystate') {
-                $this->addAjaxifiedListViewOptions(
-                    [
-                        'publish',
-                        'unpublish',
-                        'archive',
-                        'trash',
-                        'checkin',
-                        'delete',
-                        'batch',
-                    ]
-                );
-            }
+            $this->addAjaxifiedListViewOptions(
+                [
+                    'publish',
+                    'unpublish',
+                    'archive',
+                    'trash',
+                    'checkin',
+                    'delete',
+                    'batch',
+                ]
+            );
         } else {
             // In article associations modal we need to remove language filter if forcing a language.
             $forcedLanguage = Factory::getApplication()->getInput()->get('forcedLanguage', '', 'CMD');

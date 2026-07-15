@@ -68,9 +68,9 @@ if ($pluginEnabled && $collectUrlsEnabled) {
 }
 
 ?>
-<form action="<?php echo Route::_('index.php?option=com_redirect&view=links'); ?>" method="post" name="adminForm" id="adminForm">
-    <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
-    <div id="j-main-container" class="j-main-container">
+<?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
+<div id="j-main-container" class="j-main-container">
+    <form action="<?php echo Route::_('index.php?option=com_redirect&view=links'); ?>" method="post" name="adminForm" id="adminForm">
         <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]); ?>
         <?php echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#linkList']); ?>
         <?php if (empty($this->items)) : ?>
@@ -179,6 +179,6 @@ if ($pluginEnabled && $collectUrlsEnabled) {
             <?php endif; ?>
 
         <?php echo $this->filterForm->renderControlFields(); ?>
-    </div>
-    <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
-</form>
+    </form>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
