@@ -115,7 +115,7 @@ class FormControllerTest extends UnitTestCase
     public function testApplyDispatchesAfterContinuationPreparation(): void
     {
         [$controller, , $dispatcher, $sequence] = $this->createController(42, true, 42);
-        $redirectAtDispatch                    = null;
+        $redirectAtDispatch                     = null;
 
         $dispatcher->addListener(
             'onControllerFormTaskSuccess',
@@ -147,14 +147,14 @@ class FormControllerTest extends UnitTestCase
     public function testSuccessfulCancelDispatchesOnce(): void
     {
         [$controller, , $dispatcher, $sequence] = $this->createController(42);
-        $events                                = [];
-        $redirectAtDispatch                    = null;
+        $events                                 = [];
+        $redirectAtDispatch                     = null;
 
         $dispatcher->addListener(
             'onControllerFormTaskSuccess',
             static function (FormTaskSuccessEvent $event) use ($controller, $sequence, &$events, &$redirectAtDispatch): void {
                 $sequence->add('event');
-                $events[]          = $event;
+                $events[]           = $event;
                 $redirectAtDispatch = $controller->getPreparedRedirect();
             }
         );
@@ -421,7 +421,7 @@ class FormControllerTest extends UnitTestCase
 
         $table->method('getKeyName')->willReturn('id');
         $table->method('hasField')->willReturnCallback(
-            static fn(string $field): bool => $withCheckin
+            static fn (string $field): bool => $withCheckin
                 && \in_array($field, ['checked_out', 'checked_out_time'], true)
         );
 
