@@ -71,7 +71,7 @@ final class AutosaveStorage
                 'max_active_generations',
             ]
         );
-        $positiveInteger = static fn(int $value): bool => $value > 0;
+        $positiveInteger = static fn (int $value): bool => $value > 0;
 
         $resolver
             ->setAllowedTypes('idle_ttl', 'int')
@@ -121,7 +121,7 @@ final class AutosaveStorage
         $firstInsertFailure = null;
 
         for ($attempt = 1; $attempt <= self::MAX_INSERT_ATTEMPTS; $attempt++) {
-            $transactionStarted = false;
+            $transactionStarted  = false;
             $inInsertPhase       = false;
 
             try {

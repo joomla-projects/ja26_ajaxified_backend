@@ -58,7 +58,7 @@ class AutosaveStorageTest extends UnitTestCase
         return [
             'missing option' => [
                 [
-                    'idle_ttl'              => 60,
+                    'idle_ttl'               => 60,
                     'max_lifetime'           => 120,
                     'max_active_generations' => 2,
                 ],
@@ -115,25 +115,25 @@ class AutosaveStorageTest extends UnitTestCase
     public function invalidInitializationProvider(): array
     {
         return [
-            'anonymous user'            => [['userId' => 0]],
-            'negative user'             => [['userId' => -1]],
-            'empty context'             => [['context' => '']],
-            'component-only context'    => [['context' => 'com_example']],
-            'uppercase context'         => [['context' => 'com_example.Record']],
-            'unbounded context'         => [['context' => 'com_a.' . str_repeat('b', 250)]],
-            'empty target'              => [['targetId' => '']],
-            'whitespace target'         => [['targetId' => '   ']],
-            'target control character'  => [['targetId' => "record\x00id"]],
+            'anonymous user'                   => [['userId' => 0]],
+            'negative user'                    => [['userId' => -1]],
+            'empty context'                    => [['context' => '']],
+            'component-only context'           => [['context' => 'com_example']],
+            'uppercase context'                => [['context' => 'com_example.Record']],
+            'unbounded context'                => [['context' => 'com_a.' . str_repeat('b', 250)]],
+            'empty target'                     => [['targetId' => '']],
+            'whitespace target'                => [['targetId' => '   ']],
+            'target control character'         => [['targetId' => "record\x00id"]],
             'target unicode control character' => [['targetId' => "record\u{0085}id"]],
-            'invalid UTF-8 target'       => [['targetId' => "record\xFFid"]],
-            'unbounded target'          => [['targetId' => str_repeat('x', 192)]],
-            'empty revision'            => [['baseRevision' => '']],
-            'revision control character' => [['baseRevision' => "revision\x1F"]],
-            'unbounded revision'        => [['baseRevision' => str_repeat('x', 256)]],
-            'empty key'                 => [['initializationKey' => '']],
-            'key control character'     => [['initializationKey' => "key\x7F"]],
-            'unbounded key'             => [['initializationKey' => str_repeat('x', 192)]],
-            'non-UTC time'              => [['now' => new Date('2026-07-29 10:00:00', 'Asia/Kolkata')]],
+            'invalid UTF-8 target'             => [['targetId' => "record\xFFid"]],
+            'unbounded target'                 => [['targetId' => str_repeat('x', 192)]],
+            'empty revision'                   => [['baseRevision' => '']],
+            'revision control character'       => [['baseRevision' => "revision\x1F"]],
+            'unbounded revision'               => [['baseRevision' => str_repeat('x', 256)]],
+            'empty key'                        => [['initializationKey' => '']],
+            'key control character'            => [['initializationKey' => "key\x7F"]],
+            'unbounded key'                    => [['initializationKey' => str_repeat('x', 192)]],
+            'non-UTC time'                     => [['now' => new Date('2026-07-29 10:00:00', 'Asia/Kolkata')]],
         ];
     }
 
@@ -374,9 +374,9 @@ class AutosaveStorageTest extends UnitTestCase
     {
         $db = $this->createMock(DatabaseInterface::class);
 
-        $db->method('createQuery')->willReturnCallback(fn() => $this->getQueryStub($db));
+        $db->method('createQuery')->willReturnCallback(fn () => $this->getQueryStub($db));
         $db->method('quoteName')->willReturnCallback(
-            static fn($name, $as = null) => $as === null ? $name : $name . ' AS ' . $as
+            static fn ($name, $as = null) => $as === null ? $name : $name . ' AS ' . $as
         );
         $db->method('setQuery')->willReturnSelf();
 
@@ -396,7 +396,7 @@ class AutosaveStorageTest extends UnitTestCase
     {
         return array_replace(
             [
-                'idle_ttl'              => 60,
+                'idle_ttl'               => 60,
                 'max_lifetime'           => 120,
                 'tombstone_retention'    => 300,
                 'max_active_generations' => 2,

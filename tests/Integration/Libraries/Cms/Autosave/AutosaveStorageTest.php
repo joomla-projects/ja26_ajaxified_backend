@@ -155,8 +155,8 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
     public function semanticConflictProvider(): array
     {
         return [
-            'context differs'      => [['context' => 'com_example.other']],
-            'target differs'       => [['targetId' => 'record-43']],
+            'context differs'       => [['context' => 'com_example.other']],
+            'target differs'        => [['targetId' => 'record-43']],
             'base revision differs' => [['baseRevision' => 'revision-2']],
         ];
     }
@@ -234,7 +234,7 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
     public function testUnexpiredGenerationContinuesToConsumeQuota(): void
     {
         $policy = [
-            'idle_ttl'              => 10,
+            'idle_ttl'               => 10,
             'max_lifetime'           => 20,
             'max_active_generations' => 1,
         ];
@@ -261,7 +261,7 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
     public function testExpiryCreatesTombstoneAndReleasesQuota(): void
     {
         $policy = [
-            'idle_ttl'              => 10,
+            'idle_ttl'               => 10,
             'max_lifetime'           => 20,
             'tombstone_retention'    => 30,
             'max_active_generations' => 1,
@@ -300,7 +300,7 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
     public function testExpiryAtExactBoundaryCreatesTombstoneAndReusesQuota(): void
     {
         $policy = [
-            'idle_ttl'              => 10,
+            'idle_ttl'               => 10,
             'max_lifetime'           => 20,
             'tombstone_retention'    => 30,
             'max_active_generations' => 1,
@@ -338,7 +338,7 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
     public function testReducedQuotaCountsActiveSlotsOutsideConfiguredRange(): void
     {
         $oldPolicy = [
-            'idle_ttl'              => 10,
+            'idle_ttl'               => 10,
             'max_lifetime'           => 20,
             'tombstone_retention'    => 30,
             'max_active_generations' => 2,
@@ -470,9 +470,9 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
         $generation = $this->loadRow('#__autosave_generations', 'public_id', $second['generation_id']);
 
         $this->terminalizeGeneration($second['generation_id']);
-        $generation['public_id']   = str_repeat('c', 64);
-        $generation['quota_slot']  = 1;
-        $generation['terminal_at'] = null;
+        $generation['public_id']    = str_repeat('c', 64);
+        $generation['quota_slot']   = 1;
+        $generation['terminal_at']  = null;
         $generation['retain_until'] = null;
 
         $this->expectException(ExecutionFailureException::class);
@@ -504,7 +504,7 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
         );
         $policy = array_replace(
             [
-                'idle_ttl'              => 60,
+                'idle_ttl'               => 60,
                 'max_lifetime'           => 120,
                 'tombstone_retention'    => 300,
                 'max_active_generations' => 2,
@@ -647,19 +647,19 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
         $columns    = [];
         $parameters = [];
         $types      = [
-            'continuation_id'       => ParameterType::INTEGER,
-            'user_id'               => ParameterType::INTEGER,
-            'client_revision'       => ParameterType::INTEGER,
+            'continuation_id'        => ParameterType::INTEGER,
+            'user_id'                => ParameterType::INTEGER,
+            'client_revision'        => ParameterType::INTEGER,
             'payload_schema_version' => ParameterType::INTEGER,
-            'active_marker'         => ParameterType::INTEGER,
-            'quota_slot'            => ParameterType::INTEGER,
+            'active_marker'          => ParameterType::INTEGER,
+            'quota_slot'             => ParameterType::INTEGER,
         ];
         $query      = $this->getDBDriver()->createQuery()
             ->insert($this->getDBDriver()->quoteName('#__autosave_generations'));
 
         foreach ($generation as $column => &$value) {
-            $parameter   = ':' . $column;
-            $columns[]   = $this->getDBDriver()->quoteName($column);
+            $parameter    = ':' . $column;
+            $columns[]    = $this->getDBDriver()->quoteName($column);
             $parameters[] = $parameter;
             $query->bind($parameter, $value, $value === null ? ParameterType::NULL : ($types[$column] ?? ParameterType::STRING));
         }
