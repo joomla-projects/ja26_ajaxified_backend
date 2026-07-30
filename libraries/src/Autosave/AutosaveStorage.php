@@ -26,7 +26,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  *
  * @since  __DEPLOY_VERSION__
  */
-final class AutosaveStorage
+final class AutosaveStorage implements AutosaveStorageInterface
 {
     private const MAX_INSERT_ATTEMPTS       = 3;
     private const MAX_ID_ATTEMPTS           = 3;
