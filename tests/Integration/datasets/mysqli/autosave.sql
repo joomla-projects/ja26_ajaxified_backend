@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS `#__autosave_generations` (
   `state` varchar(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `client_revision` bigint unsigned NOT NULL DEFAULT 0,
   `payload` mediumtext,
+  `payload_digest` char(64) CHARACTER SET ascii COLLATE ascii_bin,
   `payload_schema_version` int unsigned,
   `active_marker` tinyint unsigned,
   `quota_slot` int unsigned,

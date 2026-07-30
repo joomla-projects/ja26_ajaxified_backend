@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS "#__autosave_generations" (
   "state" varchar(16) NOT NULL,
   "client_revision" bigint DEFAULT 0 NOT NULL,
   "payload" text,
+  "payload_digest" varchar(64),
   "payload_schema_version" integer,
   "active_marker" smallint,
   "quota_slot" integer,

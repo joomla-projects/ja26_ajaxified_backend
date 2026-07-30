@@ -21,7 +21,6 @@ namespace Joomla\CMS\Autosave;
 enum GenerationState: string
 {
     case Active    = 'active';
-    case Retired   = 'retired';
     case Discarded = 'discarded';
     case Expired   = 'expired';
 

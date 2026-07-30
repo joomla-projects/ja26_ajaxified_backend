@@ -57,19 +57,12 @@ class GenerationStateTest extends UnitTestCase
     {
         return [
             'active to active'       => [GenerationState::Active, GenerationState::Active, false],
-            'active to retired'      => [GenerationState::Active, GenerationState::Retired, true],
             'active to discarded'    => [GenerationState::Active, GenerationState::Discarded, true],
             'active to expired'      => [GenerationState::Active, GenerationState::Expired, true],
-            'retired to active'      => [GenerationState::Retired, GenerationState::Active, false],
-            'retired to retired'     => [GenerationState::Retired, GenerationState::Retired, false],
-            'retired to discarded'   => [GenerationState::Retired, GenerationState::Discarded, false],
-            'retired to expired'     => [GenerationState::Retired, GenerationState::Expired, false],
             'discarded to active'    => [GenerationState::Discarded, GenerationState::Active, false],
-            'discarded to retired'   => [GenerationState::Discarded, GenerationState::Retired, false],
             'discarded to discarded' => [GenerationState::Discarded, GenerationState::Discarded, false],
             'discarded to expired'   => [GenerationState::Discarded, GenerationState::Expired, false],
             'expired to active'      => [GenerationState::Expired, GenerationState::Active, false],
-            'expired to retired'     => [GenerationState::Expired, GenerationState::Retired, false],
             'expired to discarded'   => [GenerationState::Expired, GenerationState::Discarded, false],
             'expired to expired'     => [GenerationState::Expired, GenerationState::Expired, false],
         ];

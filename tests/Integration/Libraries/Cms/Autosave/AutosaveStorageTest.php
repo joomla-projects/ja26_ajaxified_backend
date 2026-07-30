@@ -10,6 +10,7 @@
 
 namespace Joomla\Tests\Integration\Libraries\Cms\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveStorage;
 use Joomla\CMS\Autosave\GenerationState;
 use Joomla\CMS\Date\Date;
@@ -89,6 +90,7 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
         $this->assertSame(GenerationState::Active->value, $generation['state']);
         $this->assertSame(0, (int) $generation['client_revision']);
         $this->assertNull($generation['payload']);
+        $this->assertNull($generation['payload_digest']);
         $this->assertNull($generation['payload_schema_version']);
         $this->assertSame(1, (int) $generation['active_marker']);
         $this->assertSame(1, (int) $generation['quota_slot']);
@@ -134,7 +136,8 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
         try {
             $this->initialize($changes);
             $this->fail('The semantic idempotency-key conflict was not rejected.');
-        } catch (\DomainException $exception) {
+        } catch (AutosaveException $exception) {
+            $this->assertSame('initialization_conflict', $exception->getErrorCode());
             $this->assertSame(
                 'The Autosave initialization key is already bound to different inputs.',
                 $exception->getMessage()
@@ -214,8 +217,9 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
         try {
             $this->initialize(['initializationKey' => 'initialization-2'], $policy);
             $this->fail('The exhausted owner quota was not rejected.');
-        } catch (\OverflowException $exception) {
-            $this->assertSame('The active Autosave generation quota has been reached.', $exception->getMessage());
+        } catch (AutosaveException $exception) {
+            $this->assertSame('draft_limit_reached', $exception->getErrorCode());
+            $this->assertSame('The active Autosave draft limit has been reached.', $exception->getMessage());
         }
 
         $this->assertSame([1], $this->loadQuotaSlots(7));
@@ -241,7 +245,8 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
 
         $this->initialize([], $policy);
 
-        $this->expectException(\OverflowException::class);
+        $this->expectException(AutosaveException::class);
+        $this->expectExceptionMessage('The active Autosave draft limit has been reached.');
         $this->initialize(
             [
                 'initializationKey' => 'initialization-2',
@@ -362,8 +367,9 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
                 array_replace($oldPolicy, ['max_active_generations' => 1])
             );
             $this->fail('The reduced active-generation quota was not enforced.');
-        } catch (\OverflowException $exception) {
-            $this->assertSame('The active Autosave generation quota has been reached.', $exception->getMessage());
+        } catch (AutosaveException $exception) {
+            $this->assertSame('draft_limit_reached', $exception->getErrorCode());
+            $this->assertSame('The active Autosave draft limit has been reached.', $exception->getMessage());
         }
 
         $generations = $this->loadRows('#__autosave_generations');
@@ -480,6 +486,487 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
     }
 
     /**
+     * @testdox  compares owner-scoped initialization keys by exact bytes
+     *
+     * @param   string  $firstKey   The first exact key.
+     * @param   string  $secondKey  The byte-distinct key.
+     *
+     * @return  void
+     *
+     * @dataProvider byteDistinctInitializationKeyProvider
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testByteDistinctInitializationKeysCanCoexist(string $firstKey, string $secondKey): void
+    {
+        $first  = $this->initialize(['initializationKey' => $firstKey]);
+        $second = $this->initialize(['initializationKey' => $secondKey]);
+
+        $this->assertNotSame($first['continuation_id'], $second['continuation_id']);
+        $this->assertSame(2, $this->countRows('#__autosave_continuations'));
+    }
+
+    /**
+     * Byte-distinct initialization-key cases required by the storage contract.
+     *
+     * @return  array
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function byteDistinctInitializationKeyProvider(): array
+    {
+        return [
+            'trailing U+0020 space' => ['key', 'key '],
+            'case difference'       => ['key', 'Key'],
+            'Unicode normalization' => ["\u{00E9}", "e\u{0301}"],
+        ];
+    }
+
+    /**
+     * @testdox  scopes an identical initialization key to its owner
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testAnotherOwnerCanReuseAnInitializationKey(): void
+    {
+        $first  = $this->initialize();
+        $second = $this->initialize(['userId' => 8]);
+
+        $this->assertNotSame($first['continuation_id'], $second['continuation_id']);
+        $this->assertSame(2, $this->countRows('#__autosave_continuations'));
+    }
+
+    /**
+     * @testdox  preserves and inspects a deterministic owner-bound payload
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testPreserveAndInspectRoundTrip(): void
+    {
+        $identities = $this->initialize();
+        $payload    = [
+            'z'       => ['second' => 2, 'first' => 1],
+            'article' => '<p>Draft &amp; text</p>',
+            'list'    => [3, 1, 2],
+            'float'   => 1.0,
+        ];
+        $storage    = $this->storage();
+
+        $result = $storage->preserve(
+            7,
+            $identities['continuation_id'],
+            $identities['generation_id'],
+            'com_example.record',
+            'record-42',
+            'revision-1',
+            1,
+            $payload,
+            1,
+            new Date('2026-07-29 10:00:10', 'UTC')
+        );
+        $inspected = $storage->inspect(
+            7,
+            $identities['continuation_id'],
+            $identities['generation_id'],
+            new Date('2026-07-29 10:00:11', 'UTC')
+        );
+        $row = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+
+        $this->assertSame('accepted', $result);
+        $this->assertSame(1, $inspected['client_revision']);
+        $this->assertSame(1, $inspected['payload_schema_version']);
+        $this->assertSame(
+            [
+                'article' => '<p>Draft &amp; text</p>',
+                'float'   => 1.0,
+                'list'    => [3, 1, 2],
+                'z'       => ['first' => 1, 'second' => 2],
+            ],
+            $inspected['payload']
+        );
+        $this->assertSame(
+            '{"article":"<p>Draft &amp; text</p>","float":1.0,"list":[3,1,2],"z":{"first":1,"second":2}}',
+            $row['payload']
+        );
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/D', $row['payload_digest']);
+    }
+
+    /**
+     * @testdox  applies the complete monotonic revision and exact-retry matrix
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testPreserveRevisionMatrix(): void
+    {
+        $identities = $this->initialize();
+        $storage    = $this->storage();
+        $first      = ['value' => 'first'];
+        $third      = ['value' => 'third'];
+
+        $this->assertSame(
+            'accepted',
+            $this->preserve($storage, $identities, 1, $first, 1, '2026-07-29 10:00:10')
+        );
+        $beforeRetry = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+        $this->assertSame(
+            'idempotent',
+            $this->preserve($storage, $identities, 1, $first, 1, '2026-07-29 10:00:20')
+        );
+        $afterRetry = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+
+        $this->assertSame($beforeRetry['updated_at'], $afterRetry['updated_at']);
+        $this->assertSame($beforeRetry['expires_at'], $afterRetry['expires_at']);
+        $this->assertSame('accepted', $this->preserve($storage, $identities, 3, $third, 1, '2026-07-29 10:00:30'));
+        $this->assertAutosaveFailure(
+            'stale_client_revision',
+            fn () => $this->preserve($storage, $identities, 2, ['value' => 'second'], 1, '2026-07-29 10:00:31')
+        );
+        $this->assertAutosaveFailure(
+            'revision_conflict',
+            fn () => $this->preserve($storage, $identities, 3, ['value' => 'changed'], 1, '2026-07-29 10:00:31')
+        );
+        $this->assertAutosaveFailure(
+            'schema_version_conflict',
+            fn () => $this->preserve($storage, $identities, 3, $third, 2, '2026-07-29 10:00:31')
+        );
+        $this->assertAutosaveFailure(
+            'base_revision_conflict',
+            fn () => $this->preserve(
+                $storage,
+                $identities,
+                4,
+                ['value' => 'fourth'],
+                1,
+                '2026-07-29 10:00:31',
+                ['baseRevision' => 'revision-2']
+            )
+        );
+    }
+
+    /**
+     * @testdox  keeps detection owner-bound, metadata-only and limited to acknowledged active payloads
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testDetectReturnsOnlyRecoverableAcknowledgedMetadata(): void
+    {
+        $identities = $this->initialize();
+        $storage    = $this->storage();
+        $now        = new Date('2026-07-29 10:00:10', 'UTC');
+
+        $this->assertNull($storage->detect(7, 'com_example.record', 'record-42', $now));
+        $this->preserve($storage, $identities, 1, ['value' => 'draft'], 1, '2026-07-29 10:00:10');
+
+        $detected = $storage->detect(
+            7,
+            'com_example.record',
+            'record-42',
+            new Date('2026-07-29 10:00:11', 'UTC')
+        );
+
+        $this->assertSame($identities['continuation_id'], $detected['continuation_id']);
+        $this->assertSame($identities['generation_id'], $detected['generation_id']);
+        $this->assertSame(1, $detected['client_revision']);
+        $this->assertArrayNotHasKey('payload', $detected);
+        $this->assertNull(
+            $storage->detect(8, 'com_example.record', 'record-42', new Date('2026-07-29 10:00:11', 'UTC'))
+        );
+        $this->assertNull(
+            $storage->detect(7, 'com_example.other', 'record-42', new Date('2026-07-29 10:00:11', 'UTC'))
+        );
+    }
+
+    /**
+     * @testdox  detects the generation with the newest acknowledged activity
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testDetectOrdersAcknowledgedActivityNewestFirst(): void
+    {
+        $first   = $this->initialize();
+        $storage = $this->storage();
+        $this->preserve($storage, $first, 1, ['value' => 'first'], 1, '2026-07-29 10:00:10');
+        $second = $this->initialize(
+            [
+                'initializationKey' => 'initialization-2',
+                'now'               => new Date('2026-07-29 10:00:20', 'UTC'),
+            ]
+        );
+        $this->preserve($storage, $second, 1, ['value' => 'second'], 1, '2026-07-29 10:00:30');
+
+        $detected = $storage->detect(
+            7,
+            'com_example.record',
+            'record-42',
+            new Date('2026-07-29 10:00:31', 'UTC')
+        );
+
+        $this->assertSame($second['generation_id'], $detected['generation_id']);
+    }
+
+    /**
+     * @testdox  discards atomically, erases recoverable content and preserves tombstone metadata
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testDiscardClearsPayloadAndIsIdempotent(): void
+    {
+        $identities = $this->initialize();
+        $storage    = $this->storage();
+        $this->preserve($storage, $identities, 1, ['value' => 'draft'], 1, '2026-07-29 10:00:10');
+
+        $this->assertSame(
+            'discarded',
+            $storage->discard(
+                7,
+                $identities['continuation_id'],
+                $identities['generation_id'],
+                new Date('2026-07-29 10:00:20', 'UTC')
+            )
+        );
+        $row = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+
+        $this->assertSame(GenerationState::Discarded->value, $row['state']);
+        $this->assertSame(1, (int) $row['client_revision']);
+        $this->assertSame(1, (int) $row['payload_schema_version']);
+        $this->assertNull($row['payload']);
+        $this->assertNull($row['payload_digest']);
+        $this->assertNull($row['active_marker']);
+        $this->assertNull($row['quota_slot']);
+        $this->assertSame('2026-07-29 10:00:20', $row['terminal_at']);
+        $this->assertSame('2026-07-29 10:05:20', $row['retain_until']);
+        $this->assertSame(
+            'idempotent',
+            $storage->discard(
+                7,
+                $identities['continuation_id'],
+                $identities['generation_id'],
+                new Date('2026-07-29 10:00:30', 'UTC')
+            )
+        );
+        $this->assertNull(
+            $storage->detect(7, 'com_example.record', 'record-42', new Date('2026-07-29 10:00:30', 'UTC'))
+        );
+    }
+
+    /**
+     * @testdox  does not reveal missing or foreign-owner draft identities
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testOwnerIsolationUsesOnePrivateNotFoundOutcome(): void
+    {
+        $identities = $this->initialize();
+        $storage    = $this->storage();
+
+        foreach (
+            [
+                'foreign inspect' => fn () => $storage->inspect(
+                    8,
+                    $identities['continuation_id'],
+                    $identities['generation_id'],
+                    new Date('2026-07-29 10:00:10', 'UTC')
+                ),
+                'foreign preserve' => fn () => $this->preserve(
+                    $storage,
+                    $identities,
+                    1,
+                    ['value' => 'draft'],
+                    1,
+                    '2026-07-29 10:00:10',
+                    ['userId' => 8]
+                ),
+                'missing discard' => fn () => $storage->discard(
+                    7,
+                    str_repeat('c', 64),
+                    str_repeat('d', 64),
+                    new Date('2026-07-29 10:00:10', 'UTC')
+                ),
+            ] as $operation
+        ) {
+            $this->assertAutosaveFailure('draft_not_found', $operation);
+        }
+    }
+
+    /**
+     * @testdox  expires at equality and preserves revision metadata while erasing payload
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testInspectExpiresAtDeadlineEquality(): void
+    {
+        $identities = $this->initialize([], ['idle_ttl' => 10, 'max_lifetime' => 20]);
+        $storage    = $this->storage(['idle_ttl' => 10, 'max_lifetime' => 20]);
+        $this->preserve($storage, $identities, 1, ['value' => 'draft'], 1, '2026-07-29 10:00:05');
+
+        $this->assertAutosaveFailure(
+            'draft_expired',
+            fn () => $storage->inspect(
+                7,
+                $identities['continuation_id'],
+                $identities['generation_id'],
+                new Date('2026-07-29 10:00:15', 'UTC')
+            )
+        );
+        $row = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+
+        $this->assertSame(GenerationState::Expired->value, $row['state']);
+        $this->assertSame(1, (int) $row['client_revision']);
+        $this->assertSame(1, (int) $row['payload_schema_version']);
+        $this->assertNull($row['payload']);
+        $this->assertNull($row['payload_digest']);
+        $this->assertNull($row['quota_slot']);
+    }
+
+    /**
+     * @testdox  caps renewed idle expiry at the generation hard lifetime
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testPreserveRenewalHonoursHardLifetime(): void
+    {
+        $identities = $this->initialize([], ['idle_ttl' => 60, 'max_lifetime' => 120]);
+        $storage    = $this->storage(['idle_ttl' => 60, 'max_lifetime' => 120]);
+
+        $this->preserve($storage, $identities, 1, ['value' => 'first'], 1, '2026-07-29 10:00:50');
+        $row = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+        $this->assertSame('2026-07-29 10:01:50', $row['expires_at']);
+
+        $this->preserve($storage, $identities, 2, ['value' => 'second'], 1, '2026-07-29 10:01:40');
+        $row = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+        $this->assertSame('2026-07-29 10:02:00', $row['expires_at']);
+    }
+
+    /**
+     * @testdox  does not replace a terminal generation for the same initialization key
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testTerminalInitializationRetryDoesNotCreateReplacement(): void
+    {
+        $identities = $this->initialize();
+        $this->storage()->discard(
+            7,
+            $identities['continuation_id'],
+            $identities['generation_id'],
+            new Date('2026-07-29 10:00:10', 'UTC')
+        );
+
+        $this->assertAutosaveFailure('draft_terminal', fn () => $this->initialize());
+        $this->assertSame(1, $this->countRows('#__autosave_continuations'));
+        $this->assertSame(1, $this->countRows('#__autosave_generations'));
+    }
+
+    /**
+     * Create storage with the complete test policy.
+     *
+     * @param   array  $policy  Policy replacements.
+     *
+     * @return  AutosaveStorage
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function storage(array $policy = []): AutosaveStorage
+    {
+        return new AutosaveStorage(
+            $this->getDBDriver(),
+            array_replace(
+                [
+                    'idle_ttl'               => 60,
+                    'max_lifetime'           => 120,
+                    'tombstone_retention'    => 300,
+                    'max_active_generations' => 2,
+                    'max_payload_bytes'      => 1048576,
+                ],
+                $policy
+            )
+        );
+    }
+
+    /**
+     * Preserve a payload with optional binding replacements.
+     *
+     * @param   AutosaveStorage  $storage     The storage under test.
+     * @param   array            $identities  The continuation and generation public IDs.
+     * @param   integer          $revision    The incoming client revision.
+     * @param   array            $payload     The normalized payload.
+     * @param   integer          $schema      The payload schema version.
+     * @param   string           $now         The UTC operation time.
+     * @param   array            $changes     Binding replacements.
+     *
+     * @return  string
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function preserve(
+        AutosaveStorage $storage,
+        array $identities,
+        int $revision,
+        array $payload,
+        int $schema,
+        string $now,
+        array $changes = []
+    ): string {
+        $arguments = array_replace(
+            [
+                'userId'         => 7,
+                'continuationId' => $identities['continuation_id'],
+                'generationId'   => $identities['generation_id'],
+                'context'        => 'com_example.record',
+                'targetId'       => 'record-42',
+                'baseRevision'   => 'revision-1',
+                'clientRevision' => $revision,
+                'payload'        => $payload,
+                'schemaVersion'  => $schema,
+                'now'            => new Date($now, 'UTC'),
+            ],
+            $changes
+        );
+
+        return $storage->preserve(...array_values($arguments));
+    }
+
+    /**
+     * Assert a transport-neutral Autosave failure identifier.
+     *
+     * @param   string    $code       The expected stable identifier.
+     * @param   callable  $operation  The operation expected to fail.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function assertAutosaveFailure(string $code, callable $operation): void
+    {
+        try {
+            $operation();
+            $this->fail('The expected Autosave domain failure was not raised.');
+        } catch (AutosaveException $exception) {
+            $this->assertSame($code, $exception->getErrorCode());
+        }
+    }
+
+    /**
      * Initialize storage with optional argument and policy replacements.
      *
      * @param   array  $arguments  Initialization argument replacements.
@@ -508,6 +995,7 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
                 'max_lifetime'           => 120,
                 'tombstone_retention'    => 300,
                 'max_active_generations' => 2,
+                'max_payload_bytes'      => 1048576,
             ],
             $policy
         );
