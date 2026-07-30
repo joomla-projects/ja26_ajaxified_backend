@@ -12,6 +12,8 @@ namespace Joomla\Component\Content\Administrator\Extension;
 
 use Joomla\CMS\Association\AssociationServiceInterface;
 use Joomla\CMS\Association\AssociationServiceTrait;
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Categories\CategoryServiceInterface;
 use Joomla\CMS\Categories\CategoryServiceTrait;
 use Joomla\CMS\Component\Router\RouterServiceInterface;
@@ -50,12 +52,14 @@ class ContentComponent extends MVCComponent implements
     CategoryServiceInterface,
     FieldsFormServiceInterface,
     AssociationServiceInterface,
+    AutosaveServiceInterface,
     SchemaorgServiceInterface,
     WorkflowServiceInterface,
     RouterServiceInterface,
     TagServiceInterface
 {
     use AssociationServiceTrait;
+    use AutosaveServiceTrait;
     use RouterServiceTrait;
     use HTMLRegistryAwareTrait;
     use WorkflowServiceTrait;
@@ -202,6 +206,20 @@ class ContentComponent extends MVCComponent implements
         ];
 
         return $contexts;
+    }
+
+    /**
+     * Returns valid exact contexts for Autosave.
+     *
+     * @return  array<string, mixed>
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getAutosaveContexts(): array
+    {
+        return [
+            'com_content.article' => true,
+        ];
     }
 
     /**
