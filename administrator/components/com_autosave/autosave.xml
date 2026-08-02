@@ -10,6 +10,10 @@
 	<version>6.2.0</version>
 	<description>COM_AUTOSAVE_XML_DESCRIPTION</description>
 	<namespace path="src">Joomla\Component\Autosave</namespace>
+	<media destination="com_autosave" folder="media">
+		<filename>joomla.asset.json</filename>
+		<folder>js</folder>
+	</media>
 	<administration>
 		<files folder="admin">
 			<filename>autosave.xml</filename>
