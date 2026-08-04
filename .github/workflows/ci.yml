@@ -96,7 +96,7 @@ jobs:
     needs: [composer, npm]
     strategy:
       matrix:
-        check: ['lint:js', 'lint:testjs', 'lint:css', 'test:autosave']
+        check: ['lint:js', 'lint:testjs', 'lint:css', 'test:autosave', 'test:editor']
     steps:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:

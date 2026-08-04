@@ -2,79 +2,23 @@
  * @copyright  (C) 2018 Open Source Matters, Inc. <https://www.joomla.org>
  * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
-import { JoomlaEditor, JoomlaEditorDecorator } from 'editor-api';
+import { JoomlaEditor } from 'editor-api';
+import TinyMCEDecorator from '../src/tinymce-decorator.es6.js';
 
 /* global tinymce, tinyMCE */
 
 // Debounce ReInit per editor ID
 const reInitQueue = {};
-const debounceReInit = (editor, element, pluginOptions) => {
+const debounceReInit = (editor, element, pluginOptions, jEditor) => {
   if (reInitQueue[element.id]) {
     clearTimeout(reInitQueue[element.id]);
   }
   reInitQueue[element.id] = setTimeout(() => {
+    JoomlaEditor.unregister(jEditor);
     editor.remove();
-    JoomlaEditor.unregister(element.id);
     Joomla.JoomlaTinyMCE.setupEditor(element, pluginOptions);
   }, 500);
 };
-
-/**
- * TinyMCE Decorator for JoomlaEditor
- */
-class TinyMCEDecorator extends JoomlaEditorDecorator {
-  /**
-   * @returns {string}
-   */
-  getValue() {
-    return this.instance.getContent();
-  }
-
-  /**
-   * @param {String} value
-   * @returns {TinyMCEDecorator}
-   */
-  setValue(value) {
-    this.instance.setContent(value);
-    return this;
-  }
-
-  /**
-   * @returns {string}
-   */
-  getSelection() {
-    return this.instance.selection.getContent({ format: 'text' });
-  }
-
-  replaceSelection(value) {
-    this.instance.execCommand('mceInsertContent', false, value);
-    return this;
-  }
-
-  disable(enable) {
-    this.instance.setMode(!enable ? 'readonly' : 'design');
-    return this;
-  }
-
-  /**
-   * Toggles the editor visibility mode. Used by Toggle button.
-   * Should be implemented by editor provider.
-   *
-   * @param {boolean} show Optional. True to show, false to hide.
-   *
-   * @returns {boolean} Return True when editor become visible, and false when become hidden.
-   */
-  toggle(show) {
-    let visible = false;
-    if (show || this.instance.isHidden()) {
-      this.instance.show();
-      visible = true;
-    } else {
-      this.instance.hide();
-    }
-    return visible;
-  }
-}
 
 Joomla.JoomlaTinyMCE = {
   /**
@@ -213,10 +157,10 @@ Joomla.JoomlaTinyMCE = {
           // Initialisation were completed. However, the iframe still not loaded. Wait for that. Say Hello to Firefox Developer edition.
           $iframe.onload = () => {
             $iframe.onload = null;
-            $iframe.addEventListener('load', () => debounceReInit(ed, element, pluginOptions));
+            $iframe.addEventListener('load', () => debounceReInit(ed, element, pluginOptions, jEditor));
           };
         } else {
-          $iframe.addEventListener('load', () => debounceReInit(ed, element, pluginOptions));
+          $iframe.addEventListener('load', () => debounceReInit(ed, element, pluginOptions, jEditor));
         }
       };
       ed.on('load', checkInitIsCompleted);
@@ -226,6 +170,9 @@ Joomla.JoomlaTinyMCE = {
     // Find out when editor is interacted
     ed.on('focus', () => {
       JoomlaEditor.setActive(jEditor);
+    });
+    ed.on('remove', () => {
+      JoomlaEditor.unregister(jEditor);
     });
 
     // Render the editor
