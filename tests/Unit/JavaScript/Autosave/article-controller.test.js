@@ -20,14 +20,36 @@ class FakeElement extends EventTarget {
   }
 }
 
+class FakePresenter {
+  constructor(options) {
+    this.options = options;
+    this.destroyCalls = 0;
+  }
+
+  destroy() {
+    this.destroyCalls += 1;
+  }
+}
+
 class FakeForm extends FakeElement {
   constructor(id) {
     super(id);
     this.elements = new Set();
+    this.uiMount = null;
   }
 
   contains(element) {
     return this.elements.has(element) && element.isConnected;
+  }
+
+  querySelectorAll(selector) {
+    if (selector !== '[data-joomla-autosave-ui]'
+      || !this.uiMount
+      || !this.uiMount.isConnected) {
+      return [];
+    }
+
+    return [this.uiMount];
   }
 }
 
@@ -176,7 +198,7 @@ const endpoints = Object.freeze({
   discard: 'index.php?task=autosave.discard',
 });
 
-const createFixture = ({ startResults = [] } = {}) => {
+const createFixture = ({ startResults = [], presenterFactory } = {}) => {
   const document = new FakeDocument();
   const registry = new FakeEditorRegistry();
   const options = {
@@ -192,6 +214,8 @@ const createFixture = ({ startResults = [] } = {}) => {
         articletext: 'jform_articletext',
         catid: 'jform_catid',
       },
+      locale: 'en-GB',
+      timeZone: 'UTC',
     },
     [RUNTIME_OPTIONS_KEY]: { endpoints: { ...endpoints } },
     'csrf.token': 'csrf-token',
@@ -205,12 +229,17 @@ const createFixture = ({ startResults = [] } = {}) => {
   };
   fields.catid.options = [{ value: '2' }, { value: '3' }];
   Object.values(fields).forEach((field) => form.elements.add(field));
+  const uiMount = new FakeElement('item-form-autosave');
+  form.uiMount = uiMount;
+  form.elements.add(uiMount);
   document.elements.set(form.id, form);
   Object.values(fields).forEach((field) => document.elements.set(field.id, field));
   const editor = new FakeEditor();
   registry.instances.set(fields.articletext.id, editor);
   const runtimes = [];
   const clients = [];
+  const eventTargets = [];
+  const presenters = [];
   const controller = new ArticleAutosaveController({
     documentSource: document,
     optionsReader: (key, fallback) => options[key] ?? fallback,
@@ -227,6 +256,18 @@ const createFixture = ({ startResults = [] } = {}) => {
 
       return runtime;
     },
+    eventTargetFactory: () => {
+      const eventTarget = new EventTarget();
+      eventTargets.push(eventTarget);
+
+      return eventTarget;
+    },
+    presenterFactory: presenterFactory || ((configuration) => {
+      const presenter = new FakePresenter(configuration);
+      presenters.push(presenter);
+
+      return presenter;
+    }),
   });
 
   return {
@@ -234,11 +275,14 @@ const createFixture = ({ startResults = [] } = {}) => {
     controller,
     document,
     editor,
+    eventTargets,
     fields,
     form,
     options,
+    presenters,
     registry,
     runtimes,
+    uiMount,
     replaceForm() {
       const replacement = new FakeForm('item-form');
       const replacementFields = {
@@ -249,14 +293,18 @@ const createFixture = ({ startResults = [] } = {}) => {
       };
       replacementFields.catid.options = [{ value: '2' }, { value: '3' }];
       Object.values(replacementFields).forEach((field) => replacement.elements.add(field));
+      const replacementMount = new FakeElement('item-form-autosave-replacement');
+      replacement.uiMount = replacementMount;
+      replacement.elements.add(replacementMount);
       form.isConnected = false;
+      uiMount.isConnected = false;
       Object.values(fields).forEach((field) => {
         field.isConnected = false;
       });
       document.elements.set(replacement.id, replacement);
       Object.values(replacementFields).forEach((field) => document.elements.set(field.id, field));
 
-      return { form: replacement, fields: replacementFields };
+      return { form: replacement, fields: replacementFields, uiMount: replacementMount };
     },
   };
 };
@@ -278,7 +326,11 @@ test('supported existing Article activates exactly once with literal runtime con
   assert.equal(fixture.runtimes[0].options.context, 'com_content.article');
   assert.equal(fixture.runtimes[0].options.targetId, '42');
   assert.equal(fixture.runtimes[0].options.schemaVersion, 1);
-  assert.strictEqual(fixture.runtimes[0].options.eventTarget, fixture.document);
+  assert.strictEqual(fixture.runtimes[0].options.eventTarget, fixture.eventTargets[0]);
+  assert.equal(Object.hasOwn(fixture.runtimes[0].options, 'onlineSource'), false);
+  assert.strictEqual(fixture.presenters[0].options.eventTarget, fixture.eventTargets[0]);
+  assert.strictEqual(fixture.presenters[0].options.runtime, fixture.runtimes[0]);
+  assert.strictEqual(fixture.presenters[0].options.mount, fixture.uiMount);
   assert.equal(fixture.runtimes[0].changeCalls, 0);
 });
 
@@ -330,6 +382,7 @@ test('an absent or unsupported editor waits without affecting Article editing', 
   absent.controller.start();
   await absent.controller.reconcile();
   assert.equal(absent.runtimes.length, 0);
+  assert.equal(absent.presenters.length, 0);
 
   const lateEditor = new FakeEditor();
   absent.registry.instances.set('jform_articletext', lateEditor);
@@ -344,6 +397,7 @@ test('an absent or unsupported editor waits without affecting Article editing', 
   unsupported.controller.start();
   await unsupported.controller.reconcile();
   assert.equal(unsupported.runtimes.length, 0);
+  assert.equal(unsupported.presenters.length, 0);
 });
 
 test('irrelevant updates and unrelated editor lifecycle events are idempotent', async () => {
@@ -359,6 +413,8 @@ test('irrelevant updates and unrelated editor lifecycle events are idempotent', 
   assert.equal(fixture.runtimes.length, 1);
   assert.equal(fixture.runtimes[0].startCalls, 1);
   assert.equal(fixture.runtimes[0].destroyCalls, 0);
+  assert.equal(fixture.presenters.length, 1);
+  assert.equal(fixture.presenters[0].destroyCalls, 0);
 });
 
 test('form replacement destroys the old pair and creates one replacement', async () => {
@@ -372,8 +428,84 @@ test('form replacement destroys the old pair and creates one replacement', async
 
   assert.equal(fixture.runtimes.length, 2);
   assert.equal(fixture.runtimes[0].destroyCalls, 1);
+  assert.equal(fixture.presenters[0].destroyCalls, 1);
   assert.equal(fixture.editor.unsubscribeCalls, 1);
   assert.strictEqual(fixture.controller.activePair.form, replacement.form);
+  assert.notStrictEqual(fixture.eventTargets[0], fixture.eventTargets[1]);
+  assert.strictEqual(fixture.presenters[1].options.eventTarget, fixture.eventTargets[1]);
+});
+
+test('UI-only replacement preserves the runtime, adapter and pair EventTarget', async () => {
+  const fixture = createFixture();
+  fixture.controller.start();
+  await fixture.controller.reconcile();
+  const runtime = fixture.runtimes[0];
+  const adapter = fixture.controller.activePair.adapter;
+  const eventTarget = fixture.eventTargets[0];
+  const replacement = new FakeElement('item-form-autosave-replacement');
+  fixture.uiMount.isConnected = false;
+  fixture.form.elements.delete(fixture.uiMount);
+  fixture.form.uiMount = replacement;
+  fixture.form.elements.add(replacement);
+
+  fixture.document.dispatchEvent(new Event('joomla:updated'));
+  await fixture.controller.reconcile();
+
+  assert.equal(fixture.runtimes.length, 1);
+  assert.equal(runtime.destroyCalls, 0);
+  assert.strictEqual(fixture.controller.activePair.adapter, adapter);
+  assert.strictEqual(fixture.controller.activePair.eventTarget, eventTarget);
+  assert.equal(fixture.presenters[0].destroyCalls, 1);
+  assert.strictEqual(fixture.presenters[1].options.runtime, runtime);
+  assert.strictEqual(fixture.presenters[1].options.eventTarget, eventTarget);
+  assert.strictEqual(fixture.presenters[1].options.mount, replacement);
+});
+
+test('presentation configuration changes replace only the presenter', async () => {
+  const fixture = createFixture();
+  fixture.controller.start();
+  await fixture.controller.reconcile();
+  const runtime = fixture.runtimes[0];
+  const eventTarget = fixture.eventTargets[0];
+
+  fixture.options[ARTICLE_OPTIONS_KEY].locale = 'fr-FR';
+  fixture.options[ARTICLE_OPTIONS_KEY].timeZone = 'Europe/Paris';
+  await fixture.controller.reconcile();
+
+  assert.equal(fixture.runtimes.length, 1);
+  assert.equal(runtime.destroyCalls, 0);
+  assert.equal(fixture.presenters[0].destroyCalls, 1);
+  assert.strictEqual(fixture.presenters[1].options.eventTarget, eventTarget);
+  assert.equal(fixture.presenters[1].options.locale, 'fr-FR');
+  assert.equal(fixture.presenters[1].options.timeZone, 'Europe/Paris');
+});
+
+test('missing, malformed and late UI preserve headless runtime operation', async () => {
+  const fixture = createFixture();
+  fixture.form.elements.delete(fixture.uiMount);
+  fixture.form.uiMount = null;
+  fixture.controller.start();
+  await fixture.controller.reconcile();
+
+  assert.equal(fixture.runtimes.length, 1);
+  assert.equal(fixture.presenters.length, 0);
+  assert.equal(fixture.runtimes[0].destroyCalls, 0);
+
+  const lateMount = new FakeElement('late-autosave-ui');
+  fixture.form.uiMount = lateMount;
+  fixture.form.elements.add(lateMount);
+  fixture.document.dispatchEvent(new Event('joomla:updated'));
+  await fixture.controller.reconcile();
+
+  assert.equal(fixture.runtimes.length, 1);
+  assert.equal(fixture.presenters.length, 1);
+  assert.strictEqual(fixture.presenters[0].options.runtime, fixture.runtimes[0]);
+
+  const malformed = createFixture({ presenterFactory: () => null });
+  malformed.controller.start();
+  await malformed.controller.reconcile();
+  assert.equal(malformed.runtimes.length, 1);
+  assert.equal(malformed.runtimes[0].destroyCalls, 0);
 });
 
 test('editor replacement and stale lifecycle metadata cannot destroy the current pair', async () => {
@@ -463,6 +595,7 @@ test('recovery decisions and native Article actions are never invoked', async ()
 
   fixture.controller.destroy();
   fixture.controller.destroy();
+  assert.equal(fixture.presenters[0].destroyCalls, 1);
   assert.equal(fixture.runtimes[0].destroyCalls, 1);
   assert.equal(fixture.registry.unsubscribeCount, 1);
   assert.equal(fixture.document.listenerCounts.get('joomla:updated'), 0);

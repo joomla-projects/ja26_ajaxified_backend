@@ -4,6 +4,7 @@
  */
 
 import { AutosaveApiClient, AutosaveRuntime } from 'com_autosave.runtime';
+import createAutosavePresenter from 'com_autosave.ui';
 import { JoomlaEditor } from 'editor-api';
 import ArticleAutosaveAdapter, { normalizeCanonicalId } from './article-autosave-adapter.es6.js';
 
@@ -48,6 +49,8 @@ const validateArticleConfiguration = (configuration) => {
     payloadSchemaVersion: configuration.payloadSchemaVersion,
     formId: configuration.formId,
     fieldIds: Object.freeze({ ...configuration.fieldIds }),
+    locale: typeof configuration.locale === 'string' ? configuration.locale : '',
+    timeZone: typeof configuration.timeZone === 'string' ? configuration.timeZone : '',
   });
 };
 
@@ -78,7 +81,7 @@ const sameEndpoints = (first, second) => OPERATIONS.every(
   (operation) => first[operation] === second[operation],
 );
 
-const sameResolution = (pair, resolution) => pair
+const sameRuntimeResolution = (pair, resolution) => pair
   && resolution
   && pair.form === resolution.form
   && pair.editor === resolution.editor
@@ -89,6 +92,9 @@ const sameResolution = (pair, resolution) => pair
   && pair.runtimeConfiguration.csrf === resolution.runtime.csrf
   && sameEndpoints(pair.runtimeConfiguration.endpoints, resolution.runtime.endpoints)
   && FIELD_KEYS.every((key) => pair.fields[key] === resolution.fields[key]);
+
+const samePresentationConfiguration = (first, second) => first.locale === second.locale
+  && first.timeZone === second.timeZone;
 
 /**
  * Own one Article adapter/runtime pair for the current administrator document.
@@ -101,6 +107,8 @@ export default class ArticleAutosaveController {
     adapterFactory = (options) => new ArticleAutosaveAdapter(options),
     apiClientFactory = (options) => new AutosaveApiClient(options),
     runtimeFactory = (options) => new AutosaveRuntime(options),
+    eventTargetFactory = () => new EventTarget(),
+    presenterFactory = createAutosavePresenter,
   } = {}) {
     if (!documentSource
       || typeof documentSource.addEventListener !== 'function'
@@ -112,7 +120,9 @@ export default class ArticleAutosaveController {
       || typeof editorRegistry.subscribeLifecycle !== 'function'
       || typeof adapterFactory !== 'function'
       || typeof apiClientFactory !== 'function'
-      || typeof runtimeFactory !== 'function') {
+      || typeof runtimeFactory !== 'function'
+      || typeof eventTargetFactory !== 'function'
+      || typeof presenterFactory !== 'function') {
       throw new TypeError('The Article Autosave controller configuration is invalid.');
     }
 
@@ -122,6 +132,8 @@ export default class ArticleAutosaveController {
     this.adapterFactory = adapterFactory;
     this.apiClientFactory = apiClientFactory;
     this.runtimeFactory = runtimeFactory;
+    this.eventTargetFactory = eventTargetFactory;
+    this.presenterFactory = presenterFactory;
     this.started = false;
     this.destroyed = false;
     this.generation = 0;
@@ -170,8 +182,13 @@ export default class ArticleAutosaveController {
       resolution = null;
     }
 
-    if (sameResolution(this.activePair, resolution)
-      || sameResolution(this.pendingPair, resolution)) {
+    if (sameRuntimeResolution(this.activePair, resolution)) {
+      this.reconcilePresenter(this.activePair, resolution);
+
+      return true;
+    }
+
+    if (sameRuntimeResolution(this.pendingPair, resolution)) {
       return true;
     }
 
@@ -216,15 +233,25 @@ export default class ArticleAutosaveController {
     }
 
     let runtime;
+    let eventTarget;
 
     try {
+      eventTarget = this.eventTargetFactory();
+
+      if (!eventTarget
+        || typeof eventTarget.addEventListener !== 'function'
+        || typeof eventTarget.removeEventListener !== 'function'
+        || typeof eventTarget.dispatchEvent !== 'function') {
+        throw new TypeError('The Article Autosave event target is invalid.');
+      }
+
       runtime = this.runtimeFactory({
         apiClient,
         adapter,
         context: resolution.article.context,
         targetId: resolution.article.targetId,
         schemaVersion: resolution.article.payloadSchemaVersion,
-        eventTarget: this.document,
+        eventTarget,
       });
     } catch (error) {
       adapter.destroy();
@@ -236,6 +263,11 @@ export default class ArticleAutosaveController {
       generation,
       runtime,
       adapter,
+      eventTarget,
+      presenter: null,
+      presenterGeneration: 0,
+      uiMount: null,
+      presentationConfiguration: null,
       form: resolution.form,
       fields: resolution.fields,
       editor: resolution.editor,
@@ -274,7 +306,7 @@ export default class ArticleAutosaveController {
     if (this.destroyed
       || generation !== this.generation
       || this.pendingPair !== pair
-      || !sameResolution(pair, current)) {
+      || !sameRuntimeResolution(pair, current)) {
       if (this.pendingPair === pair) {
         this.pendingPair = null;
       }
@@ -286,6 +318,7 @@ export default class ArticleAutosaveController {
 
     this.pendingPair = null;
     this.activePair = pair;
+    this.reconcilePresenter(pair, current);
 
     return true;
   }
@@ -356,7 +389,83 @@ export default class ArticleAutosaveController {
       form,
       fields,
       editor,
+      uiMount: this.resolveUiMount(form),
+      presentationConfiguration: {
+        locale: typeof article.locale === 'string' ? article.locale : '',
+        timeZone: typeof article.timeZone === 'string' ? article.timeZone : '',
+      },
     };
+  }
+
+  resolveUiMount(form) {
+    if (typeof form.querySelectorAll !== 'function') {
+      return null;
+    }
+
+    const mounts = form.querySelectorAll('[data-joomla-autosave-ui]');
+
+    if (mounts.length !== 1
+      || !mounts[0].isConnected
+      || !form.contains(mounts[0])) {
+      return null;
+    }
+
+    return mounts[0];
+  }
+
+  reconcilePresenter(pair, resolution) {
+    const mount = resolution.uiMount;
+    const configuration = resolution.presentationConfiguration;
+    const sameMount = pair.uiMount === mount;
+    const sameConfiguration = pair.presentationConfiguration
+      && samePresentationConfiguration(pair.presentationConfiguration, configuration);
+
+    if (sameMount && sameConfiguration && (pair.presenter || !mount)) {
+      return Boolean(pair.presenter);
+    }
+
+    if (!sameMount || !sameConfiguration) {
+      pair.presenterGeneration += 1;
+      pair.presenter?.destroy();
+      pair.presenter = null;
+      pair.uiMount = mount;
+      pair.presentationConfiguration = { ...configuration };
+    }
+
+    if (!mount) {
+      return false;
+    }
+
+    let presenter;
+
+    try {
+      presenter = this.presenterFactory({
+        runtime: pair.runtime,
+        eventTarget: pair.eventTarget,
+        mount,
+        locale: configuration.locale,
+        timeZone: configuration.timeZone,
+      });
+    } catch (error) {
+      presenter = null;
+    }
+
+    if (!presenter || typeof presenter.destroy !== 'function') {
+      presenter?.destroy?.();
+
+      return false;
+    }
+
+    pair.presenter = presenter;
+
+    return true;
+  }
+
+  destroyPair(pair) {
+    pair.presenterGeneration += 1;
+    pair.presenter?.destroy();
+    pair.presenter = null;
+    pair.runtime.destroy();
   }
 
   invalidatePairs() {
@@ -365,13 +474,13 @@ export default class ArticleAutosaveController {
     if (this.pendingPair) {
       const pending = this.pendingPair;
       this.pendingPair = null;
-      pending.runtime.destroy();
+      this.destroyPair(pending);
     }
 
     if (this.activePair) {
       const active = this.activePair;
       this.activePair = null;
-      active.runtime.destroy();
+      this.destroyPair(active);
     }
 
     return this.generation;

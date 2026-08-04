@@ -12,7 +12,8 @@
       "dependencies": [
         "core",
         "editors",
-        "com_autosave.runtime"
+        "com_autosave.runtime",
+        "com_autosave.ui"
       ],
       "attributes": {
         "type": "module"
