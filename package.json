@@ -27,7 +27,8 @@
     "cypress:install": "cypress install",
     "cypress:open": "cypress open --config-file cypress.config.mjs",
     "cypress:run": "cypress run --config-file cypress.config.mjs",
-    "test:autosave": "node --experimental-loader=./tests/Unit/JavaScript/Autosave/esm-loader.mjs --test tests/Unit/JavaScript/Autosave/api-client.test.js tests/Unit/JavaScript/Autosave/runtime.test.js"
+    "test:autosave": "node --experimental-loader=./tests/Unit/JavaScript/Autosave/esm-loader.mjs --test tests/Unit/JavaScript/Autosave/api-client.test.js tests/Unit/JavaScript/Autosave/runtime.test.js",
+    "test:editor": "node --experimental-loader=./tests/Unit/JavaScript/Editors/esm-loader.mjs --test tests/Unit/JavaScript/Editors/editor-api.test.js tests/Unit/JavaScript/Editors/providers.test.js"
   },
   "browserslist": [
     "last 2 major version",
