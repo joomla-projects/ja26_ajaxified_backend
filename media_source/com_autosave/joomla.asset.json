@@ -9,6 +9,7 @@
       "name": "com_autosave.runtime",
       "type": "script",
       "uri": "com_autosave/runtime.min.js",
+      "importmap": true,
       "attributes": {
         "type": "module"
       }
