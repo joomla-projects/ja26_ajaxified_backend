@@ -63,7 +63,7 @@ $tmpl    = $tmpl ? '&tmpl=' . $tmpl : '';
 
     <?php
     if ($this->autosaveEnabled) {
-        echo LayoutHelper::render('joomla.autosave.default', ['id' => 'item-form-autosave']);
+        echo LayoutHelper::render('joomla.autosave.recovery', ['id' => 'item-form-autosave-recovery']);
     }
     ?>
 
@@ -75,7 +75,12 @@ $tmpl    = $tmpl ? '&tmpl=' . $tmpl : '';
             <div class="col-lg-9">
                 <div>
                     <fieldset class="adminform">
-                        <?php echo $this->form->getLabel('articletext'); ?>
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <?php echo $this->form->getLabel('articletext'); ?>
+                            <?php if ($this->autosaveEnabled) : ?>
+                                <?php echo LayoutHelper::render('joomla.autosave.status', ['id' => 'item-form-autosave-status']); ?>
+                            <?php endif; ?>
+                        </div>
                         <?php echo $this->form->getInput('articletext'); ?>
                     </fieldset>
                 </div>

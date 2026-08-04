@@ -266,7 +266,8 @@ export default class ArticleAutosaveController {
       eventTarget,
       presenter: null,
       presenterGeneration: 0,
-      uiMount: null,
+      statusMount: null,
+      recoveryMount: null,
       presentationConfiguration: null,
       form: resolution.form,
       fields: resolution.fields,
@@ -389,7 +390,8 @@ export default class ArticleAutosaveController {
       form,
       fields,
       editor,
-      uiMount: this.resolveUiMount(form),
+      statusMount: this.resolveUiMount(form, '[data-joomla-autosave-status-ui]'),
+      recoveryMount: this.resolveUiMount(form, '[data-joomla-autosave-recovery-ui]'),
       presentationConfiguration: {
         locale: typeof article.locale === 'string' ? article.locale : '',
         timeZone: typeof article.timeZone === 'string' ? article.timeZone : '',
@@ -397,12 +399,12 @@ export default class ArticleAutosaveController {
     };
   }
 
-  resolveUiMount(form) {
+  resolveUiMount(form, selector) {
     if (typeof form.querySelectorAll !== 'function') {
       return null;
     }
 
-    const mounts = form.querySelectorAll('[data-joomla-autosave-ui]');
+    const mounts = form.querySelectorAll(selector);
 
     if (mounts.length !== 1
       || !mounts[0].isConnected
@@ -414,25 +416,29 @@ export default class ArticleAutosaveController {
   }
 
   reconcilePresenter(pair, resolution) {
-    const mount = resolution.uiMount;
+    const statusMount = resolution.statusMount;
+    const recoveryMount = resolution.recoveryMount;
     const configuration = resolution.presentationConfiguration;
-    const sameMount = pair.uiMount === mount;
+    const sameMounts = pair.statusMount === statusMount
+      && pair.recoveryMount === recoveryMount;
     const sameConfiguration = pair.presentationConfiguration
       && samePresentationConfiguration(pair.presentationConfiguration, configuration);
+    const hasMount = statusMount || recoveryMount;
 
-    if (sameMount && sameConfiguration && (pair.presenter || !mount)) {
+    if (sameMounts && sameConfiguration && (pair.presenter || !hasMount)) {
       return Boolean(pair.presenter);
     }
 
-    if (!sameMount || !sameConfiguration) {
+    if (!sameMounts || !sameConfiguration) {
       pair.presenterGeneration += 1;
       pair.presenter?.destroy();
       pair.presenter = null;
-      pair.uiMount = mount;
+      pair.statusMount = statusMount;
+      pair.recoveryMount = recoveryMount;
       pair.presentationConfiguration = { ...configuration };
     }
 
-    if (!mount) {
+    if (!hasMount) {
       return false;
     }
 
@@ -442,7 +448,8 @@ export default class ArticleAutosaveController {
       presenter = this.presenterFactory({
         runtime: pair.runtime,
         eventTarget: pair.eventTarget,
-        mount,
+        statusMount,
+        recoveryMount,
         locale: configuration.locale,
         timeZone: configuration.timeZone,
       });

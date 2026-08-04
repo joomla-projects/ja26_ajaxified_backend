@@ -148,14 +148,81 @@ const setHidden = (element, hidden) => {
   element.hidden = hidden;
 };
 
+const resolveStatusUi = (mount) => {
+  if (!mount
+    || typeof mount.hasAttribute !== 'function'
+    || !mount.hasAttribute('data-joomla-autosave-status-ui')
+    || typeof mount.querySelector !== 'function') {
+    return null;
+  }
+
+  try {
+    return {
+      mount,
+      statusRegion: queryRequired(mount, '[data-autosave-status]'),
+      stateNodes: new Map(PRESENTATION_STATUSES.map((status) => [
+        status,
+        queryRequired(mount, `[data-autosave-state="${status}"]`),
+      ])),
+      retryButton: queryRequired(mount, '[data-autosave-action="retry"]'),
+    };
+  } catch (error) {
+    return null;
+  }
+};
+
+const resolveRecoveryUi = (mount) => {
+  if (!mount
+    || typeof mount.hasAttribute !== 'function'
+    || !mount.hasAttribute('data-joomla-autosave-recovery-ui')
+    || typeof mount.querySelector !== 'function') {
+    return null;
+  }
+
+  try {
+    return {
+      mount,
+      alertNodes: new Map([
+        'authentication-required',
+        'conflict',
+        'terminal',
+        'error',
+        'recovery-required',
+      ].map((status) => [
+        status,
+        queryRequired(mount, `[data-autosave-alert-state="${status}"]`),
+      ])),
+      alertRegion: queryRequired(mount, '[data-autosave-alert]'),
+      buttons: new Map(['restore', 'keep-current', 'discard'].map((action) => [
+        action,
+        queryRequired(mount, `[data-autosave-action="${action}"]`),
+      ])),
+      busy: queryRequired(mount, '[data-autosave-busy]'),
+      classificationNodes: new Map(['current', 'stale', 'unknown'].map(
+        (classification) => [
+          classification,
+          queryRequired(mount, `[data-autosave-recovery-${classification}]`),
+        ],
+      )),
+      localEdits: mount.querySelector('[data-autosave-recovery-local-edits]'),
+      region: queryRequired(mount, '[data-autosave-recovery]'),
+      time: queryRequired(mount, '[data-autosave-recovery-time]'),
+      timeContainer: queryRequired(mount, '[data-autosave-recovery-time-container]'),
+    };
+  } catch (error) {
+    return null;
+  }
+};
+
 /**
- * Present one Autosave runtime using one server-rendered Joomla layout.
+ * Present one Autosave runtime using optional status and recovery layouts.
  */
 export class AutosavePresenter {
   constructor({
     runtime,
     eventTarget,
-    mount,
+    statusMount = null,
+    recoveryMount = null,
     locale,
     timeZone,
     confirmDiscard = getDialogConfirmation,
@@ -169,18 +236,22 @@ export class AutosavePresenter {
       || !eventTarget
       || typeof eventTarget.addEventListener !== 'function'
       || typeof eventTarget.removeEventListener !== 'function'
-      || !mount
-      || typeof mount.hasAttribute !== 'function'
-      || !mount.hasAttribute('data-joomla-autosave-ui')
-      || typeof mount.querySelector !== 'function'
       || typeof confirmDiscard !== 'function'
       || typeof formatTimestamp !== 'function') {
       throw new TypeError('The Autosave presenter configuration is invalid.');
     }
 
+    const statusUi = resolveStatusUi(statusMount);
+    const recoveryUi = resolveRecoveryUi(recoveryMount);
+
+    if (!statusUi && !recoveryUi) {
+      throw new TypeError('The Autosave presenter requires a valid presentation layout.');
+    }
+
     this.runtime = runtime;
     this.eventTarget = eventTarget;
-    this.mount = mount;
+    this.statusUi = statusUi;
+    this.recoveryUi = recoveryUi;
     this.confirmDiscard = confirmDiscard;
     this.formatTimestamp = formatTimestamp;
     this.destroyed = false;
@@ -188,44 +259,6 @@ export class AutosavePresenter {
     this.activeAction = null;
     this.confirmationPending = false;
     this.lastUrgentKey = null;
-
-    this.statusRegion = queryRequired(mount, '[data-autosave-status]');
-    this.alertRegion = queryRequired(mount, '[data-autosave-alert]');
-    this.savedTimeContainer = queryRequired(mount, '[data-autosave-saved-time-container]');
-    this.savedTime = queryRequired(mount, '[data-autosave-time]');
-    this.recoveryRegion = queryRequired(mount, '[data-autosave-recovery]');
-    this.recoveryTimeContainer = queryRequired(
-      mount,
-      '[data-autosave-recovery-time-container]',
-    );
-    this.recoveryTime = queryRequired(mount, '[data-autosave-recovery-time]');
-    this.recoveryBusy = queryRequired(mount, '[data-autosave-busy]');
-    this.recoveryLocalEdits = mount.querySelector('[data-autosave-recovery-local-edits]');
-
-    this.stateNodes = new Map(PRESENTATION_STATUSES.map((status) => [
-      status,
-      queryRequired(mount, `[data-autosave-state="${status}"]`),
-    ]));
-    this.alertNodes = new Map([
-      'authentication-required',
-      'conflict',
-      'terminal',
-      'error',
-      'recovery-required',
-    ].map((status) => [
-      status,
-      queryRequired(mount, `[data-autosave-alert-state="${status}"]`),
-    ]));
-    this.classificationNodes = new Map(['current', 'stale', 'unknown'].map(
-      (classification) => [
-        classification,
-        queryRequired(mount, `[data-autosave-recovery-${classification}]`),
-      ],
-    ));
-    this.buttons = new Map(['restore', 'keep-current', 'discard', 'retry'].map((action) => [
-      action,
-      queryRequired(mount, `[data-autosave-action="${action}"]`),
-    ]));
 
     this.handleState = () => this.render(this.runtime.state);
     this.handleDraft = () => this.render(this.runtime.state);
@@ -239,10 +272,10 @@ export class AutosavePresenter {
 
     this.eventTarget.addEventListener(AUTOSAVE_STATE_EVENT, this.handleState);
     this.eventTarget.addEventListener(AUTOSAVE_DRAFT_EVENT, this.handleDraft);
-    this.buttons.get('restore').addEventListener('click', this.handleRestore);
-    this.buttons.get('keep-current').addEventListener('click', this.handleKeepCurrent);
-    this.buttons.get('discard').addEventListener('click', this.handleDiscard);
-    this.buttons.get('retry').addEventListener('click', this.handleRetry);
+    this.recoveryUi?.buttons.get('restore').addEventListener('click', this.handleRestore);
+    this.recoveryUi?.buttons.get('keep-current').addEventListener('click', this.handleKeepCurrent);
+    this.recoveryUi?.buttons.get('discard').addEventListener('click', this.handleDiscard);
+    this.statusUi?.retryButton.addEventListener('click', this.handleRetry);
 
     this.render(this.runtime.state);
   }
@@ -263,17 +296,22 @@ export class AutosavePresenter {
       || status === 'recovery-applying'
       || status === 'recovery-discarding';
 
-    this.mount.hidden = status === 'destroyed';
-    this.stateNodes.forEach((node, name) => setHidden(node, name !== status));
-    this.statusRegion.setAttribute('aria-busy', BUSY_STATUSES.has(status) ? 'true' : 'false');
+    if (this.statusUi) {
+      this.statusUi.mount.hidden = status === 'destroyed';
+      this.statusUi.stateNodes.forEach((node, name) => setHidden(node, name !== status));
+      this.statusUi.statusRegion.setAttribute(
+        'aria-busy',
+        BUSY_STATUSES.has(status) ? 'true' : 'false',
+      );
+      const retryable = status === 'paused' && state.error?.retryable === true;
+      this.statusUi.retryButton.hidden = !retryable;
+      this.statusUi.retryButton.disabled = !retryable || recoveryBusy || this.confirmationPending;
+    }
 
-    this.renderTimestamp(
-      this.savedTimeContainer,
-      this.savedTime,
-      status === 'preserved' ? state.lastSuccessfulAt : null,
-    );
-    this.renderRecovery(candidate, state, status, recoveryBusy);
-    this.renderUrgent(status, candidate);
+    if (this.recoveryUi) {
+      this.renderRecovery(candidate, state, status, recoveryBusy);
+      this.renderUrgent(status, candidate);
+    }
   }
 
   renderRecovery(candidate, state, status, busy) {
@@ -282,35 +320,34 @@ export class AutosavePresenter {
       ? candidate.classification
       : 'unknown';
     const blocked = NETWORK_BLOCKED_STATUSES.has(status);
-    const retryable = status === 'paused' && state.error?.retryable === true;
+    const ui = this.recoveryUi;
 
-    this.recoveryRegion.hidden = !hasCandidate;
-    this.recoveryRegion.setAttribute('aria-busy', busy ? 'true' : 'false');
-    this.recoveryBusy.hidden = !busy;
-    this.classificationNodes.forEach((node, name) => {
+    ui.mount.hidden = status === 'destroyed'
+      || (!hasCandidate && !URGENT_STATUSES.has(status));
+    ui.region.hidden = !hasCandidate;
+    ui.region.setAttribute('aria-busy', busy ? 'true' : 'false');
+    ui.busy.hidden = !busy;
+    ui.classificationNodes.forEach((node, name) => {
       node.hidden = !hasCandidate || name !== classification;
     });
     this.renderTimestamp(
-      this.recoveryTimeContainer,
-      this.recoveryTime,
+      ui.timeContainer,
+      ui.time,
       hasCandidate ? candidate.updatedAt : null,
     );
 
-    if (this.recoveryLocalEdits) {
-      this.recoveryLocalEdits.hidden = !hasCandidate || candidate.localEdits !== true;
+    if (ui.localEdits) {
+      ui.localEdits.hidden = !hasCandidate || candidate.localEdits !== true;
     }
 
-    const restore = this.buttons.get('restore');
-    const keepCurrent = this.buttons.get('keep-current');
-    const discard = this.buttons.get('discard');
-    const retry = this.buttons.get('retry');
+    const restore = ui.buttons.get('restore');
+    const keepCurrent = ui.buttons.get('keep-current');
+    const discard = ui.buttons.get('discard');
 
     restore.disabled = !hasCandidate || busy || blocked || this.confirmationPending;
     keepCurrent.disabled = !hasCandidate || busy || status === 'destroyed'
       || this.confirmationPending;
     discard.disabled = !hasCandidate || busy || blocked || this.confirmationPending;
-    retry.hidden = !retryable;
-    retry.disabled = !retryable || busy || this.confirmationPending;
   }
 
   renderTimestamp(container, time, value) {
@@ -351,7 +388,7 @@ export class AutosavePresenter {
       return;
     }
 
-    this.alertNodes.forEach((node, name) => setHidden(node, name !== urgentKey));
+    this.recoveryUi.alertNodes.forEach((node, name) => setHidden(node, name !== urgentKey));
     this.lastUrgentKey = urgentKey;
   }
 
@@ -413,7 +450,7 @@ export class AutosavePresenter {
 
     const generation = this.generation;
     const runtime = this.runtime;
-    const button = this.buttons.get('discard');
+    const button = this.recoveryUi.buttons.get('discard');
     this.confirmationPending = true;
     this.render(runtime.state);
 
@@ -453,25 +490,27 @@ export class AutosavePresenter {
   }
 
   hasRecoveryFocus() {
-    const activeElement = this.mount.ownerDocument?.activeElement;
+    const activeElement = this.recoveryUi?.mount.ownerDocument?.activeElement;
 
-    return Boolean(activeElement && this.recoveryRegion.contains(activeElement));
+    return Boolean(activeElement && this.recoveryUi.region.contains(activeElement));
   }
 
   focusStatus() {
-    if (!this.statusRegion.isConnected || typeof this.statusRegion.focus !== 'function') {
+    const statusRegion = this.statusUi?.statusRegion;
+
+    if (!statusRegion?.isConnected || typeof statusRegion.focus !== 'function') {
       return;
     }
 
-    this.statusRegion.setAttribute('tabindex', '-1');
+    statusRegion.setAttribute('tabindex', '-1');
 
     try {
-      this.statusRegion.focus({ preventScroll: true });
+      statusRegion.focus({ preventScroll: true });
     } catch (error) {
-      this.statusRegion.focus();
+      statusRegion.focus();
     }
 
-    this.statusRegion.removeAttribute('tabindex');
+    statusRegion.removeAttribute('tabindex');
   }
 
   destroy() {
@@ -483,15 +522,24 @@ export class AutosavePresenter {
     this.generation += 1;
     this.eventTarget.removeEventListener(AUTOSAVE_STATE_EVENT, this.handleState);
     this.eventTarget.removeEventListener(AUTOSAVE_DRAFT_EVENT, this.handleDraft);
-    this.buttons.get('restore').removeEventListener('click', this.handleRestore);
-    this.buttons.get('keep-current').removeEventListener('click', this.handleKeepCurrent);
-    this.buttons.get('discard').removeEventListener('click', this.handleDiscard);
-    this.buttons.get('retry').removeEventListener('click', this.handleRetry);
-    this.mount.hidden = true;
+    this.recoveryUi?.buttons.get('restore').removeEventListener('click', this.handleRestore);
+    this.recoveryUi?.buttons.get('keep-current').removeEventListener('click', this.handleKeepCurrent);
+    this.recoveryUi?.buttons.get('discard').removeEventListener('click', this.handleDiscard);
+    this.statusUi?.retryButton.removeEventListener('click', this.handleRetry);
+
+    if (this.statusUi) {
+      this.statusUi.mount.hidden = true;
+    }
+
+    if (this.recoveryUi) {
+      this.recoveryUi.mount.hidden = true;
+    }
+
     this.activeAction = null;
     this.runtime = null;
     this.eventTarget = null;
-    this.mount = null;
+    this.statusUi = null;
+    this.recoveryUi = null;
   }
 }
 
@@ -513,4 +561,3 @@ export const createAutosavePresenter = (options) => {
 };
 
 export default createAutosavePresenter;
-

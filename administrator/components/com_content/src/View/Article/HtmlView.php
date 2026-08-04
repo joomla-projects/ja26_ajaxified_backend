@@ -137,7 +137,7 @@ class HtmlView extends FormView
      */
     private function prepareAutosave(): void
     {
-        $document = $this->getDocument();
+        $document              = $this->getDocument();
         $this->autosaveEnabled = false;
         $document->addScriptOptions('com_content.autosave.article', ['enabled' => false], false);
 

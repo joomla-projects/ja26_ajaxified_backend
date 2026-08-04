@@ -4,6 +4,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import {
   AUTOSAVE_DRAFT_EVENT,
@@ -150,11 +151,11 @@ const element = (document, name, value) => new FakeElement(document, {
 
 const createMount = () => {
   const document = new FakeDocument();
-  const mount = element(document, 'data-joomla-autosave-ui');
+  const mount = new FakeElement(document);
+  const statusMount = element(document, 'data-joomla-autosave-status-ui');
+  const recoveryMount = element(document, 'data-joomla-autosave-recovery-ui');
   const status = element(document, 'data-autosave-status');
   const alert = element(document, 'data-autosave-alert');
-  const savedTimeContainer = element(document, 'data-autosave-saved-time-container');
-  const savedTime = element(document, 'data-autosave-time');
   const recovery = element(document, 'data-autosave-recovery');
   const recoveryTimeContainer = element(document, 'data-autosave-recovery-time-container');
   const recoveryTime = element(document, 'data-autosave-recovery-time');
@@ -175,7 +176,6 @@ const createMount = () => {
     element(document, 'data-autosave-recovery-unknown'),
     localEdits,
     recoveryTimeContainer,
-    recoveryTime,
     busy,
   );
 
@@ -185,7 +185,10 @@ const createMount = () => {
   buttons.discard.setAttribute('data-autosave-confirm-title', 'Confirm discard');
   buttons.discard.setAttribute('data-autosave-confirm-message', 'Discard the draft?');
   recovery.append(buttons.restore, buttons['keep-current'], buttons.discard);
-  mount.append(status, savedTimeContainer, savedTime, buttons.retry, alert, recovery);
+  recoveryTimeContainer.append(recoveryTime);
+  statusMount.append(status, buttons.retry);
+  recoveryMount.append(alert, recovery);
+  mount.append(statusMount, recoveryMount);
 
   return {
     alert,
@@ -195,11 +198,11 @@ const createMount = () => {
     localEdits,
     mount,
     recovery,
+    recoveryMount,
     recoveryTime,
     recoveryTimeContainer,
-    savedTime,
-    savedTimeContainer,
     status,
+    statusMount,
   };
 };
 
@@ -295,8 +298,9 @@ const createFixture = ({
     confirmDiscard,
     eventTarget,
     formatTimestamp,
-    mount: dom.mount,
+    recoveryMount: dom.recoveryMount,
     runtime,
+    statusMount: dom.statusMount,
   });
 
   return {
@@ -312,18 +316,21 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 test('valid construction renders runtime.state immediately and malformed layouts fail safely', () => {
   const fixture = createFixture({ state: { ...defaultState(), status: 'dirty' } });
   assert.ok(fixture.presenter);
-  assert.equal(fixture.mount.hidden, false);
+  assert.equal(fixture.statusMount.hidden, false);
   assert.equal(fixture.mount.querySelector('[data-autosave-state="dirty"]').hidden, false);
 
   const malformed = createMount();
-  malformed.mount.querySelector('[data-autosave-status]').remove();
+  malformed.statusMount.querySelector('[data-autosave-status]').remove();
   const runtime = new FakeRuntime(new EventTarget());
   const presenter = createAutosavePresenter({
     eventTarget: runtime.eventTarget,
-    mount: malformed.mount,
+    recoveryMount: malformed.recoveryMount,
+    statusMount: malformed.statusMount,
     runtime,
   });
-  assert.equal(presenter, null);
+  assert.ok(presenter);
+  assert.equal(presenter.statusUi, null);
+  assert.ok(presenter.recoveryUi);
   assert.equal(runtime.calls.restore, 0);
 
   const optional = createMount();
@@ -331,9 +338,58 @@ test('valid construction renders runtime.state immediately and malformed layouts
   const optionalRuntime = new FakeRuntime(new EventTarget());
   assert.ok(createAutosavePresenter({
     eventTarget: optionalRuntime.eventTarget,
-    mount: optional.mount,
+    recoveryMount: optional.recoveryMount,
+    statusMount: optional.statusMount,
     runtime: optionalRuntime,
   }));
+
+  optional.statusMount.querySelector('[data-autosave-status]').remove();
+  optional.recoveryMount.querySelector('[data-autosave-recovery]').remove();
+  assert.equal(createAutosavePresenter({
+    eventTarget: optionalRuntime.eventTarget,
+    recoveryMount: optional.recoveryMount,
+    statusMount: optional.statusMount,
+    runtime: optionalRuntime,
+  }), null);
+});
+
+test('status and recovery layouts degrade independently', () => {
+  const statusOnly = createMount();
+  const statusRuntime = new FakeRuntime(new EventTarget(), {
+    ...defaultState(),
+    status: 'preserved',
+  });
+  const statusPresenter = createAutosavePresenter({
+    eventTarget: statusRuntime.eventTarget,
+    runtime: statusRuntime,
+    statusMount: statusOnly.statusMount,
+  });
+  assert.ok(statusPresenter);
+  assert.equal(statusOnly.statusMount.hidden, false);
+  assert.equal(
+    statusOnly.statusMount.querySelector('[data-autosave-state="preserved"]').hidden,
+    false,
+  );
+
+  const recoveryOnly = createMount();
+  const recoveryRuntime = new FakeRuntime(new EventTarget(), {
+    ...defaultState(),
+    recoveryCandidate: candidate(),
+    status: 'recovery-required',
+  });
+  const recoveryPresenter = createAutosavePresenter({
+    eventTarget: recoveryRuntime.eventTarget,
+    recoveryMount: recoveryOnly.recoveryMount,
+    runtime: recoveryRuntime,
+  });
+  assert.ok(recoveryPresenter);
+  assert.equal(recoveryOnly.recoveryMount.hidden, false);
+  assert.equal(recoveryOnly.recovery.hidden, false);
+
+  assert.equal(createAutosavePresenter({
+    eventTarget: new EventTarget(),
+    runtime: new FakeRuntime(new EventTarget()),
+  }), null);
 });
 
 test('every public runtime status has an explicit conservative presentation', () => {
@@ -345,9 +401,9 @@ test('every public runtime status has an explicit conservative presentation', ()
       .filter((node) => !node.hidden);
 
     if (status === 'destroyed') {
-      assert.equal(fixture.mount.hidden, true);
+      assert.equal(fixture.statusMount.hidden, true);
     } else {
-      assert.equal(fixture.mount.hidden, false);
+      assert.equal(fixture.statusMount.hidden, false);
       assert.equal(visible.length, 1);
       assert.equal(visible[0].getAttribute('data-autosave-state'), status);
     }
@@ -363,6 +419,7 @@ test('busy and urgent states use their separate accessible regions without dupli
   assert.equal(fixture.status.getAttribute('aria-busy'), 'true');
 
   fixture.runtime.update({ status: 'authentication-required' });
+  assert.equal(fixture.recoveryMount.hidden, false);
   assert.equal(
     fixture.alert.querySelector('[data-autosave-alert-state="authentication-required"]').hidden,
     false,
@@ -408,7 +465,7 @@ test('recovery visibility and network actions follow authoritative runtime state
   assert.equal(fixture.recovery.hidden, true);
 });
 
-test('timestamps are validated, formatted and never expose invalid raw values', () => {
+test('only recovery timestamps are validated, formatted and exposed', () => {
   const formatter = createAutosaveDateFormatter('en-GB', 'UTC');
   const valid = formatter('2026-08-04T10:30:00Z');
   assert.equal(valid.dateTime, '2026-08-04T10:30:00Z');
@@ -418,7 +475,14 @@ test('timestamps are validated, formatted and never expose invalid raw values', 
     '2026-08-04T10:30:00Z',
   ));
 
+  const configuredZone = createAutosaveDateFormatter('en-GB', 'Asia/Kolkata')(
+    '2026-08-04T17:55:00Z',
+  );
+  assert.equal(configuredZone.dateTime, '2026-08-04T17:55:00Z');
+  assert.match(configuredZone.text, /23:25/);
+
   const fixture = createFixture({
+    formatTimestamp: createAutosaveDateFormatter('en-GB', 'UTC'),
     state: {
       ...defaultState(),
       lastSuccessfulAt: 1785839400000,
@@ -426,15 +490,22 @@ test('timestamps are validated, formatted and never expose invalid raw values', 
       status: 'preserved',
     },
   });
-  assert.equal(fixture.savedTimeContainer.hidden, false);
-  assert.equal(fixture.savedTime.getAttribute('datetime'), '2026-08-04T10:30:00Z');
+  assert.equal(fixture.statusMount.querySelector('time'), null);
+  assert.equal(fixture.statusMount.querySelector('[data-autosave-time]'), null);
   assert.equal(fixture.recoveryTimeContainer.hidden, false);
+  assert.equal(fixture.recoveryTime.getAttribute('datetime'), '2026-08-04T10:30:00Z');
+  assert.equal(fixture.recoveryTime.textContent, '4 Aug 2026, 10:30');
 
-  fixture.runtime.update({ lastSuccessfulAt: 'invalid' });
+  fixture.runtime.update({
+    lastSuccessfulAt: '2099-01-01T00:00:00Z',
+    recoveryCandidate: { ...candidate(), updatedAt: 'invalid' },
+  });
+  assert.equal(fixture.recoveryTimeContainer.hidden, true);
+  assert.equal(fixture.recoveryTime.textContent, '');
+
   fixture.presenter.formatTimestamp = () => null;
-  fixture.runtime.update({ status: 'preserved' });
-  assert.equal(fixture.savedTimeContainer.hidden, true);
-  assert.equal(fixture.savedTime.textContent, '');
+  fixture.runtime.update({ recoveryCandidate: candidate() });
+  assert.equal(fixture.recoveryTimeContainer.hidden, true);
 
   const failedFormatter = createFixture({
     formatTimestamp: () => {
@@ -446,8 +517,44 @@ test('timestamps are validated, formatted and never expose invalid raw values', 
       status: 'preserved',
     },
   });
-  assert.equal(failedFormatter.savedTimeContainer.hidden, true);
   assert.equal(failedFormatter.recoveryTimeContainer.hidden, true);
+});
+
+test('generic layouts preserve placement, accessibility, contrast and timestamp boundaries', async () => {
+  const [statusLayout, recoveryLayout, articleLayout, articleView, language] = await Promise.all([
+    readFile('layouts/joomla/autosave/status.php', 'utf8'),
+    readFile('layouts/joomla/autosave/recovery.php', 'utf8'),
+    readFile('administrator/components/com_content/tmpl/article/edit.php', 'utf8'),
+    readFile('administrator/components/com_content/src/View/Article/HtmlView.php', 'utf8'),
+    readFile('administrator/language/en-GB/com_autosave.ini', 'utf8'),
+  ]);
+
+  assert.match(statusLayout, /role="status"/);
+  assert.match(statusLayout, /aria-live="polite"/);
+  assert.match(statusLayout, /aria-atomic="true"/);
+  assert.doesNotMatch(statusLayout, /<time|data-autosave-time|alert-warning/);
+  assert.match(language, /^COM_AUTOSAVE_STATUS_PRESERVED="Draft saved\."$/m);
+  assert.doesNotMatch(language, /^COM_AUTOSAVE_TIME_AT=/m);
+  assert.match(recoveryLayout, /class="mb-3" data-joomla-autosave-recovery-ui/);
+  assert.match(recoveryLayout, /class="alert alert-warning mb-0"/);
+  assert.match(recoveryLayout, /<time data-autosave-recovery-time>/);
+  assert.doesNotMatch(recoveryLayout, /text-muted|style=|#[0-9a-f]{3,8}/i);
+  assert.match(
+    articleLayout,
+    /d-flex flex-wrap justify-content-between align-items-center gap-2[\s\S]*getLabel\('articletext'\)[\s\S]*joomla\.autosave\.status/,
+  );
+  assert.ok(
+    articleLayout.indexOf('joomla.autosave.recovery')
+      < articleLayout.indexOf("getLabel('articletext')"),
+  );
+  assert.ok(
+    articleLayout.indexOf("getLabel('articletext')")
+      < articleLayout.indexOf("getInput('articletext')"),
+  );
+  assert.match(
+    articleView,
+    /getParam\([\s\S]*'timezone',[\s\S]*\$application->get\('offset', 'UTC'\)/,
+  );
 });
 
 test('Restore calls only the runtime, prevents duplicate actions and follows authoritative state', async () => {
@@ -585,7 +692,8 @@ test('separate EventTargets isolate presenters and destruction invalidates stale
   first.presenter.destroy();
   first.presenter.destroy();
   first.runtime.update({ status: 'preserved' });
-  assert.equal(first.mount.hidden, true);
+  assert.equal(first.statusMount.hidden, true);
+  assert.equal(first.recoveryMount.hidden, true);
 
   let release;
   const pending = createFixture({
@@ -603,5 +711,6 @@ test('separate EventTargets isolate presenters and destruction invalidates stale
   pending.presenter.destroy();
   release(true);
   await flush();
-  assert.equal(pending.mount.hidden, true);
+  assert.equal(pending.statusMount.hidden, true);
+  assert.equal(pending.recoveryMount.hidden, true);
 });
