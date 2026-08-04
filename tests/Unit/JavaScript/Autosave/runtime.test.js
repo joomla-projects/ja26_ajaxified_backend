@@ -546,6 +546,104 @@ test('offline edits remain dirty and reconnect resumes without duplicate request
   assert.equal(harness.runtime.state.status, 'preserved');
 });
 
+test('reconnect resumes pending dirty retry with the same snapshot and revision', async () => {
+  let attempts = 0;
+  const api = createApi({
+    preserve: async () => {
+      attempts += 1;
+
+      if (attempts === 1) {
+        throw apiFailure('network-failure', { retryable: true, outcomeUnknown: true });
+      }
+
+      return { status: 'idempotent' };
+    },
+  });
+  const harness = createRuntime({ api });
+  harness.runtime.start();
+  harness.adapter.edit();
+  await harness.clock.tick(10);
+  assert.equal(harness.runtime.state.status, 'retry-waiting');
+  assert.equal(harness.runtime.state.dirty, true);
+
+  harness.setOnline(false);
+  assert.equal(harness.runtime.state.status, 'offline');
+  harness.setOnline(true);
+  await settle();
+
+  assert.equal(api.calls.preserve.length, 2);
+  assert.equal(
+    api.calls.preserve[0].request.client_revision,
+    api.calls.preserve[1].request.client_revision,
+  );
+  assert.strictEqual(api.calls.preserve[0].request.payload, api.calls.preserve[1].request.payload);
+  assert.equal(harness.runtime.state.status, 'preserved');
+  assert.equal(harness.runtime.state.dirty, false);
+});
+
+test('reconnect restores unresolved recovery state through a separate pair EventTarget', async () => {
+  const api = createApi({ detect: async () => candidate });
+  const harness = createRuntime({ api, detectOnStart: true });
+  harness.runtime.start();
+  await settle();
+
+  assert.notStrictEqual(harness.onlineSource, harness.eventTarget);
+  assert.equal(harness.runtime.state.status, 'recovery-required');
+  const detectedCandidate = harness.runtime.state.recoveryCandidate;
+
+  harness.setOnline(false);
+  assert.equal(harness.runtime.state.status, 'offline');
+  assert.deepEqual(harness.runtime.state.recoveryCandidate, detectedCandidate);
+
+  const reconnectEventCount = harness.eventTarget.events.length;
+  harness.setOnline(true);
+  await settle();
+
+  assert.equal(harness.runtime.state.status, 'recovery-required');
+  assert.deepEqual(harness.runtime.state.recoveryCandidate, detectedCandidate);
+  assert.equal(api.calls.read.length, 0);
+  assert.equal(api.calls.discard.length, 0);
+  assert.equal(harness.adapter.applies, 0);
+  assert.equal(harness.eventTarget.events.length, reconnectEventCount + 1);
+
+  harness.setOnline(true);
+  await settle();
+  assert.equal(harness.runtime.state.status, 'recovery-required');
+  assert.deepEqual(harness.runtime.state.recoveryCandidate, detectedCandidate);
+  assert.equal(harness.eventTarget.events.length, reconnectEventCount + 1);
+});
+
+test('reconnect with no pending work returns to the prior clean or preserved state', async (t) => {
+  await t.test('clean', async () => {
+    const harness = createRuntime();
+    harness.runtime.start();
+    harness.setOnline(false);
+    assert.equal(harness.runtime.state.status, 'offline');
+
+    harness.setOnline(true);
+    await settle();
+    assert.equal(harness.runtime.state.status, 'clean');
+    assert.equal(harness.api.calls.initialize.length, 0);
+    assert.equal(harness.api.calls.preserve.length, 0);
+  });
+
+  await t.test('preserved', async () => {
+    const harness = createRuntime();
+    harness.runtime.start();
+    harness.adapter.edit();
+    await harness.clock.tick(10);
+    assert.equal(harness.runtime.state.status, 'preserved');
+
+    harness.setOnline(false);
+    assert.equal(harness.runtime.state.status, 'offline');
+    harness.setOnline(true);
+    await settle();
+    assert.equal(harness.runtime.state.status, 'preserved');
+    assert.equal(harness.api.calls.initialize.length, 1);
+    assert.equal(harness.api.calls.preserve.length, 1);
+  });
+});
+
 test('hidden visibility triggers immediate Fetch eligibility without concurrency', async () => {
   const preserve = deferred();
   const api = createApi({ preserve: async () => preserve.promise });
@@ -793,6 +891,11 @@ test('destroy is idempotent, aborts owned work, removes resources, and ignores l
   assert.equal(harness.onlineSource.count(), 0);
   assert.equal(harness.visibilitySource.count(), 0);
   assert.equal(harness.clock.timers.size, 0);
+  assert.equal(harness.runtime.state.status, 'destroyed');
+  assert.equal(harness.eventTarget.events.length, eventCount + 1);
+
+  harness.setOnline(false);
+  harness.setOnline(true);
   assert.equal(harness.runtime.state.status, 'destroyed');
   assert.equal(harness.eventTarget.events.length, eventCount + 1);
 

@@ -30,6 +30,15 @@ use Joomla\Component\Content\Site\Helper\RouteHelper;
 class HtmlView extends FormView
 {
     /**
+     * Whether the generic Autosave interface should be rendered.
+     *
+     * @var boolean
+     *
+     * @since __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
+    /**
      * Pagebreak TOC alias
      *
      * @var  string
@@ -128,7 +137,8 @@ class HtmlView extends FormView
      */
     private function prepareAutosave(): void
     {
-        $document = $this->getDocument();
+        $document              = $this->getDocument();
+        $this->autosaveEnabled = false;
         $document->addScriptOptions('com_content.autosave.article', ['enabled' => false], false);
 
         if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
@@ -166,6 +176,14 @@ class HtmlView extends FormView
             $endpoints[$operation] = Route::_('index.php?option=com_autosave&task=autosave.' . $operation . '&format=json', false);
         }
 
+        $application = Factory::getApplication();
+        $language    = $application->getLanguage();
+        $language->load('com_autosave', JPATH_ADMINISTRATOR);
+        $timeZone    = (string) $this->getCurrentUser()->getParam(
+            'timezone',
+            $application->get('offset', 'UTC')
+        );
+
         $document->addScriptOptions(
             'com_autosave.runtime',
             ['endpoints' => $endpoints],
@@ -180,12 +198,15 @@ class HtmlView extends FormView
                 'payloadSchemaVersion' => $provider->getPayloadSchemaVersion(),
                 'formId'               => 'item-form',
                 'fieldIds'             => $fieldIds,
+                'locale'               => $language->getTag(),
+                'timeZone'             => $timeZone,
             ],
             false
         );
         $assets = $document->getWebAssetManager();
         $assets->getRegistry()->addExtensionRegistryFile('com_autosave');
         $assets->useScript('com_content.article-autosave');
+        $this->autosaveEnabled = true;
     }
 
     /**

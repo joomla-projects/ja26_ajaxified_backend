@@ -383,6 +383,10 @@ export class AutosaveRuntime {
       return;
     }
 
+    if (this.status !== 'offline') {
+      return;
+    }
+
     if (this.retryCallback) {
       const callback = this.retryCallback;
       this.retryCallback = null;
@@ -396,6 +400,9 @@ export class AutosaveRuntime {
     }
 
     if (this.recoveryCandidate) {
+      this.status = 'recovery-required';
+      this.emitState();
+
       return;
     }
 

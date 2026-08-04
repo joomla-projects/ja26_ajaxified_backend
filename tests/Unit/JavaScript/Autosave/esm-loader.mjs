@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const aliases = {
   'com_autosave.runtime': new URL('../../../../media_source/com_autosave/js/runtime.es6.js', import.meta.url).href,
+  'com_autosave.ui': new URL('../../../../media_source/com_autosave/js/ui.es6.js', import.meta.url).href,
   'editor-api': new URL('../../../../media_source/system/js/editors/editor-api.es6.js', import.meta.url).href,
   'editor-decorator': new URL('../../../../media_source/system/js/editors/editor-decorator.es6.js', import.meta.url).href,
 };

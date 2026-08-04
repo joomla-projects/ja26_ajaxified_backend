@@ -20,14 +20,36 @@ class FakeElement extends EventTarget {
   }
 }
 
+class FakePresenter {
+  constructor(options) {
+    this.options = options;
+    this.destroyCalls = 0;
+  }
+
+  destroy() {
+    this.destroyCalls += 1;
+  }
+}
+
 class FakeForm extends FakeElement {
   constructor(id) {
     super(id);
     this.elements = new Set();
+    this.mounts = new Map();
   }
 
   contains(element) {
     return this.elements.has(element) && element.isConnected;
+  }
+
+  querySelectorAll(selector) {
+    const mount = this.mounts.get(selector);
+
+    if (!mount?.isConnected) {
+      return [];
+    }
+
+    return [mount];
   }
 }
 
@@ -176,7 +198,7 @@ const endpoints = Object.freeze({
   discard: 'index.php?task=autosave.discard',
 });
 
-const createFixture = ({ startResults = [] } = {}) => {
+const createFixture = ({ startResults = [], presenterFactory } = {}) => {
   const document = new FakeDocument();
   const registry = new FakeEditorRegistry();
   const options = {
@@ -192,6 +214,8 @@ const createFixture = ({ startResults = [] } = {}) => {
         articletext: 'jform_articletext',
         catid: 'jform_catid',
       },
+      locale: 'en-GB',
+      timeZone: 'UTC',
     },
     [RUNTIME_OPTIONS_KEY]: { endpoints: { ...endpoints } },
     'csrf.token': 'csrf-token',
@@ -205,12 +229,20 @@ const createFixture = ({ startResults = [] } = {}) => {
   };
   fields.catid.options = [{ value: '2' }, { value: '3' }];
   Object.values(fields).forEach((field) => form.elements.add(field));
+  const statusMount = new FakeElement('item-form-autosave-status');
+  const recoveryMount = new FakeElement('item-form-autosave-recovery');
+  form.mounts.set('[data-joomla-autosave-status-ui]', statusMount);
+  form.mounts.set('[data-joomla-autosave-recovery-ui]', recoveryMount);
+  form.elements.add(statusMount);
+  form.elements.add(recoveryMount);
   document.elements.set(form.id, form);
   Object.values(fields).forEach((field) => document.elements.set(field.id, field));
   const editor = new FakeEditor();
   registry.instances.set(fields.articletext.id, editor);
   const runtimes = [];
   const clients = [];
+  const eventTargets = [];
+  const presenters = [];
   const controller = new ArticleAutosaveController({
     documentSource: document,
     optionsReader: (key, fallback) => options[key] ?? fallback,
@@ -227,6 +259,18 @@ const createFixture = ({ startResults = [] } = {}) => {
 
       return runtime;
     },
+    eventTargetFactory: () => {
+      const eventTarget = new EventTarget();
+      eventTargets.push(eventTarget);
+
+      return eventTarget;
+    },
+    presenterFactory: presenterFactory || ((configuration) => {
+      const presenter = new FakePresenter(configuration);
+      presenters.push(presenter);
+
+      return presenter;
+    }),
   });
 
   return {
@@ -234,11 +278,40 @@ const createFixture = ({ startResults = [] } = {}) => {
     controller,
     document,
     editor,
+    eventTargets,
     fields,
     form,
     options,
+    presenters,
     registry,
     runtimes,
+    recoveryMount,
+    statusMount,
+    removePresentationMount(type) {
+      const selector = `[data-joomla-autosave-${type}-ui]`;
+      const mount = form.mounts.get(selector);
+      form.mounts.delete(selector);
+
+      if (mount) {
+        mount.isConnected = false;
+        form.elements.delete(mount);
+      }
+    },
+    replacePresentationMount(type) {
+      const selector = `[data-joomla-autosave-${type}-ui]`;
+      const current = form.mounts.get(selector);
+      const replacement = new FakeElement(`item-form-autosave-${type}-replacement`);
+
+      if (current) {
+        current.isConnected = false;
+        form.elements.delete(current);
+      }
+
+      form.mounts.set(selector, replacement);
+      form.elements.add(replacement);
+
+      return replacement;
+    },
     replaceForm() {
       const replacement = new FakeForm('item-form');
       const replacementFields = {
@@ -249,14 +322,27 @@ const createFixture = ({ startResults = [] } = {}) => {
       };
       replacementFields.catid.options = [{ value: '2' }, { value: '3' }];
       Object.values(replacementFields).forEach((field) => replacement.elements.add(field));
+      const replacementStatusMount = new FakeElement('item-form-autosave-status-replacement');
+      const replacementRecoveryMount = new FakeElement('item-form-autosave-recovery-replacement');
+      replacement.mounts.set('[data-joomla-autosave-status-ui]', replacementStatusMount);
+      replacement.mounts.set('[data-joomla-autosave-recovery-ui]', replacementRecoveryMount);
+      replacement.elements.add(replacementStatusMount);
+      replacement.elements.add(replacementRecoveryMount);
       form.isConnected = false;
+      statusMount.isConnected = false;
+      recoveryMount.isConnected = false;
       Object.values(fields).forEach((field) => {
         field.isConnected = false;
       });
       document.elements.set(replacement.id, replacement);
       Object.values(replacementFields).forEach((field) => document.elements.set(field.id, field));
 
-      return { form: replacement, fields: replacementFields };
+      return {
+        form: replacement,
+        fields: replacementFields,
+        recoveryMount: replacementRecoveryMount,
+        statusMount: replacementStatusMount,
+      };
     },
   };
 };
@@ -278,7 +364,12 @@ test('supported existing Article activates exactly once with literal runtime con
   assert.equal(fixture.runtimes[0].options.context, 'com_content.article');
   assert.equal(fixture.runtimes[0].options.targetId, '42');
   assert.equal(fixture.runtimes[0].options.schemaVersion, 1);
-  assert.strictEqual(fixture.runtimes[0].options.eventTarget, fixture.document);
+  assert.strictEqual(fixture.runtimes[0].options.eventTarget, fixture.eventTargets[0]);
+  assert.equal(Object.hasOwn(fixture.runtimes[0].options, 'onlineSource'), false);
+  assert.strictEqual(fixture.presenters[0].options.eventTarget, fixture.eventTargets[0]);
+  assert.strictEqual(fixture.presenters[0].options.runtime, fixture.runtimes[0]);
+  assert.strictEqual(fixture.presenters[0].options.statusMount, fixture.statusMount);
+  assert.strictEqual(fixture.presenters[0].options.recoveryMount, fixture.recoveryMount);
   assert.equal(fixture.runtimes[0].changeCalls, 0);
 });
 
@@ -330,6 +421,7 @@ test('an absent or unsupported editor waits without affecting Article editing', 
   absent.controller.start();
   await absent.controller.reconcile();
   assert.equal(absent.runtimes.length, 0);
+  assert.equal(absent.presenters.length, 0);
 
   const lateEditor = new FakeEditor();
   absent.registry.instances.set('jform_articletext', lateEditor);
@@ -344,6 +436,7 @@ test('an absent or unsupported editor waits without affecting Article editing', 
   unsupported.controller.start();
   await unsupported.controller.reconcile();
   assert.equal(unsupported.runtimes.length, 0);
+  assert.equal(unsupported.presenters.length, 0);
 });
 
 test('irrelevant updates and unrelated editor lifecycle events are idempotent', async () => {
@@ -359,6 +452,8 @@ test('irrelevant updates and unrelated editor lifecycle events are idempotent', 
   assert.equal(fixture.runtimes.length, 1);
   assert.equal(fixture.runtimes[0].startCalls, 1);
   assert.equal(fixture.runtimes[0].destroyCalls, 0);
+  assert.equal(fixture.presenters.length, 1);
+  assert.equal(fixture.presenters[0].destroyCalls, 0);
 });
 
 test('form replacement destroys the old pair and creates one replacement', async () => {
@@ -372,8 +467,118 @@ test('form replacement destroys the old pair and creates one replacement', async
 
   assert.equal(fixture.runtimes.length, 2);
   assert.equal(fixture.runtimes[0].destroyCalls, 1);
+  assert.equal(fixture.presenters[0].destroyCalls, 1);
   assert.equal(fixture.editor.unsubscribeCalls, 1);
   assert.strictEqual(fixture.controller.activePair.form, replacement.form);
+  assert.notStrictEqual(fixture.eventTargets[0], fixture.eventTargets[1]);
+  assert.strictEqual(fixture.presenters[1].options.eventTarget, fixture.eventTargets[1]);
+});
+
+test('independent UI replacements preserve the runtime, adapter and pair EventTarget', async () => {
+  const fixture = createFixture();
+  fixture.controller.start();
+  await fixture.controller.reconcile();
+  const runtime = fixture.runtimes[0];
+  const adapter = fixture.controller.activePair.adapter;
+  const eventTarget = fixture.eventTargets[0];
+  const statusReplacement = fixture.replacePresentationMount('status');
+
+  fixture.document.dispatchEvent(new Event('joomla:updated'));
+  await fixture.controller.reconcile();
+
+  assert.equal(fixture.runtimes.length, 1);
+  assert.equal(runtime.destroyCalls, 0);
+  assert.strictEqual(fixture.controller.activePair.adapter, adapter);
+  assert.strictEqual(fixture.controller.activePair.eventTarget, eventTarget);
+  assert.equal(fixture.presenters[0].destroyCalls, 1);
+  assert.strictEqual(fixture.presenters[1].options.runtime, runtime);
+  assert.strictEqual(fixture.presenters[1].options.eventTarget, eventTarget);
+  assert.strictEqual(fixture.presenters[1].options.statusMount, statusReplacement);
+  assert.strictEqual(fixture.presenters[1].options.recoveryMount, fixture.recoveryMount);
+
+  const recoveryReplacement = fixture.replacePresentationMount('recovery');
+  fixture.document.dispatchEvent(new Event('joomla:updated'));
+  await fixture.controller.reconcile();
+  assert.equal(fixture.runtimes.length, 1);
+  assert.equal(fixture.presenters[1].destroyCalls, 1);
+  assert.strictEqual(fixture.presenters[2].options.statusMount, statusReplacement);
+  assert.strictEqual(fixture.presenters[2].options.recoveryMount, recoveryReplacement);
+
+  const secondStatus = fixture.replacePresentationMount('status');
+  const secondRecovery = fixture.replacePresentationMount('recovery');
+  fixture.document.dispatchEvent(new Event('joomla:updated'));
+  await fixture.controller.reconcile();
+  assert.equal(fixture.runtimes.length, 1);
+  assert.equal(fixture.presenters[2].destroyCalls, 1);
+  assert.strictEqual(fixture.presenters[3].options.statusMount, secondStatus);
+  assert.strictEqual(fixture.presenters[3].options.recoveryMount, secondRecovery);
+
+  fixture.document.dispatchEvent(new Event('joomla:updated'));
+  await fixture.controller.reconcile();
+  assert.equal(fixture.presenters.length, 4);
+  assert.equal(fixture.presenters[3].destroyCalls, 0);
+});
+
+test('presentation configuration changes replace only the presenter', async () => {
+  const fixture = createFixture();
+  fixture.controller.start();
+  await fixture.controller.reconcile();
+  const runtime = fixture.runtimes[0];
+  const eventTarget = fixture.eventTargets[0];
+
+  fixture.options[ARTICLE_OPTIONS_KEY].locale = 'fr-FR';
+  fixture.options[ARTICLE_OPTIONS_KEY].timeZone = 'Europe/Paris';
+  await fixture.controller.reconcile();
+
+  assert.equal(fixture.runtimes.length, 1);
+  assert.equal(runtime.destroyCalls, 0);
+  assert.equal(fixture.presenters[0].destroyCalls, 1);
+  assert.strictEqual(fixture.presenters[1].options.eventTarget, eventTarget);
+  assert.equal(fixture.presenters[1].options.locale, 'fr-FR');
+  assert.equal(fixture.presenters[1].options.timeZone, 'Europe/Paris');
+});
+
+test('partial, missing, malformed and late UI preserve headless runtime operation', async () => {
+  const statusOnly = createFixture();
+  statusOnly.removePresentationMount('recovery');
+  statusOnly.controller.start();
+  await statusOnly.controller.reconcile();
+  assert.equal(statusOnly.runtimes.length, 1);
+  assert.equal(statusOnly.presenters.length, 1);
+  assert.strictEqual(statusOnly.presenters[0].options.statusMount, statusOnly.statusMount);
+  assert.equal(statusOnly.presenters[0].options.recoveryMount, null);
+
+  const recoveryOnly = createFixture();
+  recoveryOnly.removePresentationMount('status');
+  recoveryOnly.controller.start();
+  await recoveryOnly.controller.reconcile();
+  assert.equal(recoveryOnly.runtimes.length, 1);
+  assert.equal(recoveryOnly.presenters.length, 1);
+  assert.equal(recoveryOnly.presenters[0].options.statusMount, null);
+  assert.strictEqual(recoveryOnly.presenters[0].options.recoveryMount, recoveryOnly.recoveryMount);
+
+  const headless = createFixture();
+  headless.removePresentationMount('status');
+  headless.removePresentationMount('recovery');
+  headless.controller.start();
+  await headless.controller.reconcile();
+  assert.equal(headless.runtimes.length, 1);
+  assert.equal(headless.presenters.length, 0);
+  assert.equal(headless.runtimes[0].destroyCalls, 0);
+
+  const lateStatus = headless.replacePresentationMount('status');
+  headless.document.dispatchEvent(new Event('joomla:updated'));
+  await headless.controller.reconcile();
+  assert.equal(headless.runtimes.length, 1);
+  assert.equal(headless.presenters.length, 1);
+  assert.strictEqual(headless.presenters[0].options.statusMount, lateStatus);
+  assert.equal(headless.presenters[0].options.recoveryMount, null);
+
+  const malformed = createFixture({ presenterFactory: () => null });
+  malformed.controller.start();
+  await malformed.controller.reconcile();
+  assert.equal(malformed.runtimes.length, 1);
+  assert.equal(malformed.runtimes[0].destroyCalls, 0);
 });
 
 test('editor replacement and stale lifecycle metadata cannot destroy the current pair', async () => {
@@ -463,6 +668,7 @@ test('recovery decisions and native Article actions are never invoked', async ()
 
   fixture.controller.destroy();
   fixture.controller.destroy();
+  assert.equal(fixture.presenters[0].destroyCalls, 1);
   assert.equal(fixture.runtimes[0].destroyCalls, 1);
   assert.equal(fixture.registry.unsubscribeCount, 1);
   assert.equal(fixture.document.listenerCounts.get('joomla:updated'), 0);

@@ -13,6 +13,20 @@
       "attributes": {
         "type": "module"
       }
+    },
+    {
+      "name": "com_autosave.ui",
+      "type": "script",
+      "uri": "com_autosave/ui.min.js",
+      "dependencies": [
+        "core",
+        "com_autosave.runtime",
+        "joomla.dialog"
+      ],
+      "importmap": true,
+      "attributes": {
+        "type": "module"
+      }
     }
   ]
 }
