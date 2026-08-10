@@ -12,6 +12,7 @@ namespace Joomla\Component\Users\Administrator\View\Groups;
 
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
 use Joomla\Component\Users\Administrator\Model\GroupsModel;
@@ -27,6 +28,8 @@ use Joomla\Component\Users\Administrator\Model\GroupsModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * The item data.
      *
@@ -93,6 +96,12 @@ class HtmlView extends BaseHtmlView
             ->addControlField('boxchecked', '0');
 
         $this->addToolbar();
+        $this->addAjaxifiedListViewOptions(
+            [
+                'delete',
+            ]
+        );
+
         parent::display($tpl);
     }
 

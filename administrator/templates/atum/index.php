@@ -202,7 +202,9 @@ $statusModules = LayoutHelper::render('status', ['modules' => 'status']);
             <div id="subhead-container" class="subhead mb-3">
                 <div class="row">
                     <div class="col-md-12">
+                        <?php echo '<?start name="toolbar"?>'; ?>
                         <jdoc:include type="modules" name="toolbar" style="none" />
+                        <?php echo '<?end?>'; ?>
                     </div>
                 </div>
             </div>

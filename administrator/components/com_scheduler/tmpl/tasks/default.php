@@ -25,8 +25,7 @@ use Joomla\Component\Scheduler\Administrator\Task\Status;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect')
+$wa->useScript('multiselect')
     ->useScript('com_scheduler.test-task')
     ->useStyle('com_scheduler.admin-view-tasks-css');
 
@@ -71,12 +70,14 @@ if ($this->hasDueTasks === true) {
 
 ?>
 
-<form action="<?php echo Route::_('index.php?option=com_scheduler&view=tasks'); ?>" method="post" name="adminForm"
-      id="adminForm">
-    <div id="j-main-container" class="j-main-container">
+<?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
+<div id="j-main-container" class="j-main-container">
+    <form action="<?php echo Route::_('index.php?option=com_scheduler&view=tasks'); ?>" method="post" name="adminForm"
+          id="adminForm">
         <?php
         // Search tools bar
         echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]);
+        echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#categoryList']);
         ?>
 
         <!-- If no tasks -->
@@ -301,5 +302,6 @@ if ($this->hasDueTasks === true) {
         <?php endif; ?>
 
         <?php echo $this->filterForm->renderControlFields(); ?>
-    </div>
-</form>
+    </form>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

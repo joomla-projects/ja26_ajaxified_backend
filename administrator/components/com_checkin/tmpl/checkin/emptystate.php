@@ -10,6 +10,7 @@
 
 defined('_JEXEC') or die;
 
+use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Layout\LayoutHelper;
 
@@ -22,4 +23,9 @@ $displayData = [
     'controlFields' => $this->filterForm->renderControlFields(),
 ];
 
-echo LayoutHelper::render('joomla.content.emptystate', $displayData);
+echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container');
+?>
+<div id="j-main-container" class="j-main-container">
+    <?php echo LayoutHelper::render('joomla.content.emptystate', $displayData); ?>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

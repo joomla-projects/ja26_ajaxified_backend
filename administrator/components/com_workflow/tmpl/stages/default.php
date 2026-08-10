@@ -21,8 +21,7 @@ use Joomla\CMS\Session\Session;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect');
+$wa->useScript('multiselect');
 
 $user      = $this->getCurrentUser();
 $userId    = $user->id;
@@ -50,10 +49,12 @@ if ($saveOrder) {
                     } else {
                         echo 'col-md-12';
                     } ?>">
+            <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
             <div id="j-main-container" class="j-main-container">
                 <?php
                 // Search tools bar
                 echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]);
+                echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#stageList']);
                 ?>
                 <?php if (empty($this->stages)) : ?>
                     <div class="alert alert-info">
@@ -61,7 +62,7 @@ if ($saveOrder) {
                         <?php echo Text::_('JGLOBAL_NO_MATCHING_RESULTS'); ?>
                     </div>
                 <?php else : ?>
-                    <table class="table">
+                    <table class="table" id="stageList">
                         <caption class="visually-hidden">
                             <?php echo Text::_('COM_WORKFLOW_STAGES_TABLE_CAPTION'); ?>,
                             <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,
@@ -152,6 +153,7 @@ if ($saveOrder) {
 
                 <?php echo $this->filterForm->renderControlFields(); ?>
             </div>
+            <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
         </div>
     </div>
 </form>

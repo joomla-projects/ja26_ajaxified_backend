@@ -25,21 +25,22 @@ window.customElements.define('joomla-toolbar-button', class extends HTMLElement 
       throw new Error('Joomla API is not properly initiated');
     }
 
+    this.attachShadow({ mode: 'open' });
+
+    this.slotElement = document.createElement('slot');
+
+    this.shadowRoot.append(this.slotElement);
+
     this.confirmationReceived = false;
     this.onChange = this.onChange.bind(this);
     this.executeTask = this.executeTask.bind(this);
+    this.syncButtonElement = this.syncButtonElement.bind(this);
   }
 
   /**
    * Lifecycle
    */
   connectedCallback() {
-    // We need a button to support button behavior,
-    // because we cannot currently extend HTMLButtonElement
-    this.buttonElement = this.querySelector('button, a');
-
-    this.buttonElement.addEventListener('click', this.executeTask);
-
     // Check whether we have a form
     const formSelector = this.form || 'adminForm';
     this.formElement = document.getElementById(formSelector);
@@ -58,17 +59,47 @@ window.customElements.define('joomla-toolbar-button', class extends HTMLElement 
       // Watch on list selection
       this.formElement.boxchecked.addEventListener('change', this.onChange);
     }
+
+    this.slotElement.addEventListener('slotchange', this.syncButtonElement);
+    this.syncButtonElement();
   }
 
   /**
    * Lifecycle
    */
   disconnectedCallback() {
-    if (this.formElement.boxchecked) {
+    this.slotElement.removeEventListener('slotchange', this.syncButtonElement);
+
+    if (this.formElement?.boxchecked) {
       this.formElement.boxchecked.removeEventListener('change', this.onChange);
     }
 
-    this.buttonElement.removeEventListener('click', this.executeTask);
+    if (this.buttonElement) {
+      this.buttonElement.removeEventListener('click', this.executeTask);
+      this.buttonElement = null;
+    }
+  }
+
+  syncButtonElement() {
+    // We need a button to support button behavior,
+    // because we cannot currently extend HTMLButtonElement
+    const assignedElements = this.slotElement.assignedElements({ flatten: true });
+    const buttonElement = assignedElements.find((element) => element.matches('button, a'))
+      || assignedElements
+        .map((element) => element.querySelector?.('button, a'))
+        .find(Boolean);
+
+    if (!buttonElement || buttonElement === this.buttonElement) {
+      return;
+    }
+
+    if (this.buttonElement) {
+      this.buttonElement.removeEventListener('click', this.executeTask);
+    }
+
+    this.buttonElement = buttonElement;
+    this.buttonElement.addEventListener('click', this.executeTask);
+    this.setDisabled(this.disabled);
   }
 
   onChange({ target }) {

@@ -13,6 +13,7 @@ namespace Joomla\Component\Installer\Administrator\View\Update;
 use Joomla\CMS\Application\CMSApplication;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\Component\Installer\Administrator\Helper\InstallerHelper;
 use Joomla\Component\Installer\Administrator\Model\UpdateModel;
 use Joomla\Component\Installer\Administrator\View\Installer\HtmlView as InstallerViewDefault;
@@ -28,6 +29,8 @@ use Joomla\Component\Installer\Administrator\View\Installer\HtmlView as Installe
  */
 class HtmlView extends InstallerViewDefault
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * List of update items.
      *
@@ -125,6 +128,10 @@ class HtmlView extends InstallerViewDefault
         $this->filterForm
             ->addControlField('task')
             ->addControlField('boxchecked', '0');
+
+        $this->addAjaxifiedListViewOptions([
+            'find',
+        ]);
 
         parent::display($tpl);
     }

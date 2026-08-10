@@ -25,18 +25,22 @@ $listOrder = $this->escape($this->state->get('list.ordering'));
 $listDirn = $this->escape($this->state->get('list.direction'));
 
 ?>
-<form action="<?php echo Route::_('index.php?option=com_finder&view=searches'); ?>" method="post" name="adminForm" id="adminForm">
-    <div class="row">
-        <div class="col-md-12">
-            <div id="j-main-container" class="j-main-container">
-                <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this, 'options' => ['filterButton' => false]]); ?>
+<?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
+<div id="j-main-container" class="j-main-container">
+    <form action="<?php echo Route::_('index.php?option=com_finder&view=searches'); ?>" method="post" name="adminForm" id="adminForm">
+        <div class="row">
+            <div class="col-md-12">
+                <?php
+                echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this, 'options' => ['filterButton' => false]]);
+                echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#finderSearchList']);
+                ?>
                 <?php if (empty($this->items)) : ?>
                     <div class="alert alert-info">
                         <span class="icon-info-circle" aria-hidden="true"></span><span class="visually-hidden"><?php echo Text::_('INFO'); ?></span>
                         <?php echo Text::_('JGLOBAL_NO_MATCHING_RESULTS'); ?>
                     </div>
                 <?php else : ?>
-                <table class="table">
+                <table class="table" id="finderSearchList">
                     <caption class="visually-hidden">
                         <?php echo Text::_('COM_FINDER_SEARCHES_TABLE_CAPTION'); ?>,
                             <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,
@@ -80,5 +84,6 @@ $listDirn = $this->escape($this->state->get('list.direction'));
                 <?php echo $this->filterForm->renderControlFields(); ?>
             </div>
         </div>
-    </div>
-</form>
+    </form>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

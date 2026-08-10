@@ -52,13 +52,14 @@ Joomla = window.Joomla || {};
       const defaults = {
         // Form options
         formSelector: '.js-stools-form',
+        searchToolsSelector: '.js-stools',
 
         // Search
         searchFieldSelector: '.js-stools-field-search',
         clearBtnSelector: '.js-stools-btn-clear',
 
         // Global container
-        mainContainerSelector: '.js-stools',
+        mainContainerSelector: '#j-main-container',
 
         // Filter fields
         searchBtnSelector: '.js-stools-btn-search',
@@ -93,41 +94,45 @@ Joomla = window.Joomla || {};
       this.options = Joomla.extend(defaults, options);
 
       // Initialise selectors
-      this.theForm = document.querySelector(this.options.formSelector);
+      this.searchToolsElement = elem || document.querySelector(this.options.searchToolsSelector);
+      this.mainContainer = this.searchToolsElement?.closest(this.options.mainContainerSelector)
+        || document.querySelector(this.options.mainContainerSelector);
+      this.theForm = this.searchToolsElement?.closest('form')
+        || document.querySelector(this.options.formSelector);
+
       // Prevent duplicate initialization when joomla:updated fires
-      if (this.theForm && this.theForm.dataset.searchtoolsInitialized) {
+      if (this.searchToolsElement && this.searchToolsElement.dataset.searchtoolsInitialized) {
         return;
       }
 
-      if (this.theForm) {
-        this.theForm.dataset.searchtoolsInitialized = 'true';
+      if (this.searchToolsElement) {
+        this.searchToolsElement.dataset.searchtoolsInitialized = 'true';
       }
 
       // Filters
-      this.filterButton = document.querySelector(`${this.options.formSelector} ${this.options.filterBtnSelector}`);
-      this.filterContainer = document.querySelector(`${this.options.formSelector} ${this.options.filterContainerSelector}`) ? document.querySelector(`${this.options.formSelector} ${this.options.filterContainerSelector}`) : '';
+      this.filterButton = this.searchToolsElement?.querySelector(this.options.filterBtnSelector);
+      this.filterContainer = this.searchToolsElement?.querySelector(this.options.filterContainerSelector) || '';
       this.filtersHidden = this.options.filtersHidden;
 
       // List fields
-      this.listButton = document.querySelector(this.options.listBtnSelector);
-      this.listContainer = document.querySelector(`${this.options.formSelector} ${this.options.listContainerSelector}`);
+      this.listButton = this.searchToolsElement?.querySelector(this.options.listBtnSelector);
+      this.listContainer = this.searchToolsElement?.querySelector(this.options.listContainerSelector);
       this.listHidden = this.options.listHidden;
 
-      // Main container
-      this.mainContainer = document.querySelector(this.options.mainContainerSelector);
-
       // Search
-      this.searchButton = document.querySelector(`${this.options.formSelector} ${this.options.searchBtnSelector}`);
-      this.searchField = document.querySelector(`${this.options.formSelector} ${this.options.searchFieldSelector}`);
+      this.searchButton = this.searchToolsElement?.querySelector(this.options.searchBtnSelector);
+      this.searchField = this.searchToolsElement?.querySelector(this.options.searchFieldSelector);
       this.searchString = null;
-      this.clearButton = document.querySelector(this.options.clearBtnSelector);
+      this.clearButton = this.searchToolsElement?.querySelector(this.options.clearBtnSelector);
 
       // Ordering
-      this.orderCols = document.querySelectorAll(`${this.options.formSelector} ${this.options.orderColumnSelector}`);
-      this.orderField = document.querySelector(`${this.options.formSelector} ${this.options.orderFieldSelector}`);
+      this.orderCols = this.mainContainer?.querySelectorAll(this.options.orderColumnSelector) || [];
+      this.orderField = this.theForm?.querySelector(this.options.orderFieldSelector)
+        || this.mainContainer?.querySelector(this.options.orderFieldSelector);
 
       // Limit
-      this.limitField = document.querySelector(`${this.options.formSelector} ${this.options.limitFieldSelector}`);
+      this.limitField = this.theForm?.querySelector(this.options.limitFieldSelector)
+        || this.mainContainer?.querySelector(this.options.limitFieldSelector);
 
       // Init trackers
       this.activeColumn = null;
@@ -301,7 +306,11 @@ Joomla = window.Joomla || {};
         });
 
         // Special case to limit box to the default config limit
-        document.querySelector('#list_limit').value = self.options.defaultLimit;
+        const listLimit = self.mainContainer?.querySelector('#list_limit');
+
+        if (listLimit) {
+          listLimit.value = self.options.defaultLimit;
+        }
       }
 
       if (self.theForm.requestSubmit) {
@@ -391,8 +400,8 @@ Joomla = window.Joomla || {};
     }
 
     getFilterFields() {
-      if (this.mainContainer) {
-        return this.mainContainer.querySelectorAll('select,input');
+      if (this.searchToolsElement) {
+        return this.searchToolsElement.querySelectorAll('select,input');
       }
       if (this.filterContainer) {
         return this.filterContainer.querySelectorAll('select,input');
@@ -402,7 +411,7 @@ Joomla = window.Joomla || {};
     }
 
     getListFields() {
-      return this.listContainer.querySelectorAll('select');
+      return this.listContainer?.querySelectorAll('select') || [];
     }
 
     // Common container functions
@@ -478,7 +487,13 @@ Joomla = window.Joomla || {};
         this.orderField.setAttribute('name', self.options.orderFieldName);
         this.orderField.setAttribute('value', `${self.activeOrder} ${this.activeDirection}`);
 
-        this.theForm.append(this.orderField);
+        const orderFieldParent = this.mainContainer || this.theForm;
+
+        if (!orderFieldParent) {
+          return;
+        }
+
+        orderFieldParent.append(this.orderField);
       }
 
       // Add missing columns to the order select
@@ -556,12 +571,19 @@ Joomla = window.Joomla || {};
     }
   }
 
-  const onBoot = () => {
+  const onBoot = (event = {}) => {
+    const target = event.detail?.target || event.target || document;
+
     if (Joomla.getOptions('searchtools')) {
       const options = Joomla.getOptions('searchtools');
-      const element = document.querySelector(options.selector);
+      const searchToolsSelector = options.searchToolsSelector || '.js-stools';
+      const elements = target.matches?.(searchToolsSelector)
+        ? [target]
+        : [...(target.querySelectorAll?.(searchToolsSelector) || [])];
 
-      new Searchtools(element, options);
+      elements.forEach((element) => {
+        new Searchtools(element, options);
+      });
     }
 
     const sort = document.getElementById('sorted');
@@ -576,14 +598,11 @@ Joomla = window.Joomla || {};
       const ariasort = sort.getAttribute('data-sort');
       sort.parentNode.setAttribute('aria-sort', ariasort);
     }
-
-    // Reinitialize for Joomla Updated event
-    document.addEventListener('joomla:updated', onBoot);
-
     // Cleanup
     document.removeEventListener('DOMContentLoaded', onBoot);
   };
 
   // Execute on DOM Loaded Event
   document.addEventListener('DOMContentLoaded', onBoot);
+  document.addEventListener('joomla:updated', onBoot);
 })(Joomla);

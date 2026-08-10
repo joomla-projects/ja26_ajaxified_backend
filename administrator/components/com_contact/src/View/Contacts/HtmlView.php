@@ -13,6 +13,7 @@ namespace Joomla\Component\Contact\Administrator\View\Contacts;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Multilanguage;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\ListView;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -26,6 +27,8 @@ use Joomla\CMS\MVC\View\ListView;
  */
 class HtmlView extends ListView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * The help link for the view
      *
@@ -94,6 +97,35 @@ class HtmlView extends ListView
 
             $this->filterForm
                 ->addControlField('forcedLanguage', $forcedLanguage);
+        }
+    }
+
+    /**
+     * Add the page title and toolbar.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    protected function addToolbar()
+    {
+        parent::addToolbar();
+
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'featured',
+                'unfeatured',
+                'trash',
+                'checkin',
+                'delete',
+                'batch',
+            ]
+        );
+
+        if ($this->getLayout() === 'emptystate') {
+            return;
         }
     }
 }

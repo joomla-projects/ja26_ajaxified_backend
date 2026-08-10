@@ -13,6 +13,7 @@ namespace Joomla\Component\Users\Administrator\View\Debuggroup;
 use Joomla\CMS\Access\Exception\NotAllowed;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
 use Joomla\Component\Users\Administrator\Model\DebuggroupModel;
@@ -28,6 +29,8 @@ use Joomla\Component\Users\Administrator\Model\DebuggroupModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * List of component actions
      *
@@ -113,6 +116,8 @@ class HtmlView extends BaseHtmlView
             ->addControlField('boxchecked', '0');
 
         $this->addToolbar();
+
+        $this->addAjaxifiedListViewOptions([]);
 
         parent::display($tpl);
     }

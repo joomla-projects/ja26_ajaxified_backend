@@ -72,21 +72,31 @@ window.customElements.define('joomla-field-fancy-select', class extends HTMLElem
     this.activeXHR = null;
     this.choicesInstance = null;
     this.isDisconnected = false;
+    this.doConnect = this.doConnect.bind(this);
+
+    this.attachShadow({ mode: 'open' });
+
+    this.slotElement = document.createElement('slot');
+
+    this.shadowRoot.append(this.slotElement);
   }
 
   /**
    * Lifecycle
    */
   connectedCallback() {
+    this.slotElement.addEventListener('slotchange', this.doConnect);
+
     // Make sure Choices are loaded
     if (window.Choices || document.readyState === 'complete') {
       this.doConnect();
     } else {
-      const callback = () => {
+      this.loadCallback = () => {
         this.doConnect();
-        window.removeEventListener('load', callback);
+        window.removeEventListener('load', this.loadCallback);
+        this.loadCallback = null;
       };
-      window.addEventListener('load', callback);
+      window.addEventListener('load', this.loadCallback);
     }
   }
 
@@ -95,7 +105,7 @@ window.customElements.define('joomla-field-fancy-select', class extends HTMLElem
     this.select = this.querySelector('select');
 
     if (!this.select) {
-      throw new Error('JoomlaFieldFancySelect requires <select> element to work');
+      return;
     }
 
     // The element was already initialised previously and perhaps was detached from DOM
@@ -279,6 +289,13 @@ window.customElements.define('joomla-field-fancy-select', class extends HTMLElem
    * Lifecycle
    */
   disconnectedCallback() {
+    this.slotElement.removeEventListener('slotchange', this.doConnect);
+
+    if (this.loadCallback) {
+      window.removeEventListener('load', this.loadCallback);
+      this.loadCallback = null;
+    }
+
     // Destroy Choices instance, to unbind event listeners
     if (this.choicesInstance) {
       // Keep selected values, because choices will reset them on re-init

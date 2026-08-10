@@ -21,8 +21,7 @@ use Joomla\CMS\Router\Route;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect');
+$wa->useScript('multiselect');
 
 $user       = $this->getCurrentUser();
 $listOrder  = $this->escape($this->state->get('list.ordering'));
@@ -37,9 +36,13 @@ $stateMsgs  = [
 $this->getLanguage()->load('plg_system_privacyconsent', JPATH_ADMINISTRATOR);
 
 ?>
-<form action="<?php echo Route::_('index.php?option=com_privacy&view=consents'); ?>" method="post" name="adminForm" id="adminForm">
-    <div id="j-main-container">
-        <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]); ?>
+<?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
+<div id="j-main-container">
+    <form action="<?php echo Route::_('index.php?option=com_privacy&view=consents'); ?>" method="post" name="adminForm" id="adminForm">
+        <?php
+        echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]);
+        echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#consentList']);
+        ?>
         <?php if (empty($this->items)) : ?>
             <div class="alert alert-info">
                 <span class="icon-info-circle" aria-hidden="true"></span><span class="visually-hidden"><?php echo Text::_('INFO'); ?></span>
@@ -124,5 +127,6 @@ $this->getLanguage()->load('plg_system_privacyconsent', JPATH_ADMINISTRATOR);
         <?php endif; ?>
 
         <?php echo $this->filterForm->renderControlFields(); ?>
-    </div>
-</form>
+    </form>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

@@ -13,6 +13,7 @@ namespace Joomla\Component\Banners\Administrator\View\Tracks;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Pagination\Pagination;
 use Joomla\CMS\Router\Route;
@@ -30,6 +31,8 @@ use Joomla\Component\Banners\Administrator\Model\TracksModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * The search tools form
      *
@@ -110,6 +113,8 @@ class HtmlView extends BaseHtmlView
         $this->filterForm
             ->addControlField('task')
             ->addControlField('boxchecked', '0');
+
+        $this->addAjaxifiedListViewOptions([]);
 
         parent::display($tpl);
     }

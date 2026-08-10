@@ -19,18 +19,18 @@ use Joomla\CMS\Router\Route;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect');
+$wa->useScript('multiselect');
 
 $listOrder     = $this->escape($this->state->get('list.ordering'));
 $listDirection = $this->escape($this->state->get('list.direction'));
 
 ?>
-<div id="installer-database" class="clearfix">
-    <form action="<?php echo Route::_('index.php?option=com_installer&view=database'); ?>" method="post" name="adminForm" id="adminForm">
-        <div class="row">
-            <div class="col-md-12">
-                <div id="j-main-container" class="j-main-container">
+<?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
+<div id="j-main-container" class="j-main-container">
+    <div id="installer-database" class="clearfix">
+        <form action="<?php echo Route::_('index.php?option=com_installer&view=database'); ?>" method="post" name="adminForm" id="adminForm">
+            <div class="row">
+                <div class="col-md-12">
                     <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]); ?>
                     <?php if (empty($this->changeSet)) : ?>
                         <div class="alert alert-info">
@@ -38,7 +38,8 @@ $listDirection = $this->escape($this->state->get('list.direction'));
                             <?php echo Text::_('JGLOBAL_NO_MATCHING_RESULTS'); ?>
                         </div>
                     <?php else : ?>
-                        <table class="table">
+                        <?php echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#databaseList']); ?>
+                        <table class="table" id="databaseList">
                             <caption class="visually-hidden">
                                 <?php echo Text::_('COM_INSTALLER_DATABASE_TABLE_CAPTION'); ?>,
                                 <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,
@@ -130,6 +131,7 @@ $listDirection = $this->escape($this->state->get('list.direction'));
                     <?php echo $this->filterForm->renderControlFields(); ?>
                 </div>
             </div>
-        </div>
-    </form>
+        </form>
+    </div>
 </div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
