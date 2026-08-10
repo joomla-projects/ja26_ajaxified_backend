@@ -122,7 +122,7 @@ final class LifecycleTestStorage implements AutosaveStorageInterface
         string $intent,
         Date $now
     ): array {
-        $this->events[]                         = 'storage.prepareCanonicalAction';
+        $this->events[]                          = 'storage.prepareCanonicalAction';
         $this->calls['prepareCanonicalAction'][] = \func_get_args();
         if ($this->canonicalFailure !== null) {
             throw $this->canonicalFailure;
@@ -138,7 +138,7 @@ final class LifecycleTestStorage implements AutosaveStorageInterface
         string $targetId,
         Date $now
     ): array {
-        $this->events[]                         = 'storage.inspectCanonicalAction';
+        $this->events[]                          = 'storage.inspectCanonicalAction';
         $this->calls['inspectCanonicalAction'][] = \func_get_args();
         if ($this->canonicalFailure !== null) {
             throw $this->canonicalFailure;
@@ -156,7 +156,7 @@ final class LifecycleTestStorage implements AutosaveStorageInterface
         string $currentBaseRevision,
         Date $now
     ): array {
-        $this->events[]                        = 'storage.verifyCanonicalAction';
+        $this->events[]                         = 'storage.verifyCanonicalAction';
         $this->calls['verifyCanonicalAction'][] = \func_get_args();
         if ($this->canonicalFailure !== null) {
             throw $this->canonicalFailure;
@@ -175,7 +175,7 @@ final class LifecycleTestStorage implements AutosaveStorageInterface
         string $finalBaseRevision,
         Date $now
     ): array {
-        $this->events[]                                 = 'storage.finalizeCanonicalActionSuccess';
+        $this->events[]                                  = 'storage.finalizeCanonicalActionSuccess';
         $this->calls['finalizeCanonicalActionSuccess'][] = \func_get_args();
         if ($this->canonicalFailure !== null) {
             throw $this->canonicalFailure;
@@ -193,7 +193,7 @@ final class LifecycleTestStorage implements AutosaveStorageInterface
         string $failureCode,
         Date $now
     ): array {
-        $this->events[]                                 = 'storage.finalizeCanonicalActionFailure';
+        $this->events[]                                  = 'storage.finalizeCanonicalActionFailure';
         $this->calls['finalizeCanonicalActionFailure'][] = \func_get_args();
         if ($this->canonicalFailure !== null) {
             throw $this->canonicalFailure;

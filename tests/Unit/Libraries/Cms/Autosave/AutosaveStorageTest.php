@@ -985,9 +985,9 @@ class AutosaveStorageTest extends UnitTestCase
 
         $this->assertSame(
             [
-                'operation_id'       => $operationId,
-                'outcome'            => 'successful',
-                'final_target_id'    => 'record-42',
+                'operation_id'        => $operationId,
+                'outcome'             => 'successful',
+                'final_target_id'     => 'record-42',
                 'final_base_revision' => 'revision-2',
             ],
             $result

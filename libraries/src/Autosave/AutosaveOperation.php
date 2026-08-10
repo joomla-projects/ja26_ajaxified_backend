@@ -20,10 +20,10 @@ namespace Joomla\CMS\Autosave;
  */
 enum AutosaveOperation: string
 {
-    case Initialize = 'initialize';
-    case Preserve   = 'preserve';
-    case Detect     = 'detect';
-    case Read       = 'read';
+    case Initialize             = 'initialize';
+    case Preserve               = 'preserve';
+    case Detect                 = 'detect';
+    case Read                   = 'read';
     case PrepareCanonicalAction = 'prepare-canonical-action';
     case QueryCanonicalAction   = 'query-canonical-action';
 }

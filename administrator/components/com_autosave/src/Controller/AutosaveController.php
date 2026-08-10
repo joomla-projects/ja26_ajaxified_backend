@@ -46,14 +46,14 @@ final class AutosaveController
     public function execute(string $operation, array $request, User $user, Date $now): ?array
     {
         return match ($operation) {
-            'initialize' => $this->initialize($request, $user, $now),
-            'preserve'   => $this->preserve($request, $user, $now),
-            'detect'     => $this->detect($request, $user, $now),
-            'read'       => $this->read($request, $user, $now),
-            'discard'    => $this->discard($request, $user, $now),
-            'prepareCanonicalAction' => $this->prepareCanonicalAction($request, $user, $now),
+            'initialize'                => $this->initialize($request, $user, $now),
+            'preserve'                  => $this->preserve($request, $user, $now),
+            'detect'                    => $this->detect($request, $user, $now),
+            'read'                      => $this->read($request, $user, $now),
+            'discard'                   => $this->discard($request, $user, $now),
+            'prepareCanonicalAction'    => $this->prepareCanonicalAction($request, $user, $now),
             'getCanonicalActionOutcome' => $this->getCanonicalActionOutcome($request, $user, $now),
-            default      => throw new \InvalidArgumentException('The Autosave operation is unsupported.'),
+            default                     => throw new \InvalidArgumentException('The Autosave operation is unsupported.'),
         };
     }
 

@@ -1138,7 +1138,7 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
             'apply',
             new Date('2026-07-29 10:00:10', 'UTC'),
         ];
-        $prepared = $storage->prepareCanonicalAction(...$arguments);
+        $prepared             = $storage->prepareCanonicalAction(...$arguments);
         $conflicting          = $arguments;
         $conflicting[7]       = ['value' => 'different'];
         $conflicting[10]      = new Date('2026-07-29 10:00:11', 'UTC');
@@ -1158,14 +1158,14 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
         $storage    = $this->storage();
         $identities = $this->initialize();
         $prepared   = $storage->prepareCanonicalAction(7, $identities['continuation_id'], $identities['generation_id'], 'com_example.record', 'record-42', 'revision-1', 1, ['value' => 'submitted'], 1, 'apply', new Date('2026-07-29 10:00:10', 'UTC'));
-        $verify = fn (array $changes = []) => $storage->verifyCanonicalAction(...array_values(array_replace([
+        $verify     = fn (array $changes = []) => $storage->verifyCanonicalAction(...array_values(array_replace([
                         'userId'              => 7,
-                        'operationId'          => $prepared['operation_id'],
-                        'context'              => 'com_example.record',
-                        'targetId'             => 'record-42',
-                        'intent'               => 'apply',
-                        'currentBaseRevision'  => 'revision-1',
-                        'now'                  => new Date('2026-07-29 10:00:11', 'UTC'),
+                        'operationId'         => $prepared['operation_id'],
+                        'context'             => 'com_example.record',
+                        'targetId'            => 'record-42',
+                        'intent'              => 'apply',
+                        'currentBaseRevision' => 'revision-1',
+                        'now'                 => new Date('2026-07-29 10:00:11', 'UTC'),
                     ], $changes)));
         $this->assertSame('pending', $verify()['outcome']);
         $this->assertAutosaveFailure('canonical_action_not_found', fn () => $verify(['userId' => 8]));
@@ -1187,9 +1187,9 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
      */
     public function testCanonicalSuccessIsolatedFromAnotherTab(): void
     {
-        $storage = $this->storage();
-        $first   = $this->initialize();
-        $second  = $this->initialize(['initializationKey' => 'initialization-2']);
+        $storage  = $this->storage();
+        $first    = $this->initialize();
+        $second   = $this->initialize(['initializationKey' => 'initialization-2']);
         $prepared = $storage->prepareCanonicalAction(7, $first['continuation_id'], $first['generation_id'], 'com_example.record', 'record-42', 'revision-1', 1, ['value' => 'first tab'], 1, 'apply', new Date('2026-07-29 10:00:10', 'UTC'));
         $storage->finalizeCanonicalActionSuccess(7, $prepared['operation_id'], 'com_example.record', 'record-42', 'apply', 'record-42', 'revision-2', new Date('2026-07-29 10:00:12', 'UTC'));
         $firstRow  = $this->loadRow('#__autosave_generations', 'public_id', $first['generation_id']);
@@ -1207,23 +1207,23 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
      */
     public function testCanonicalPreparationRollsBackPartialState(): void
     {
-        $storage     = $this->storage();
-        $identities  = $this->initialize();
+        $storage      = $this->storage();
+        $identities   = $this->initialize();
         $continuation = $this->loadRow('#__autosave_continuations', 'public_id', $identities['continuation_id']);
-        $generation = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
-        $fixture    = (object) [
-            'public_id'             => str_repeat('c', 64),
-            'user_id'               => 7,
-            'continuation_id'       => (int) $continuation['id'],
-            'generation_id'         => (int) $generation['id'],
-            'context'               => 'com_example.record',
-            'target_id'             => 'record-42',
-            'intent'                => 'apply',
+        $generation   = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+        $fixture      = (object) [
+            'public_id'              => str_repeat('c', 64),
+            'user_id'                => 7,
+            'continuation_id'        => (int) $continuation['id'],
+            'generation_id'          => (int) $generation['id'],
+            'context'                => 'com_example.record',
+            'target_id'              => 'record-42',
+            'intent'                 => 'apply',
             'expected_base_revision' => 'revision-1',
-            'outcome'               => 'pending',
-            'created_at'            => '2026-07-29 10:00:00',
-            'updated_at'            => '2026-07-29 10:00:00',
-            'expires_at'            => '2026-07-29 10:02:00',
+            'outcome'                => 'pending',
+            'created_at'             => '2026-07-29 10:00:00',
+            'updated_at'             => '2026-07-29 10:00:00',
+            'expires_at'             => '2026-07-29 10:02:00',
         ];
         $this->getDBDriver()->insertObject('#__autosave_canonical_actions', $fixture);
         try {
@@ -1248,8 +1248,8 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
         $storage    = $this->storage();
         $identities = $this->initialize();
         $prepared   = $storage->prepareCanonicalAction(7, $identities['continuation_id'], $identities['generation_id'], 'com_example.record', 'record-42', 'revision-1', 1, ['value' => 'submitted'], 1, 'apply', new Date('2026-07-29 10:00:10', 'UTC'));
-        $retired = GenerationState::Retired->value;
-        $query   = $this->getDBDriver()->createQuery()
+        $retired    = GenerationState::Retired->value;
+        $query      = $this->getDBDriver()->createQuery()
             ->update($this->getDBDriver()->quoteName('#__autosave_generations'))
             ->set($this->getDBDriver()->quoteName('state') . ' = :retired')
             ->where($this->getDBDriver()->quoteName('public_id') . ' = :generation_id')

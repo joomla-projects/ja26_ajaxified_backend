@@ -28,15 +28,15 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  */
 final class AutosaveStorage implements AutosaveStorageInterface
 {
-    private const MAX_INSERT_ATTEMPTS       = 3;
-    private const MAX_ID_ATTEMPTS           = 3;
-    private const MAX_PAYLOAD_BYTES         = 16777215;
-    private const MAX_QUOTA_SLOTS           = 2147483647;
+    private const MAX_INSERT_ATTEMPTS         = 3;
+    private const MAX_ID_ATTEMPTS             = 3;
+    private const MAX_PAYLOAD_BYTES           = 16777215;
+    private const MAX_QUOTA_SLOTS             = 2147483647;
     private const MAX_CANONICAL_OPERATION_TTL = 86400;
-    private const PAYLOAD_DIGEST_DOMAIN     = 'autosave:payload-digest:v1';
-    private const INSERT_PHASE_NONE         = 'none';
-    private const INSERT_PHASE_CONTINUATION = 'continuation_insert';
-    private const INSERT_PHASE_GENERATION   = 'generation_insert';
+    private const PAYLOAD_DIGEST_DOMAIN       = 'autosave:payload-digest:v1';
+    private const INSERT_PHASE_NONE           = 'none';
+    private const INSERT_PHASE_CONTINUATION   = 'continuation_insert';
+    private const INSERT_PHASE_GENERATION     = 'generation_insert';
 
     /**
      * Validated storage policy.
@@ -941,9 +941,9 @@ final class AutosaveStorage implements AutosaveStorageInterface
         }
 
         return [
-            'operation_id'          => $operation['operation_id'],
-            'intent'                => $operation['intent'],
-            'outcome'               => $operation['outcome'],
+            'operation_id'           => $operation['operation_id'],
+            'intent'                 => $operation['intent'],
+            'outcome'                => $operation['outcome'],
             'expected_base_revision' => $operation['expected_base_revision'],
         ];
     }
@@ -1036,7 +1036,7 @@ final class AutosaveStorage implements AutosaveStorageInterface
             $closed       = GenerationState::Closed->value;
             $retired      = GenerationState::Retired->value;
             $generationPk = (int) $operation['generation_pk'];
-            $retainUntil = (clone $now)
+            $retainUntil  = (clone $now)
                 ->add(new \DateInterval('PT' . $this->policy['tombstone_retention'] . 'S'))
                 ->toSql();
             $retire = $this->db->createQuery()
@@ -1737,21 +1737,21 @@ final class AutosaveStorage implements AutosaveStorageInterface
     private function formatCanonicalAction(array $operation): array
     {
         return [
-            'operation_id'          => $operation['operation_id'],
-            'context'               => $operation['context'],
-            'target_id'             => $operation['target_id'],
-            'continuation_id'       => $operation['continuation_id'],
-            'generation_id'         => $operation['generation_id'],
-            'intent'                => $operation['intent'],
-            'outcome'               => $operation['outcome'],
+            'operation_id'           => $operation['operation_id'],
+            'context'                => $operation['context'],
+            'target_id'              => $operation['target_id'],
+            'continuation_id'        => $operation['continuation_id'],
+            'generation_id'          => $operation['generation_id'],
+            'intent'                 => $operation['intent'],
+            'outcome'                => $operation['outcome'],
             'expected_base_revision' => $operation['expected_base_revision'],
-            'final_target_id'       => $operation['final_target_id'],
-            'final_base_revision'   => $operation['final_base_revision'],
-            'failure_code'          => $operation['failure_code'],
-            'created_at'            => $operation['created_at'],
-            'updated_at'            => $operation['updated_at'],
-            'expires_at'            => $operation['expires_at'],
-            'completed_at'          => $operation['completed_at'],
+            'final_target_id'        => $operation['final_target_id'],
+            'final_base_revision'    => $operation['final_base_revision'],
+            'failure_code'           => $operation['failure_code'],
+            'created_at'             => $operation['created_at'],
+            'updated_at'             => $operation['updated_at'],
+            'expires_at'             => $operation['expires_at'],
+            'completed_at'           => $operation['completed_at'],
         ];
     }
 
@@ -1761,9 +1761,9 @@ final class AutosaveStorage implements AutosaveStorageInterface
     private function formatCanonicalSuccess(array $operation): array
     {
         return [
-            'operation_id'       => $operation['operation_id'],
-            'outcome'            => CanonicalActionState::Successful->value,
-            'final_target_id'    => $operation['final_target_id'],
+            'operation_id'        => $operation['operation_id'],
+            'outcome'             => CanonicalActionState::Successful->value,
+            'final_target_id'     => $operation['final_target_id'],
             'final_base_revision' => $operation['final_base_revision'],
         ];
     }

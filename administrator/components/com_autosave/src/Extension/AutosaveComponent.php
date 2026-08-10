@@ -11,13 +11,13 @@
 namespace Joomla\Component\Autosave\Administrator\Extension;
 
 use Joomla\CMS\Application\CMSApplicationInterface;
-use Joomla\CMS\Autosave\AutosaveLifecycle;
 use Joomla\CMS\Autosave\AutosaveCanonicalActionServiceInterface;
+use Joomla\CMS\Autosave\AutosaveLifecycle;
 use Joomla\CMS\Date\Date;
 use Joomla\CMS\Dispatcher\DispatcherInterface;
 use Joomla\CMS\Extension\ComponentInterface;
-use Joomla\Component\Autosave\Administrator\Dispatcher\Dispatcher;
 use Joomla\CMS\User\User;
+use Joomla\Component\Autosave\Administrator\Dispatcher\Dispatcher;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;

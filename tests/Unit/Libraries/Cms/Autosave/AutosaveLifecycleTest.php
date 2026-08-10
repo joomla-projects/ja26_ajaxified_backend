@@ -954,14 +954,14 @@ class AutosaveLifecycleTest extends UnitTestCase
      */
     public function testPrepareCanonicalActionOrchestratesProviderAndStorage(): void
     {
-        $events                  = [];
-        $provider                = new LifecycleTestProvider($events);
-        $provider->normalized    = ['title' => 'Normalized'];
-        $storage                 = new LifecycleTestStorage($events);
+        $events                   = [];
+        $provider                 = new LifecycleTestProvider($events);
+        $provider->normalized     = ['title' => 'Normalized'];
+        $storage                  = new LifecycleTestStorage($events);
         $storage->canonicalResult = ['operation_id' => 'operation', 'outcome' => 'pending'];
-        $lifecycle               = $this->lifecycle($provider, $storage, $events);
-        $now                     = $this->now();
-        $result = $lifecycle->prepareCanonicalAction($this->user(), 'com_example.record', 'client-target', self::CONTINUATION_ID, self::GENERATION_ID, 4, ['title' => 'Client value'], 1, 'apply', 'base-1', $now);
+        $lifecycle                = $this->lifecycle($provider, $storage, $events);
+        $now                      = $this->now();
+        $result                   = $lifecycle->prepareCanonicalAction($this->user(), 'com_example.record', 'client-target', self::CONTINUATION_ID, self::GENERATION_ID, 4, ['title' => 'Client value'], 1, 'apply', 'base-1', $now);
         $this->assertSame($storage->canonicalResult, $result);
         $this->assertSame(['title' => 'Client value'], $provider->normalizationArguments[0]);
         $this->assertSame([
@@ -1044,13 +1044,13 @@ class AutosaveLifecycleTest extends UnitTestCase
      */
     public function testCanonicalOperationLifecycleDelegatesLiteralMetadata(): void
     {
-        $events                  = [];
-        $provider                = new LifecycleTestProvider($events);
-        $storage                 = new LifecycleTestStorage($events);
+        $events                   = [];
+        $provider                 = new LifecycleTestProvider($events);
+        $storage                  = new LifecycleTestStorage($events);
         $storage->canonicalResult = ['operation_id' => 'operation', 'outcome' => 'pending'];
-        $lifecycle               = $this->lifecycle($provider, $storage, $events);
-        $user                    = $this->user();
-        $now                     = $this->now();
+        $lifecycle                = $this->lifecycle($provider, $storage, $events);
+        $user                     = $this->user();
+        $now                      = $this->now();
         $this->assertSame($storage->canonicalResult, $lifecycle->getCanonicalActionOutcome($user, 'operation', 'com_example.record', 'client-target', $now));
         $this->assertSame($storage->canonicalResult, $lifecycle->verifyCanonicalAction($user, 'operation', 'com_example.record', 'client-target', 'apply', $now));
         $this->assertSame($storage->canonicalResult, $lifecycle->finalizeCanonicalActionSuccess($user, 'operation', 'com_example.record', 'client-target', 'apply', 'final-target', $now));
@@ -1095,16 +1095,15 @@ class AutosaveLifecycleTest extends UnitTestCase
                     1,
                     $now
                 ),
-            'detect'  => $lifecycle->detect($user, 'com_example.record', 'target', $now),
-            'read'    => $lifecycle->read($user, self::CONTINUATION_ID, self::GENERATION_ID, $now),
-            'discard' => $lifecycle->discard($user, self::CONTINUATION_ID, self::GENERATION_ID, $now),
-            'prepareCanonicalAction' => $lifecycle->prepareCanonicalAction($user, 'com_example.record', 'target', self::CONTINUATION_ID, self::GENERATION_ID, 1, [], 1, 'apply', 'base-1', $now),
-            'getCanonicalActionOutcome' => $lifecycle->getCanonicalActionOutcome($user, 'operation', 'com_example.record', 'target', $now),
-            'verifyCanonicalAction' => $lifecycle->verifyCanonicalAction($user, 'operation', 'com_example.record', 'target', 'apply', $now),
-            'finalizeCanonicalActionSuccess' => $lifecycle->finalizeCanonicalActionSuccess($user, 'operation', 'com_example.record', 'target', 'apply', 'target', $now),
-            'finalizeCanonicalActionFailure' => $lifecycle->finalizeCanonicalActionFailure($user, 'operation', 'com_example.record', 'target', 'apply', 'canonical_save_failed', $now),
+                'detect'                         => $lifecycle->detect($user, 'com_example.record', 'target', $now),
+                'read'                           => $lifecycle->read($user, self::CONTINUATION_ID, self::GENERATION_ID, $now),
+                'discard'                        => $lifecycle->discard($user, self::CONTINUATION_ID, self::GENERATION_ID, $now),
+                'prepareCanonicalAction'         => $lifecycle->prepareCanonicalAction($user, 'com_example.record', 'target', self::CONTINUATION_ID, self::GENERATION_ID, 1, [], 1, 'apply', 'base-1', $now),
+                'getCanonicalActionOutcome'      => $lifecycle->getCanonicalActionOutcome($user, 'operation', 'com_example.record', 'target', $now),
+                'verifyCanonicalAction'          => $lifecycle->verifyCanonicalAction($user, 'operation', 'com_example.record', 'target', 'apply', $now),
+                'finalizeCanonicalActionSuccess' => $lifecycle->finalizeCanonicalActionSuccess($user, 'operation', 'com_example.record', 'target', 'apply', 'target', $now),
+                'finalizeCanonicalActionFailure' => $lifecycle->finalizeCanonicalActionFailure($user, 'operation', 'com_example.record', 'target', 'apply', 'canonical_save_failed', $now),
             }
-
         );
 
         $this->assertInstanceOf(\InvalidArgumentException::class, $exception);

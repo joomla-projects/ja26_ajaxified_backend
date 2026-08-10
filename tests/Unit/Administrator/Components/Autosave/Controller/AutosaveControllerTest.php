@@ -91,7 +91,7 @@ class AutosaveControllerTest extends UnitTestCase
     public function testPrepareCanonicalActionUsesExactValidatedSnapshotAndBinding(): void
     {
         [$controller, $storage, $provider] = $this->controller();
-        $storage->canonicalResult = [
+        $storage->canonicalResult          = [
             'operation_id' => str_repeat('c', 64),
             'intent'       => 'apply',
             'outcome'      => 'pending',
@@ -124,7 +124,7 @@ class AutosaveControllerTest extends UnitTestCase
 
     public function testCanonicalOutcomeQueryReturnsMetadataOnly(): void
     {
-        [$controller, $storage] = $this->controller();
+        [$controller, $storage]   = $this->controller();
         $storage->canonicalResult = [
             'operation_id' => str_repeat('c', 64),
             'outcome'      => 'pending',
