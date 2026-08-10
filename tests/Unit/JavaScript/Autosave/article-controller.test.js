@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import ArticleAutosaveController, {
+  ARTICLE_CANONICAL_TASK_POLICY,
   ARTICLE_OPTIONS_KEY,
   RUNTIME_OPTIONS_KEY,
 } from '../../../../media_source/com_content/src/article-autosave-controller.es6.js';
@@ -24,6 +25,24 @@ class FakePresenter {
   constructor(options) {
     this.options = options;
     this.destroyCalls = 0;
+  }
+
+  destroy() {
+    this.destroyCalls += 1;
+  }
+}
+
+class FakeCoordinator {
+  constructor(options) {
+    this.options = options;
+    this.startCalls = 0;
+    this.destroyCalls = 0;
+  }
+
+  start() {
+    this.startCalls += 1;
+
+    return this;
   }
 
   destroy() {
@@ -196,6 +215,8 @@ const endpoints = Object.freeze({
   detect: 'index.php?task=autosave.detect',
   read: 'index.php?task=autosave.read',
   discard: 'index.php?task=autosave.discard',
+  prepareCanonicalAction: 'index.php?task=autosave.prepareCanonicalAction',
+  getCanonicalActionOutcome: 'index.php?task=autosave.getCanonicalActionOutcome',
 });
 
 const createFixture = ({ startResults = [], presenterFactory } = {}) => {
@@ -243,6 +264,7 @@ const createFixture = ({ startResults = [], presenterFactory } = {}) => {
   const clients = [];
   const eventTargets = [];
   const presenters = [];
+  const coordinators = [];
   const controller = new ArticleAutosaveController({
     documentSource: document,
     optionsReader: (key, fallback) => options[key] ?? fallback,
@@ -271,11 +293,18 @@ const createFixture = ({ startResults = [], presenterFactory } = {}) => {
 
       return presenter;
     }),
+    coordinatorFactory: (configuration) => {
+      const coordinator = new FakeCoordinator(configuration);
+      coordinators.push(coordinator);
+
+      return coordinator;
+    },
   });
 
   return {
     clients,
     controller,
+    coordinators,
     document,
     editor,
     eventTargets,
@@ -370,6 +399,18 @@ test('supported existing Article activates exactly once with literal runtime con
   assert.strictEqual(fixture.presenters[0].options.runtime, fixture.runtimes[0]);
   assert.strictEqual(fixture.presenters[0].options.statusMount, fixture.statusMount);
   assert.strictEqual(fixture.presenters[0].options.recoveryMount, fixture.recoveryMount);
+  assert.strictEqual(fixture.coordinators[0].options.taskPolicy, ARTICLE_CANONICAL_TASK_POLICY);
+  assert.deepEqual(ARTICLE_CANONICAL_TASK_POLICY['article.save2copy'], {
+    intent: 'save-copy', transport: 'native', canonical: true,
+  });
+  assert.deepEqual(Object.keys(ARTICLE_CANONICAL_TASK_POLICY), [
+    'article.apply',
+    'article.save',
+    'article.save2new',
+    'article.save2copy',
+    'article.cancel',
+  ]);
+  assert.equal(fixture.coordinators[0].startCalls, 1);
   assert.equal(fixture.runtimes[0].changeCalls, 0);
 });
 
@@ -390,6 +431,7 @@ test('invalid, disabled and new Article configurations remain inactive', async (
       fixture.controller.start();
       await fixture.controller.reconcile();
       assert.equal(fixture.runtimes.length, 0);
+      assert.equal(fixture.coordinators.length, 0);
     });
   }
 });
@@ -422,6 +464,7 @@ test('an absent or unsupported editor waits without affecting Article editing', 
   await absent.controller.reconcile();
   assert.equal(absent.runtimes.length, 0);
   assert.equal(absent.presenters.length, 0);
+  assert.equal(absent.coordinators.length, 0);
 
   const lateEditor = new FakeEditor();
   absent.registry.instances.set('jform_articletext', lateEditor);
@@ -437,6 +480,7 @@ test('an absent or unsupported editor waits without affecting Article editing', 
   await unsupported.controller.reconcile();
   assert.equal(unsupported.runtimes.length, 0);
   assert.equal(unsupported.presenters.length, 0);
+  assert.equal(unsupported.coordinators.length, 0);
 });
 
 test('irrelevant updates and unrelated editor lifecycle events are idempotent', async () => {
@@ -454,6 +498,9 @@ test('irrelevant updates and unrelated editor lifecycle events are idempotent', 
   assert.equal(fixture.runtimes[0].destroyCalls, 0);
   assert.equal(fixture.presenters.length, 1);
   assert.equal(fixture.presenters[0].destroyCalls, 0);
+  assert.equal(fixture.coordinators.length, 1);
+  assert.equal(fixture.coordinators[0].startCalls, 1);
+  assert.equal(fixture.coordinators[0].destroyCalls, 0);
 });
 
 test('form replacement destroys the old pair and creates one replacement', async () => {
@@ -467,6 +514,9 @@ test('form replacement destroys the old pair and creates one replacement', async
 
   assert.equal(fixture.runtimes.length, 2);
   assert.equal(fixture.runtimes[0].destroyCalls, 1);
+  assert.equal(fixture.coordinators.length, 2);
+  assert.equal(fixture.coordinators[0].destroyCalls, 1);
+  assert.equal(fixture.coordinators[1].startCalls, 1);
   assert.equal(fixture.presenters[0].destroyCalls, 1);
   assert.equal(fixture.editor.unsubscribeCalls, 1);
   assert.strictEqual(fixture.controller.activePair.form, replacement.form);
@@ -481,6 +531,7 @@ test('independent UI replacements preserve the runtime, adapter and pair EventTa
   const runtime = fixture.runtimes[0];
   const adapter = fixture.controller.activePair.adapter;
   const eventTarget = fixture.eventTargets[0];
+  const coordinator = fixture.coordinators[0];
   const statusReplacement = fixture.replacePresentationMount('status');
 
   fixture.document.dispatchEvent(new Event('joomla:updated'));
@@ -490,6 +541,8 @@ test('independent UI replacements preserve the runtime, adapter and pair EventTa
   assert.equal(runtime.destroyCalls, 0);
   assert.strictEqual(fixture.controller.activePair.adapter, adapter);
   assert.strictEqual(fixture.controller.activePair.eventTarget, eventTarget);
+  assert.strictEqual(fixture.controller.activePair.coordinator, coordinator);
+  assert.equal(coordinator.destroyCalls, 0);
   assert.equal(fixture.presenters[0].destroyCalls, 1);
   assert.strictEqual(fixture.presenters[1].options.runtime, runtime);
   assert.strictEqual(fixture.presenters[1].options.eventTarget, eventTarget);
@@ -500,6 +553,7 @@ test('independent UI replacements preserve the runtime, adapter and pair EventTa
   fixture.document.dispatchEvent(new Event('joomla:updated'));
   await fixture.controller.reconcile();
   assert.equal(fixture.runtimes.length, 1);
+  assert.equal(fixture.coordinators.length, 1);
   assert.equal(fixture.presenters[1].destroyCalls, 1);
   assert.strictEqual(fixture.presenters[2].options.statusMount, statusReplacement);
   assert.strictEqual(fixture.presenters[2].options.recoveryMount, recoveryReplacement);
@@ -509,6 +563,7 @@ test('independent UI replacements preserve the runtime, adapter and pair EventTa
   fixture.document.dispatchEvent(new Event('joomla:updated'));
   await fixture.controller.reconcile();
   assert.equal(fixture.runtimes.length, 1);
+  assert.equal(fixture.coordinators.length, 1);
   assert.equal(fixture.presenters[2].destroyCalls, 1);
   assert.strictEqual(fixture.presenters[3].options.statusMount, secondStatus);
   assert.strictEqual(fixture.presenters[3].options.recoveryMount, secondRecovery);
@@ -531,6 +586,7 @@ test('presentation configuration changes replace only the presenter', async () =
   await fixture.controller.reconcile();
 
   assert.equal(fixture.runtimes.length, 1);
+  assert.equal(fixture.coordinators.length, 1);
   assert.equal(runtime.destroyCalls, 0);
   assert.equal(fixture.presenters[0].destroyCalls, 1);
   assert.strictEqual(fixture.presenters[1].options.eventTarget, eventTarget);
@@ -592,6 +648,7 @@ test('editor replacement and stale lifecycle metadata cannot destroy the current
   });
   await fixture.controller.reconcile();
   assert.equal(fixture.runtimes[0].destroyCalls, 1);
+  assert.equal(fixture.coordinators[0].destroyCalls, 1);
 
   const replacement = new FakeEditor('<p>Replacement</p>');
   fixture.registry.instances.set('jform_articletext', replacement);
@@ -600,6 +657,7 @@ test('editor replacement and stale lifecycle metadata cannot destroy the current
   });
   await fixture.controller.reconcile();
   assert.equal(fixture.runtimes.length, 2);
+  assert.equal(fixture.coordinators.length, 2);
   assert.strictEqual(fixture.controller.activePair.editor, replacement);
 
   fixture.registry.emit({
@@ -657,7 +715,7 @@ test('a stale asynchronous activation destroys only itself', async () => {
   assert.strictEqual(fixture.controller.activePair.runtime, fixture.runtimes[1]);
 });
 
-test('recovery decisions and native Article actions are never invoked', async () => {
+test('controller teardown remains pair-owned and does not perform recovery actions', async () => {
   const fixture = createFixture();
   fixture.controller.start();
   await fixture.controller.reconcile();
@@ -669,6 +727,7 @@ test('recovery decisions and native Article actions are never invoked', async ()
   fixture.controller.destroy();
   fixture.controller.destroy();
   assert.equal(fixture.presenters[0].destroyCalls, 1);
+  assert.equal(fixture.coordinators[0].destroyCalls, 1);
   assert.equal(fixture.runtimes[0].destroyCalls, 1);
   assert.equal(fixture.registry.unsubscribeCount, 1);
   assert.equal(fixture.document.listenerCounts.get('joomla:updated'), 0);

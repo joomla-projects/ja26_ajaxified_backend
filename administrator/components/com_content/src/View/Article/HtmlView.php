@@ -172,13 +172,25 @@ class HtmlView extends FormView
 
         $endpoints = [];
 
-        foreach (['initialize', 'preserve', 'detect', 'read', 'discard'] as $operation) {
+        foreach (
+            [
+                'initialize',
+                'preserve',
+                'detect',
+                'read',
+                'discard',
+                'prepareCanonicalAction',
+                'getCanonicalActionOutcome',
+            ] as $operation
+        ) {
             $endpoints[$operation] = Route::_('index.php?option=com_autosave&task=autosave.' . $operation . '&format=json', false);
         }
 
         $application = Factory::getApplication();
         $language    = $application->getLanguage();
         $language->load('com_autosave', JPATH_ADMINISTRATOR);
+        Text::script('COM_AUTOSAVE_CANCEL_DISCARD_FAILED');
+        Text::script('COM_AUTOSAVE_CANCEL_DISCARD_FAILED_TITLE');
         $timeZone    = (string) $this->getCurrentUser()->getParam(
             'timezone',
             $application->get('offset', 'UTC')

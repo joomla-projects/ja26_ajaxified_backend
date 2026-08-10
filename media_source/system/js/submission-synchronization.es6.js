@@ -19,7 +19,7 @@ export default class SubmissionSynchronization {
      *
      * @returns {Promise<void>}
      */
-    static async synchronize({ response, context }) {
+    static async synchronize({ response, context, submissionState = null }) {
         /*
          * Phase 1:
          * Determine whether the response remains within
@@ -28,6 +28,10 @@ export default class SubmissionSynchronization {
         if (!this.isSynchronizableResponse(response, context)) {
             this.performNavigation(response);
 
+            return;
+        }
+
+        if (!this.isCurrentSubmission(context, submissionState)) {
             return;
         }
 
@@ -41,7 +45,7 @@ export default class SubmissionSynchronization {
 
         await this.synchronizeAssets(snapshot);
 
-        this.synchronizeWorkspace(snapshot, strategy);
+        this.synchronizeWorkspace(snapshot, strategy, submissionState);
 
         this.synchronizeRuntimeOptions(snapshot);
 
@@ -123,8 +127,36 @@ export default class SubmissionSynchronization {
      *
      * @returns {void}
      */
-    static synchronizeWorkspace(snapshot, strategy) {
-        WorkspaceSynchronizer.synchronize(snapshot, strategy);
+    static synchronizeWorkspace(snapshot, strategy, submissionState = null) {
+        WorkspaceSynchronizer.synchronize(snapshot, strategy, submissionState);
+    }
+
+    /**
+     * Capture successful-control values at the exact transport boundary.
+     *
+     * @param {SubmissionContext} context
+     *
+     * @returns {{form: HTMLFormElement, controls: Map}|null}
+     */
+    static captureSubmissionState(context) {
+        return WorkspaceSynchronizer.captureFormControls(context?.form);
+    }
+
+    /**
+     * Determine whether an asynchronous response still belongs to the live form.
+     *
+     * @param {SubmissionContext} context
+     * @param {{form: HTMLFormElement, controls: Map}|null} submissionState
+     *
+     * @returns {boolean}
+     */
+    static isCurrentSubmission(context, submissionState) {
+        if (!submissionState?.form) {
+            return true;
+        }
+
+        return submissionState.form === context?.form
+            && submissionState.form.isConnected !== false;
     }
 
     /**

@@ -3,8 +3,21 @@
  * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
-const OPERATIONS = ['initialize', 'preserve', 'detect', 'read', 'discard'];
-const MUTATION_OPERATIONS = new Set(['initialize', 'preserve', 'discard']);
+const OPERATIONS = [
+  'initialize',
+  'preserve',
+  'detect',
+  'read',
+  'discard',
+  'prepareCanonicalAction',
+  'getCanonicalActionOutcome',
+];
+const MUTATION_OPERATIONS = new Set([
+  'initialize',
+  'preserve',
+  'discard',
+  'prepareCanonicalAction',
+]);
 
 const ERROR_CLASSIFICATIONS = new Map([
   ['authentication_required', 'authentication-required'],
@@ -30,7 +43,13 @@ const ERROR_CLASSIFICATIONS = new Map([
   ['stale_client_revision', 'conflict'],
   ['revision_conflict', 'conflict'],
   ['draft_terminal', 'terminal-generation'],
+  ['draft_closed', 'terminal-generation'],
   ['draft_expired', 'terminal-generation'],
+  ['canonical_action_not_found', 'canonical-outcome-unknown'],
+  ['canonical_action_conflict', 'conflict'],
+  ['canonical_intent_conflict', 'conflict'],
+  ['canonical_action_consumed', 'conflict'],
+  ['canonical_generation_not_closed', 'conflict'],
   ['draft_limit_reached', 'rate-limited'],
   ['internal_error', 'temporary-server-failure'],
 ]);
@@ -109,6 +128,78 @@ const validateData = (operation, data) => {
     case 'discard':
       return isObject(data) && ['discarded', 'idempotent'].includes(data.status);
 
+    case 'prepareCanonicalAction':
+      return hasExactKeys(data, ['operation_id', 'intent', 'outcome', 'expires_at'])
+        && assertStringProperties(data, ['operation_id', 'intent', 'expires_at'])
+        && data.outcome === 'pending';
+
+    case 'getCanonicalActionOutcome':
+      if (!hasExactKeys(data, [
+        'operation_id',
+        'context',
+        'target_id',
+        'continuation_id',
+        'generation_id',
+        'intent',
+        'outcome',
+        'expected_base_revision',
+        'final_target_id',
+        'final_base_revision',
+        'failure_code',
+        'created_at',
+        'updated_at',
+        'expires_at',
+        'completed_at',
+      ])
+        || !assertStringProperties(data, [
+          'operation_id',
+          'context',
+          'target_id',
+          'continuation_id',
+          'generation_id',
+          'intent',
+          'outcome',
+          'expected_base_revision',
+          'created_at',
+          'updated_at',
+          'expires_at',
+        ])) {
+        return false;
+      }
+
+      if (!['pending', 'successful', 'failed', 'unknown'].includes(data.outcome)
+        || !['final_target_id', 'final_base_revision', 'failure_code', 'completed_at'].every(
+          (key) => data[key] === null || isNonEmptyString(data[key]),
+        )) {
+        return false;
+      }
+
+      if (data.outcome === 'pending') {
+        return data.final_target_id === null
+          && data.final_base_revision === null
+          && data.failure_code === null
+          && data.completed_at === null;
+      }
+
+      if (data.outcome === 'successful') {
+        return isNonEmptyString(data.final_target_id)
+          && isNonEmptyString(data.final_base_revision)
+          && data.failure_code === null
+          && isNonEmptyString(data.completed_at);
+      }
+
+      if (data.outcome === 'failed') {
+        return data.final_target_id === null
+          && data.final_base_revision === null
+          && isNonEmptyString(data.failure_code)
+          && isNonEmptyString(data.completed_at);
+      }
+
+      return data.final_target_id === null
+        && data.final_base_revision === null
+        && data.failure_code === null
+        && isNonEmptyString(data.completed_at);
+
     default:
       return false;
   }
@@ -140,6 +231,34 @@ const validateRequest = (operation, request) => {
     case 'discard':
       return hasExactKeys(request, ['continuation_id', 'generation_id'])
         && assertStringProperties(request, ['continuation_id', 'generation_id']);
+
+    case 'prepareCanonicalAction':
+      return hasExactKeys(request, [
+        'context',
+        'target_id',
+        'continuation_id',
+        'generation_id',
+        'client_revision',
+        'payload_schema_version',
+        'payload',
+        'intent',
+        'expected_base_revision',
+      ])
+        && assertStringProperties(request, [
+          'context',
+          'target_id',
+          'continuation_id',
+          'generation_id',
+          'intent',
+          'expected_base_revision',
+        ])
+        && isPositiveInteger(request.client_revision)
+        && isPositiveInteger(request.payload_schema_version)
+        && isObject(request.payload);
+
+    case 'getCanonicalActionOutcome':
+      return hasExactKeys(request, ['operation_id', 'context', 'target_id'])
+        && assertStringProperties(request, ['operation_id', 'context', 'target_id']);
 
     default:
       return false;
@@ -284,6 +403,14 @@ export class AutosaveApiClient {
 
   discard(request, options) {
     return this.request('discard', request, options);
+  }
+
+  prepareCanonicalAction(request, options) {
+    return this.request('prepareCanonicalAction', request, options);
+  }
+
+  getCanonicalActionOutcome(request, options) {
+    return this.request('getCanonicalActionOutcome', request, options);
   }
 
   async request(operation, request, { signal } = {}) {

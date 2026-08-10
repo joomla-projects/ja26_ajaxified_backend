@@ -243,6 +243,182 @@ final class AutosaveLifecycle
     }
 
     /**
+     * Atomically preserve the submitted snapshot, close its generation and
+     * create an idempotent canonical action operation.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function prepareCanonicalAction(
+        User $user,
+        string $context,
+        string $targetId,
+        string $continuationId,
+        string $generationId,
+        int $clientRevision,
+        mixed $payload,
+        int $schemaVersion,
+        string $intent,
+        string $expectedBaseRevision,
+        Date $now
+    ): array {
+        $userId          = $this->validateInvocation($user, $now);
+        $provider        = $this->resolver->resolve($context);
+        $canonicalTarget = $provider->canonicalizeTargetId($targetId);
+
+        if (!$provider->targetExists($canonicalTarget)) {
+            throw new AutosaveException('target_not_found', 'The Autosave target was not found.');
+        }
+
+        $provider->authorize($user, $canonicalTarget, AutosaveOperation::PrepareCanonicalAction);
+        $currentBaseRevision = $provider->getBaseRevision($canonicalTarget);
+
+        if (!hash_equals($currentBaseRevision, $expectedBaseRevision)) {
+            throw new AutosaveException(
+                'base_revision_conflict',
+                'The canonical base revision changed before preparation.'
+            );
+        }
+
+        if ($provider->getPayloadSchemaVersion() !== $schemaVersion) {
+            throw new AutosaveException(
+                'unsupported_schema_version',
+                'The Autosave payload schema version is not supported.'
+            );
+        }
+
+        return $this->storage->prepareCanonicalAction(
+            $userId,
+            $continuationId,
+            $generationId,
+            $context,
+            $canonicalTarget,
+            $currentBaseRevision,
+            $clientRevision,
+            $provider->normalizePayload($payload, $schemaVersion),
+            $schemaVersion,
+            $intent,
+            $now
+        );
+    }
+
+    /**
+     * Query one metadata-only authoritative canonical outcome.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function getCanonicalActionOutcome(
+        User $user,
+        string $operationId,
+        string $context,
+        string $targetId,
+        Date $now
+    ): array {
+        $userId          = $this->validateInvocation($user, $now);
+        $provider        = $this->resolver->resolve($context);
+        $canonicalTarget = $provider->canonicalizeTargetId($targetId);
+
+        $provider->authorize($user, $canonicalTarget, AutosaveOperation::QueryCanonicalAction);
+
+        return $this->storage->inspectCanonicalAction(
+            $userId,
+            $operationId,
+            $context,
+            $canonicalTarget,
+            $now
+        );
+    }
+
+    /**
+     * Verify prepared metadata before the canonical controller save begins.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function verifyCanonicalAction(
+        User $user,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        Date $now
+    ): array {
+        $userId          = $this->validateInvocation($user, $now);
+        $provider        = $this->resolver->resolve($context);
+        $canonicalTarget = $provider->canonicalizeTargetId($targetId);
+
+        $provider->authorize($user, $canonicalTarget, AutosaveOperation::PrepareCanonicalAction);
+
+        return $this->storage->verifyCanonicalAction(
+            $userId,
+            $operationId,
+            $context,
+            $canonicalTarget,
+            $intent,
+            $provider->getBaseRevision($canonicalTarget),
+            $now
+        );
+    }
+
+    /**
+     * Retire the prepared generation after authoritative controller success.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function finalizeCanonicalActionSuccess(
+        User $user,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $finalTargetId,
+        Date $now
+    ): array {
+        $userId          = $this->validateInvocation($user, $now);
+        $provider        = $this->resolver->resolve($context);
+        $canonicalTarget = $provider->canonicalizeTargetId($targetId);
+        $canonicalFinal  = $provider->canonicalizeTargetId($finalTargetId);
+
+        return $this->storage->finalizeCanonicalActionSuccess(
+            $userId,
+            $operationId,
+            $context,
+            $canonicalTarget,
+            $intent,
+            $canonicalFinal,
+            $provider->getBaseRevision($canonicalFinal),
+            $now
+        );
+    }
+
+    /**
+     * Record a definitive canonical controller failure.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function finalizeCanonicalActionFailure(
+        User $user,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $failureCode,
+        Date $now
+    ): array {
+        $this->validateInvocation($user, $now);
+        $provider        = $this->resolver->resolve($context);
+        $canonicalTarget = $provider->canonicalizeTargetId($targetId);
+
+        return $this->storage->finalizeCanonicalActionFailure(
+            (int) $user->id,
+            $operationId,
+            $context,
+            $canonicalTarget,
+            $intent,
+            $failureCode,
+            $now
+        );
+    }
+
+    /**
      * Discard an owner-bound draft without booting its component.
      *
      * @return  array{status: 'discarded'|'idempotent'}

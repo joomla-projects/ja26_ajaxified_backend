@@ -14,16 +14,14 @@ namespace Joomla\CMS\Autosave;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Operations for which a provider must authorize access.
+ * Server-authoritative canonical action outcomes.
  *
  * @since  __DEPLOY_VERSION__
  */
-enum AutosaveOperation: string
+enum CanonicalActionState: string
 {
-    case Initialize = 'initialize';
-    case Preserve   = 'preserve';
-    case Detect     = 'detect';
-    case Read       = 'read';
-    case PrepareCanonicalAction = 'prepare-canonical-action';
-    case QueryCanonicalAction   = 'query-canonical-action';
+    case Pending    = 'pending';
+    case Successful = 'successful';
+    case Failed     = 'failed';
+    case Unknown    = 'unknown';
 }

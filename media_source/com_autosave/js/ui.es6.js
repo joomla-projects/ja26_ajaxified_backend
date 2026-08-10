@@ -5,6 +5,7 @@
 
 import {
   AUTOSAVE_DRAFT_EVENT,
+  AUTOSAVE_RECOVERY_FOCUS_EVENT,
   AUTOSAVE_STATE_EVENT,
 } from 'com_autosave.runtime';
 
@@ -26,6 +27,12 @@ const PRESENTATION_STATUSES = Object.freeze([
   'recovery-required',
   'recovery-applying',
   'recovery-discarding',
+  'canonical-preparing',
+  'canonical-submitting',
+  'canonical-outcome-pending',
+  'canonical-failed',
+  'canonical-prepare-failed',
+  'canonical-outcome-unknown',
   'destroyed',
   'unknown',
 ]);
@@ -44,6 +51,9 @@ const BUSY_STATUSES = new Set([
   'preserving',
   'recovery-applying',
   'recovery-discarding',
+  'canonical-preparing',
+  'canonical-submitting',
+  'canonical-outcome-pending',
 ]);
 
 const NETWORK_BLOCKED_STATUSES = new Set([
@@ -53,6 +63,7 @@ const NETWORK_BLOCKED_STATUSES = new Set([
   'conflict',
   'terminal',
   'destroyed',
+  'canonical-outcome-unknown',
 ]);
 
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -262,6 +273,7 @@ export class AutosavePresenter {
 
     this.handleState = () => this.render(this.runtime.state);
     this.handleDraft = () => this.render(this.runtime.state);
+    this.handleRecoveryFocus = () => this.focusRecovery();
     this.handleRestore = () => this.runRecoveryAction(
       'restore',
       () => this.runtime.restoreDetectedDraft(),
@@ -272,6 +284,7 @@ export class AutosavePresenter {
 
     this.eventTarget.addEventListener(AUTOSAVE_STATE_EVENT, this.handleState);
     this.eventTarget.addEventListener(AUTOSAVE_DRAFT_EVENT, this.handleDraft);
+    this.eventTarget.addEventListener(AUTOSAVE_RECOVERY_FOCUS_EVENT, this.handleRecoveryFocus);
     this.recoveryUi?.buttons.get('restore').addEventListener('click', this.handleRestore);
     this.recoveryUi?.buttons.get('keep-current').addEventListener('click', this.handleKeepCurrent);
     this.recoveryUi?.buttons.get('discard').addEventListener('click', this.handleDiscard);
@@ -513,6 +526,24 @@ export class AutosavePresenter {
     statusRegion.removeAttribute('tabindex');
   }
 
+  focusRecovery() {
+    const region = this.recoveryUi?.region;
+
+    if (!region?.isConnected || typeof region.focus !== 'function') {
+      return;
+    }
+
+    region.setAttribute('tabindex', '-1');
+
+    try {
+      region.focus({ preventScroll: true });
+    } catch (error) {
+      region.focus();
+    }
+
+    region.removeAttribute('tabindex');
+  }
+
   destroy() {
     if (this.destroyed) {
       return;
@@ -522,6 +553,7 @@ export class AutosavePresenter {
     this.generation += 1;
     this.eventTarget.removeEventListener(AUTOSAVE_STATE_EVENT, this.handleState);
     this.eventTarget.removeEventListener(AUTOSAVE_DRAFT_EVENT, this.handleDraft);
+    this.eventTarget.removeEventListener(AUTOSAVE_RECOVERY_FOCUS_EVENT, this.handleRecoveryFocus);
     this.recoveryUi?.buttons.get('restore').removeEventListener('click', this.handleRestore);
     this.recoveryUi?.buttons.get('keep-current').removeEventListener('click', this.handleKeepCurrent);
     this.recoveryUi?.buttons.get('discard').removeEventListener('click', this.handleDiscard);

@@ -45,7 +45,9 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
     {
         parent::setUp();
 
-        foreach (['#__autosave_generations', '#__autosave_continuations'] as $table) {
+        foreach (
+            ['#__autosave_canonical_actions', '#__autosave_generations', '#__autosave_continuations'] as $table
+        ) {
             $query = $this->getDBDriver()->createQuery()
                 ->delete($this->getDBDriver()->quoteName($table));
 
@@ -877,6 +879,394 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
         $this->assertSame(1, $this->countRows('#__autosave_generations'));
     }
 
+    /**
+     * @testdox  atomically stores the exact submitted snapshot and closes one generation idempotently
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalPreparationClosesGenerationIdempotently(): void
+    {
+        $storage    = $this->storage();
+        $identities = $this->initialize();
+        $payload    = ['title' => 'Submitted', 'articletext' => '<p>Exact</p>'];
+        $arguments  = [
+            7,
+            $identities['continuation_id'],
+            $identities['generation_id'],
+            'com_example.record',
+            'record-42',
+            'revision-1',
+            1,
+            $payload,
+            1,
+            'apply',
+            new Date('2026-07-29 10:00:10', 'UTC'),
+        ];
+
+        $first  = $storage->prepareCanonicalAction(...$arguments);
+        $second = $storage->prepareCanonicalAction(...$arguments);
+        $row    = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+
+        $this->assertSame($first, $second);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $first['operation_id']);
+        $this->assertSame('pending', $first['outcome']);
+        $this->assertSame(GenerationState::Closed->value, $row['state']);
+        $this->assertSame(1, (int) $row['client_revision']);
+        $this->assertSame($payload, json_decode($row['payload'], true));
+        $this->assertNull($row['active_marker']);
+        $this->assertNull($row['quota_slot']);
+        $this->assertSame('2026-07-29 10:00:10', $row['closed_at']);
+        $this->assertSame(1, $this->countRows('#__autosave_canonical_actions'));
+    }
+
+    /**
+     * @testdox  rejects late preserves without mutating the closed snapshot
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testLatePreserveCannotMutateClosedCanonicalSnapshot(): void
+    {
+        $storage    = $this->storage();
+        $identities = $this->initialize();
+        $storage->prepareCanonicalAction(
+            7,
+            $identities['continuation_id'],
+            $identities['generation_id'],
+            'com_example.record',
+            'record-42',
+            'revision-1',
+            1,
+            ['value' => 'submitted'],
+            1,
+            'apply',
+            new Date('2026-07-29 10:00:10', 'UTC')
+        );
+
+        $this->assertAutosaveFailure(
+            'draft_terminal',
+            fn () => $this->preserve(
+                $storage,
+                $identities,
+                2,
+                ['value' => 'late'],
+                1,
+                '2026-07-29 10:00:11'
+            )
+        );
+        $row = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+        $this->assertSame(['value' => 'submitted'], json_decode($row['payload'], true));
+        $this->assertSame(1, (int) $row['client_revision']);
+    }
+
+    /**
+     * @testdox  verified success retires only the prepared generation and exposes metadata-only outcome
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalSuccessRetiresPreparedGeneration(): void
+    {
+        $storage    = $this->storage();
+        $identities = $this->initialize();
+        $prepared   = $storage->prepareCanonicalAction(
+            7,
+            $identities['continuation_id'],
+            $identities['generation_id'],
+            'com_example.record',
+            'record-42',
+            'revision-1',
+            1,
+            ['value' => 'submitted'],
+            1,
+            'save-exit',
+            new Date('2026-07-29 10:00:10', 'UTC')
+        );
+
+        $storage->verifyCanonicalAction(
+            7,
+            $prepared['operation_id'],
+            'com_example.record',
+            'record-42',
+            'save-exit',
+            'revision-1',
+            new Date('2026-07-29 10:00:11', 'UTC')
+        );
+        $first = $storage->finalizeCanonicalActionSuccess(
+            7,
+            $prepared['operation_id'],
+            'com_example.record',
+            'record-42',
+            'save-exit',
+            'record-42',
+            'revision-2',
+            new Date('2026-07-29 10:00:12', 'UTC')
+        );
+        $second = $storage->finalizeCanonicalActionSuccess(
+            7,
+            $prepared['operation_id'],
+            'com_example.record',
+            'record-42',
+            'save-exit',
+            'record-42',
+            'revision-2',
+            new Date('2026-07-29 10:00:13', 'UTC')
+        );
+        $outcome = $storage->inspectCanonicalAction(
+            7,
+            $prepared['operation_id'],
+            'com_example.record',
+            'record-42',
+            new Date('2026-07-29 10:00:14', 'UTC')
+        );
+        $row = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+
+        $this->assertSame($first, $second);
+        $this->assertSame('successful', $outcome['outcome']);
+        $this->assertSame('record-42', $outcome['final_target_id']);
+        $this->assertSame('revision-2', $outcome['final_base_revision']);
+        $this->assertArrayNotHasKey('payload', $outcome);
+        $this->assertSame(GenerationState::Retired->value, $row['state']);
+        $this->assertNull($row['payload']);
+        $this->assertNull($storage->detect(7, 'com_example.record', 'record-42', new Date('2026-07-29 10:00:14', 'UTC')));
+    }
+
+    /**
+     * @testdox  definitive failure retains the immutable closed snapshot
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalFailureRetainsClosedSnapshot(): void
+    {
+        $storage    = $this->storage();
+        $identities = $this->initialize();
+        $prepared   = $storage->prepareCanonicalAction(
+            7,
+            $identities['continuation_id'],
+            $identities['generation_id'],
+            'com_example.record',
+            'record-42',
+            'revision-1',
+            1,
+            ['value' => 'submitted'],
+            1,
+            'apply',
+            new Date('2026-07-29 10:00:10', 'UTC')
+        );
+
+        $storage->finalizeCanonicalActionFailure(
+            7,
+            $prepared['operation_id'],
+            'com_example.record',
+            'record-42',
+            'apply',
+            'canonical_save_failed',
+            new Date('2026-07-29 10:00:12', 'UTC')
+        );
+        $row = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+
+        $this->assertSame(GenerationState::Closed->value, $row['state']);
+        $this->assertSame(['value' => 'submitted'], json_decode($row['payload'], true));
+        $outcome = $storage->inspectCanonicalAction(
+            7,
+            $prepared['operation_id'],
+            'com_example.record',
+            'record-42',
+            new Date('2026-07-29 10:00:13', 'UTC')
+        );
+        $this->assertSame('failed', $outcome['outcome']);
+        $this->assertSame('canonical_save_failed', $outcome['failure_code']);
+    }
+
+    /**
+     * @testdox  canonical preparation rejects foreign, mismatched, stale and invalid requests without closing the draft
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalPreparationRejectsInvalidBindingsWithoutMutation(): void
+    {
+        $storage    = $this->storage(['max_payload_bytes' => 64]);
+        $identities = $this->initialize([], ['max_payload_bytes' => 64]);
+        $prepare    = fn (array $changes = []) => $storage->prepareCanonicalAction(...array_values(array_replace([
+                        'userId'         => 7,
+                        'continuationId' => $identities['continuation_id'],
+                        'generationId'   => $identities['generation_id'],
+                        'context'        => 'com_example.record',
+                        'targetId'       => 'record-42',
+                        'baseRevision'   => 'revision-1',
+                        'clientRevision' => 1,
+                        'payload'        => ['value' => 'submitted'],
+                        'schemaVersion'  => 1,
+                        'intent'         => 'apply',
+                        'now'            => new Date('2026-07-29 10:00:10', 'UTC'),
+                    ], $changes)));
+        $this->assertAutosaveFailure('draft_not_found', fn () => $prepare(['userId' => 8]));
+        $this->assertAutosaveFailure('draft_not_found', fn () => $prepare(['continuationId' => str_repeat('a', 64)]));
+        $this->assertAutosaveFailure('draft_not_found', fn () => $prepare(['generationId' => str_repeat('b', 64)]));
+        $this->assertAutosaveFailure('draft_not_found', fn () => $prepare(['context' => 'com_example.other']));
+        $this->assertAutosaveFailure('draft_not_found', fn () => $prepare(['targetId' => 'record-43']));
+        $this->assertAutosaveFailure('base_revision_conflict', fn () => $prepare(['baseRevision' => 'revision-stale']));
+        $this->assertAutosaveFailure('payload_too_large', fn () => $prepare(['payload' => ['value' => str_repeat('x', 100)]]));
+        $this->expectException(\InvalidArgumentException::class);
+        try {
+            $prepare(['intent' => 'unsupported']);
+        } finally {
+            $row = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+            $this->assertSame(GenerationState::Active->value, $row['state']);
+            $this->assertNull($row['payload']);
+            $this->assertSame(0, $this->countRows('#__autosave_canonical_actions'));
+        }
+    }
+
+    /**
+     * @testdox  a closed preparation accepts only the exact idempotent retry and a retired generation stays terminal
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalPreparationCannotRewriteClosedOrRetiredGeneration(): void
+    {
+        $storage    = $this->storage();
+        $identities = $this->initialize();
+        $arguments  = [
+            7,
+            $identities['continuation_id'],
+            $identities['generation_id'],
+            'com_example.record',
+            'record-42',
+            'revision-1',
+            1,
+            ['value' => 'submitted'],
+            1,
+            'apply',
+            new Date('2026-07-29 10:00:10', 'UTC'),
+        ];
+        $prepared = $storage->prepareCanonicalAction(...$arguments);
+        $conflicting          = $arguments;
+        $conflicting[7]       = ['value' => 'different'];
+        $conflicting[10]      = new Date('2026-07-29 10:00:11', 'UTC');
+        $this->assertAutosaveFailure('canonical_action_conflict', fn () => $storage->prepareCanonicalAction(...$conflicting));
+        $storage->finalizeCanonicalActionSuccess(7, $prepared['operation_id'], 'com_example.record', 'record-42', 'apply', 'record-42', 'revision-2', new Date('2026-07-29 10:00:12', 'UTC'));
+        $arguments[10] = new Date('2026-07-29 10:00:13', 'UTC');
+        $this->assertAutosaveFailure('draft_terminal', fn () => $storage->prepareCanonicalAction(...$arguments));
+    }
+
+    /**
+     * @testdox  canonical verification protects ownership, binding, intent, base, expiry and consumption
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalVerificationRejectsInvalidOrConsumedOperations(): void
+    {
+        $storage    = $this->storage();
+        $identities = $this->initialize();
+        $prepared   = $storage->prepareCanonicalAction(7, $identities['continuation_id'], $identities['generation_id'], 'com_example.record', 'record-42', 'revision-1', 1, ['value' => 'submitted'], 1, 'apply', new Date('2026-07-29 10:00:10', 'UTC'));
+        $verify = fn (array $changes = []) => $storage->verifyCanonicalAction(...array_values(array_replace([
+                        'userId'              => 7,
+                        'operationId'          => $prepared['operation_id'],
+                        'context'              => 'com_example.record',
+                        'targetId'             => 'record-42',
+                        'intent'               => 'apply',
+                        'currentBaseRevision'  => 'revision-1',
+                        'now'                  => new Date('2026-07-29 10:00:11', 'UTC'),
+                    ], $changes)));
+        $this->assertSame('pending', $verify()['outcome']);
+        $this->assertAutosaveFailure('canonical_action_not_found', fn () => $verify(['userId' => 8]));
+        $this->assertAutosaveFailure('canonical_action_not_found', fn () => $verify(['operationId' => str_repeat('a', 64)]));
+        $this->assertAutosaveFailure('canonical_action_not_found', fn () => $verify(['targetId' => 'record-43']));
+        $this->assertAutosaveFailure('canonical_intent_conflict', fn () => $verify(['intent' => 'save-exit']));
+        $this->assertAutosaveFailure('base_revision_conflict', fn () => $verify(['currentBaseRevision' => 'revision-2']));
+        $this->assertAutosaveFailure('canonical_action_consumed', fn () => $verify(['now' => new Date('2026-07-30 10:00:11', 'UTC')]));
+        $outcome = $storage->inspectCanonicalAction(7, $prepared['operation_id'], 'com_example.record', 'record-42', new Date('2026-07-30 10:00:12', 'UTC'));
+        $this->assertSame('unknown', $outcome['outcome']);
+        $this->assertArrayNotHasKey('generation_state', $outcome);
+        $this->assertArrayNotHasKey('payload', $outcome);
+    }
+
+    /**
+     * @testdox  retiring one submitted generation leaves another tab's active generation untouched
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalSuccessIsolatedFromAnotherTab(): void
+    {
+        $storage = $this->storage();
+        $first   = $this->initialize();
+        $second  = $this->initialize(['initializationKey' => 'initialization-2']);
+        $prepared = $storage->prepareCanonicalAction(7, $first['continuation_id'], $first['generation_id'], 'com_example.record', 'record-42', 'revision-1', 1, ['value' => 'first tab'], 1, 'apply', new Date('2026-07-29 10:00:10', 'UTC'));
+        $storage->finalizeCanonicalActionSuccess(7, $prepared['operation_id'], 'com_example.record', 'record-42', 'apply', 'record-42', 'revision-2', new Date('2026-07-29 10:00:12', 'UTC'));
+        $firstRow  = $this->loadRow('#__autosave_generations', 'public_id', $first['generation_id']);
+        $secondRow = $this->loadRow('#__autosave_generations', 'public_id', $second['generation_id']);
+        $this->assertSame(GenerationState::Retired->value, $firstRow['state']);
+        $this->assertSame(GenerationState::Active->value, $secondRow['state']);
+        $this->assertSame(1, (int) $secondRow['active_marker']);
+        $this->assertNotNull($secondRow['quota_slot']);
+    }
+
+    /**
+     * @testdox  canonical prepare rolls back the close when operation insertion fails
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalPreparationRollsBackPartialState(): void
+    {
+        $storage     = $this->storage();
+        $identities  = $this->initialize();
+        $continuation = $this->loadRow('#__autosave_continuations', 'public_id', $identities['continuation_id']);
+        $generation = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+        $fixture    = (object) [
+            'public_id'             => str_repeat('c', 64),
+            'user_id'               => 7,
+            'continuation_id'       => (int) $continuation['id'],
+            'generation_id'         => (int) $generation['id'],
+            'context'               => 'com_example.record',
+            'target_id'             => 'record-42',
+            'intent'                => 'apply',
+            'expected_base_revision' => 'revision-1',
+            'outcome'               => 'pending',
+            'created_at'            => '2026-07-29 10:00:00',
+            'updated_at'            => '2026-07-29 10:00:00',
+            'expires_at'            => '2026-07-29 10:02:00',
+        ];
+        $this->getDBDriver()->insertObject('#__autosave_canonical_actions', $fixture);
+        try {
+            $storage->prepareCanonicalAction(7, $identities['continuation_id'], $identities['generation_id'], 'com_example.record', 'record-42', 'revision-1', 1, ['value' => 'submitted'], 1, 'apply', new Date('2026-07-29 10:00:10', 'UTC'));
+            $this->fail('The duplicate operation constraint did not reject the partial prepare.');
+        } catch (ExecutionFailureException) {
+            $row = $this->loadRow('#__autosave_generations', 'public_id', $identities['generation_id']);
+            $this->assertSame(GenerationState::Active->value, $row['state']);
+            $this->assertSame(0, (int) $row['client_revision']);
+            $this->assertNull($row['payload']);
+            $this->assertSame(1, $this->countRows('#__autosave_canonical_actions'));
+        }
+    }
+
+    /**
+     * @testdox  retirement failure rolls back success metadata and preserves the terminal write fence
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalRetirementFailureLeavesTruthfulPendingOutcome(): void
+    {
+        $storage    = $this->storage();
+        $identities = $this->initialize();
+        $prepared   = $storage->prepareCanonicalAction(7, $identities['continuation_id'], $identities['generation_id'], 'com_example.record', 'record-42', 'revision-1', 1, ['value' => 'submitted'], 1, 'apply', new Date('2026-07-29 10:00:10', 'UTC'));
+        $retired = GenerationState::Retired->value;
+        $query   = $this->getDBDriver()->createQuery()
+            ->update($this->getDBDriver()->quoteName('#__autosave_generations'))
+            ->set($this->getDBDriver()->quoteName('state') . ' = :retired')
+            ->where($this->getDBDriver()->quoteName('public_id') . ' = :generation_id')
+            ->bind(':retired', $retired)
+            ->bind(':generation_id', $identities['generation_id']);
+        $this->getDBDriver()->setQuery($query)->execute();
+        $this->expectException(\RuntimeException::class);
+        try {
+            $storage->finalizeCanonicalActionSuccess(7, $prepared['operation_id'], 'com_example.record', 'record-42', 'apply', 'record-42', 'revision-2', new Date('2026-07-29 10:00:12', 'UTC'));
+        } finally {
+            $outcome = $storage->inspectCanonicalAction(7, $prepared['operation_id'], 'com_example.record', 'record-42', new Date('2026-07-29 10:00:13', 'UTC'));
+            $this->assertSame('pending', $outcome['outcome']);
+            $this->assertNull($outcome['final_target_id']);
+            $this->assertNull($outcome['final_base_revision']);
+            $this->assertAutosaveFailure('draft_terminal', fn () => $this->preserve($storage, $identities, 2, ['value' => 'late'], 1, '2026-07-29 10:00:14'));
+        }
+    }
     /**
      * Create storage with the complete test policy.
      *

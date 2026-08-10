@@ -12,9 +12,12 @@ namespace Joomla\Component\Autosave\Administrator\Extension;
 
 use Joomla\CMS\Application\CMSApplicationInterface;
 use Joomla\CMS\Autosave\AutosaveLifecycle;
+use Joomla\CMS\Autosave\AutosaveCanonicalActionServiceInterface;
+use Joomla\CMS\Date\Date;
 use Joomla\CMS\Dispatcher\DispatcherInterface;
 use Joomla\CMS\Extension\ComponentInterface;
 use Joomla\Component\Autosave\Administrator\Dispatcher\Dispatcher;
+use Joomla\CMS\User\User;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -25,7 +28,7 @@ use Joomla\Component\Autosave\Administrator\Dispatcher\Dispatcher;
  *
  * @since  __DEPLOY_VERSION__
  */
-final class AutosaveComponent implements ComponentInterface
+final class AutosaveComponent implements ComponentInterface, AutosaveCanonicalActionServiceInterface
 {
     /**
      * Deployment policy for component-neutral draft persistence.
@@ -63,5 +66,72 @@ final class AutosaveComponent implements ComponentInterface
     public function getDispatcher(CMSApplicationInterface $application): DispatcherInterface
     {
         return new Dispatcher($application, $application->getInput(), $this->lifecycle);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function verifyCanonicalAction(
+        User $user,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        Date $now
+    ): array {
+        return $this->lifecycle->verifyCanonicalAction(
+            $user,
+            $operationId,
+            $context,
+            $targetId,
+            $intent,
+            $now
+        );
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function finalizeCanonicalActionSuccess(
+        User $user,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $finalTargetId,
+        Date $now
+    ): array {
+        return $this->lifecycle->finalizeCanonicalActionSuccess(
+            $user,
+            $operationId,
+            $context,
+            $targetId,
+            $intent,
+            $finalTargetId,
+            $now
+        );
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function finalizeCanonicalActionFailure(
+        User $user,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $failureCode,
+        Date $now
+    ): array {
+        return $this->lifecycle->finalizeCanonicalActionFailure(
+            $user,
+            $operationId,
+            $context,
+            $targetId,
+            $intent,
+            $failureCode,
+            $now
+        );
     }
 }

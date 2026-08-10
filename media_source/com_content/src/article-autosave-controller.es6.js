@@ -4,14 +4,30 @@
  */
 
 import { AutosaveApiClient, AutosaveRuntime } from 'com_autosave.runtime';
+import AutosaveCanonicalActionCoordinator from 'com_autosave.canonical-actions';
 import createAutosavePresenter from 'com_autosave.ui';
 import { JoomlaEditor } from 'editor-api';
 import ArticleAutosaveAdapter, { normalizeCanonicalId } from './article-autosave-adapter.es6.js';
 
 const ARTICLE_OPTIONS_KEY = 'com_content.autosave.article';
 const RUNTIME_OPTIONS_KEY = 'com_autosave.runtime';
-const OPERATIONS = Object.freeze(['initialize', 'preserve', 'detect', 'read', 'discard']);
+const OPERATIONS = Object.freeze([
+  'initialize',
+  'preserve',
+  'detect',
+  'read',
+  'discard',
+  'prepareCanonicalAction',
+  'getCanonicalActionOutcome',
+]);
 const FIELD_KEYS = Object.freeze(['title', 'alias', 'articletext', 'catid']);
+const ARTICLE_CANONICAL_TASK_POLICY = Object.freeze({
+  'article.apply': Object.freeze({ intent: 'apply', transport: 'ajax', canonical: true }),
+  'article.save': Object.freeze({ intent: 'save-exit', transport: 'native', canonical: true }),
+  'article.save2new': Object.freeze({ intent: 'save-new', transport: 'native', canonical: true }),
+  'article.save2copy': Object.freeze({ intent: 'save-copy', transport: 'native', canonical: true }),
+  'article.cancel': Object.freeze({ intent: 'cancel', transport: 'native', canonical: false }),
+});
 
 const isPlainObject = (value) => value !== null
   && typeof value === 'object'
@@ -109,6 +125,7 @@ export default class ArticleAutosaveController {
     runtimeFactory = (options) => new AutosaveRuntime(options),
     eventTargetFactory = () => new EventTarget(),
     presenterFactory = createAutosavePresenter,
+    coordinatorFactory = (options) => new AutosaveCanonicalActionCoordinator(options),
   } = {}) {
     if (!documentSource
       || typeof documentSource.addEventListener !== 'function'
@@ -122,7 +139,8 @@ export default class ArticleAutosaveController {
       || typeof apiClientFactory !== 'function'
       || typeof runtimeFactory !== 'function'
       || typeof eventTargetFactory !== 'function'
-      || typeof presenterFactory !== 'function') {
+      || typeof presenterFactory !== 'function'
+      || typeof coordinatorFactory !== 'function') {
       throw new TypeError('The Article Autosave controller configuration is invalid.');
     }
 
@@ -134,6 +152,7 @@ export default class ArticleAutosaveController {
     this.runtimeFactory = runtimeFactory;
     this.eventTargetFactory = eventTargetFactory;
     this.presenterFactory = presenterFactory;
+    this.coordinatorFactory = coordinatorFactory;
     this.started = false;
     this.destroyed = false;
     this.generation = 0;
@@ -234,6 +253,7 @@ export default class ArticleAutosaveController {
 
     let runtime;
     let eventTarget;
+    let coordinator;
 
     try {
       eventTarget = this.eventTargetFactory();
@@ -253,8 +273,23 @@ export default class ArticleAutosaveController {
         schemaVersion: resolution.article.payloadSchemaVersion,
         eventTarget,
       });
+      coordinator = this.coordinatorFactory({
+        form: resolution.form,
+        runtime,
+        taskPolicy: ARTICLE_CANONICAL_TASK_POLICY,
+      });
+
+      if (!coordinator || typeof coordinator.start !== 'function' || typeof coordinator.destroy !== 'function') {
+        throw new TypeError('The Article Autosave canonical action coordinator is invalid.');
+      }
     } catch (error) {
-      adapter.destroy();
+      coordinator?.destroy?.();
+
+      if (runtime) {
+        runtime.destroy();
+      } else {
+        adapter.destroy();
+      }
 
       return false;
     }
@@ -262,6 +297,7 @@ export default class ArticleAutosaveController {
     const pair = {
       generation,
       runtime,
+      coordinator,
       adapter,
       eventTarget,
       presenter: null,
@@ -286,6 +322,8 @@ export default class ArticleAutosaveController {
       if (started && typeof started.then === 'function') {
         await started;
       }
+
+      coordinator.start();
     } catch (error) {
       if (this.pendingPair === pair) {
         this.pendingPair = null;
@@ -472,6 +510,7 @@ export default class ArticleAutosaveController {
     pair.presenterGeneration += 1;
     pair.presenter?.destroy();
     pair.presenter = null;
+    pair.coordinator.destroy();
     pair.runtime.destroy();
   }
 
@@ -495,6 +534,7 @@ export default class ArticleAutosaveController {
 }
 
 export {
+  ARTICLE_CANONICAL_TASK_POLICY,
   ARTICLE_OPTIONS_KEY,
   RUNTIME_OPTIONS_KEY,
   validateArticleConfiguration,

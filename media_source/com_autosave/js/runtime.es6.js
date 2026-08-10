@@ -10,6 +10,7 @@ export { AutosaveApiClient, AutosaveApiError, validateAutosaveAdapter };
 
 export const AUTOSAVE_STATE_EVENT = 'joomla:autosave-statechange';
 export const AUTOSAVE_DRAFT_EVENT = 'joomla:autosave-draftdetected';
+export const AUTOSAVE_RECOVERY_FOCUS_EVENT = 'joomla:autosave-recoveryfocus';
 
 export const DEFAULT_AUTOSAVE_CONFIGURATION = Object.freeze({
   debounceInterval: 1500,
@@ -91,7 +92,15 @@ export class AutosaveRuntime {
     configuration = {},
   }) {
     if (!apiClient
-      || !['initialize', 'preserve', 'detect', 'read', 'discard'].every(
+      || ![
+        'initialize',
+        'preserve',
+        'detect',
+        'read',
+        'discard',
+        'prepareCanonicalAction',
+        'getCanonicalActionOutcome',
+      ].every(
         (method) => typeof apiClient[method] === 'function',
       )) {
       throw new TypeError('The Autosave API client contract is invalid.');
@@ -127,6 +136,7 @@ export class AutosaveRuntime {
     this.isOnline = isOnline;
     this.isHidden = isHidden;
     this.abortControllerFactory = abortControllerFactory;
+    this.identityFactory = identityFactory;
     this.configuration = validateConfiguration(configuration);
 
     this.runtimeIdentity = identityFactory();
@@ -175,6 +185,11 @@ export class AutosaveRuntime {
     this.lastError = null;
     this.recoveryCandidate = null;
     this.ignoredCandidate = null;
+    this.canonicalPaused = false;
+    this.canonicalAction = null;
+    this.canonicalStatusBeforeOffline = null;
+    this.idleWaiters = new Set();
+    this.canonicalRetryWaiters = new Map();
 
     this.handleMeaningfulChange = this.handleMeaningfulChange.bind(this);
     this.handleOnline = this.handleOnline.bind(this);
@@ -214,6 +229,11 @@ export class AutosaveRuntime {
       retryAt: this.retryAt,
       error: this.lastError ? { ...this.lastError } : null,
       recoveryCandidate: candidate,
+      canonicalAction: this.canonicalAction ? {
+        operationId: this.canonicalAction.operationId,
+        intent: this.canonicalAction.intent,
+        outcome: this.canonicalAction.outcome,
+      } : null,
     };
   }
 
@@ -367,6 +387,10 @@ export class AutosaveRuntime {
       return;
     }
 
+    if (this.canonicalPaused && this.status !== 'offline') {
+      this.canonicalStatusBeforeOffline = this.status;
+    }
+
     this.clearRetryTimer();
     this.status = 'offline';
     this.emitState();
@@ -384,6 +408,15 @@ export class AutosaveRuntime {
     }
 
     if (this.status !== 'offline') {
+      return;
+    }
+
+    if (this.canonicalPaused) {
+      this.status = this.canonicalStatusBeforeOffline
+        || (this.canonicalAction ? 'canonical-submitting' : 'canonical-preparing');
+      this.canonicalStatusBeforeOffline = null;
+      this.emitState();
+
       return;
     }
 
@@ -573,6 +606,7 @@ export class AutosaveRuntime {
       this.activeMutation = null;
       this.recoveryOperation = null;
       this.releaseController(controller);
+      this.notifyRuntimeIdle();
 
       if (!this.destroyed && !this.recoveryCandidate && this.dirty) {
         this.scheduleDirty();
@@ -626,6 +660,354 @@ export class AutosaveRuntime {
     return true;
   }
 
+  requestRecoveryResolution() {
+    if (this.destroyed || !this.recoveryCandidate) {
+      return false;
+    }
+
+    this.status = 'recovery-required';
+    this.lastError = {
+      code: 'recovery_resolution_required',
+      classification: 'canonical-action-blocked',
+      retryable: false,
+    };
+    this.emitState();
+    this.eventTarget.dispatchEvent(
+      this.eventFactory(AUTOSAVE_RECOVERY_FOCUS_EVENT, {
+        context: this.context,
+        targetId: this.targetId,
+      }),
+    );
+
+    return true;
+  }
+
+  async prepareCanonicalAction(intent) {
+    if (!['apply', 'save-exit', 'save-new', 'save-copy'].includes(intent)) {
+      throw new TypeError('The Autosave canonical intent is invalid.');
+    }
+
+    if (this.destroyed || !this.started || this.terminal || this.canonicalPaused) {
+      throw this.runtimeError('canonical_action_unavailable', 'canonical-action-failure');
+    }
+
+    if (this.recoveryCandidate) {
+      this.requestRecoveryResolution();
+      throw this.runtimeError('recovery_resolution_required', 'canonical-action-blocked');
+    }
+
+    if (!this.isOnline()) {
+      this.status = 'offline';
+      this.emitState();
+      throw this.runtimeError('canonical_action_offline', 'network-failure');
+    }
+
+    this.canonicalPaused = true;
+    this.clearDirtyTimers();
+    this.clearRetryTimer();
+    this.status = 'canonical-preparing';
+    this.lastError = null;
+    this.emitState();
+
+    try {
+      const submittedChangeSequence = this.changeSequence;
+      const payload = createPayloadSnapshot(await this.adapter.capture());
+
+      await this.waitForRuntimeIdle();
+
+      if (!this.identity) {
+        await this.initializeForCanonicalAction();
+      }
+
+      if (this.destroyed) {
+        throw this.runtimeError('canonical_action_destroyed', 'request-aborted');
+      }
+
+      const clientRevision = this.nextClientRevision;
+      this.nextClientRevision += 1;
+      const canonicalRequest = Object.freeze({
+        context: this.context,
+        target_id: this.targetId,
+        continuation_id: this.identity.continuationId,
+        generation_id: this.identity.generationId,
+        client_revision: clientRevision,
+        payload_schema_version: this.schemaVersion,
+        payload,
+        intent,
+        expected_base_revision: this.baseRevision,
+      });
+      const prepared = await this.retryCanonicalMutation(
+        (options) => this.apiClient.prepareCanonicalAction(canonicalRequest, options),
+      );
+
+      if (this.destroyed) {
+        throw this.runtimeError('canonical_action_destroyed', 'request-aborted');
+      }
+
+      this.pendingSnapshot = null;
+      this.lastAcknowledgedRevision = clientRevision;
+      this.canonicalAction = Object.freeze({
+        operationId: prepared.operation_id,
+        intent,
+        outcome: prepared.outcome,
+        submittedChangeSequence,
+        submittedRevision: clientRevision,
+      });
+      this.status = 'canonical-submitting';
+      this.emitState();
+
+      return {
+        operationId: prepared.operation_id,
+        intent,
+        submittedChangeSequence,
+      };
+    } catch (error) {
+      if (!this.destroyed && !this.canonicalAction) {
+        this.canonicalPaused = false;
+        this.canonicalStatusBeforeOffline = null;
+        this.lastError = safeError(error);
+        this.status = this.isOnline() ? 'canonical-prepare-failed' : 'offline';
+        this.emitState();
+
+        if (this.dirty) {
+          this.scheduleDirty();
+        }
+      }
+
+      throw error;
+    }
+  }
+
+  async queryCanonicalActionOutcome(operationId) {
+    if (this.destroyed
+      || !this.canonicalAction
+      || this.canonicalAction.operationId !== operationId) {
+      throw this.runtimeError('canonical_action_mismatch', 'canonical-action-failure');
+    }
+
+    this.status = 'canonical-outcome-pending';
+    this.emitState();
+
+    return this.apiClient.getCanonicalActionOutcome({
+      operation_id: operationId,
+      context: this.context,
+      target_id: this.targetId,
+    });
+  }
+
+  markCanonicalActionOutcomeUnconfirmed(operationId, error = null) {
+    if (this.destroyed
+      || !this.canonicalAction
+      || this.canonicalAction.operationId !== operationId) {
+      return false;
+    }
+
+    this.canonicalAction = Object.freeze({
+      ...this.canonicalAction,
+      outcome: 'unknown',
+    });
+    this.lastError = error ? safeError(error) : {
+      code: 'canonical_outcome_unconfirmed',
+      classification: 'canonical-action-unknown',
+      retryable: false,
+      retryAfter: null,
+    };
+    this.canonicalStatusBeforeOffline = 'canonical-outcome-unknown';
+    this.status = this.isOnline() ? 'canonical-outcome-unknown' : 'offline';
+    this.emitState();
+
+    return true;
+  }
+
+  reconcileCanonicalAction(outcome) {
+    if (this.destroyed
+      || !this.canonicalAction
+      || outcome?.operation_id !== this.canonicalAction.operationId
+      || outcome?.intent !== this.canonicalAction.intent
+      || !['pending', 'unknown', 'successful', 'failed'].includes(outcome?.outcome)
+      || (outcome.outcome === 'successful'
+        && (typeof outcome.final_base_revision !== 'string'
+          || outcome.final_base_revision.length === 0))) {
+      return false;
+    }
+
+    if (outcome.outcome === 'pending') {
+      this.status = 'canonical-outcome-pending';
+      this.emitState();
+
+      return false;
+    }
+
+    if (outcome.outcome === 'unknown') {
+      this.canonicalAction = Object.freeze({
+        ...this.canonicalAction,
+        outcome: 'unknown',
+      });
+      this.status = 'canonical-outcome-unknown';
+      this.emitState();
+
+      return false;
+    }
+
+    const submittedSequence = this.canonicalAction.submittedChangeSequence;
+    const hasLaterChanges = this.changeSequence > submittedSequence;
+    this.identity = null;
+    this.initializationKey = this.identityFactory();
+    this.nextClientRevision = 1;
+    this.lastAcknowledgedRevision = 0;
+    this.pendingSnapshot = null;
+    this.retryAttempt = 0;
+    this.retryAt = null;
+    this.retryCallback = null;
+    this.clearRetryTimer();
+    this.canonicalPaused = false;
+    this.canonicalAction = null;
+    this.canonicalStatusBeforeOffline = null;
+
+    if (outcome.outcome === 'successful') {
+      this.baseRevision = outcome.final_base_revision;
+      this.dirty = hasLaterChanges;
+      this.lastError = null;
+      this.status = hasLaterChanges ? 'waiting-debounce' : 'clean';
+    } else if (outcome.outcome === 'failed') {
+      this.dirty = true;
+      this.lastError = {
+        code: outcome.failure_code || 'canonical_save_failed',
+        classification: 'canonical-action-failure',
+        retryable: false,
+      };
+      this.status = 'canonical-failed';
+    } else {
+      return false;
+    }
+
+    if (this.dirty) {
+      this.dirtySince = this.clock.now();
+      this.debounceDeadline = this.dirtySince;
+      this.maximumDirtyDeadline = this.dirtySince;
+      this.forceEligible = true;
+    } else {
+      this.dirtySince = null;
+      this.debounceDeadline = null;
+      this.maximumDirtyDeadline = null;
+      this.forceEligible = false;
+    }
+
+    this.emitState();
+
+    if (this.dirty) {
+      this.scheduleDirty();
+    }
+
+    return true;
+  }
+
+  /**
+   * Quiesce local work before the caller leaves the document.
+   *
+   * A preserved draft remains recoverable until an explicit recovery discard
+   * action confirms its removal. Closing an editor is not that decision.
+   *
+   * @returns {Promise<boolean>} Whether it is safe for the caller to leave.
+   */
+  async prepareForCancel() {
+    if (this.destroyed || this.canonicalAction) {
+      return false;
+    }
+
+    this.canonicalPaused = true;
+    this.clearDirtyTimers();
+    this.clearRetryTimer();
+
+    await this.waitForRuntimeIdle();
+
+    if (this.destroyed) {
+      return false;
+    }
+
+    this.canonicalPaused = false;
+    this.canonicalStatusBeforeOffline = null;
+
+    return true;
+  }
+
+  async initializeForCanonicalAction() {
+    const initializationRequest = Object.freeze({
+      context: this.context,
+      target_id: this.targetId,
+      initialization_key: this.initializationKey,
+    });
+    const identity = await this.retryCanonicalMutation(
+      (options) => this.apiClient.initialize(initializationRequest, options),
+    );
+
+    if (identity.context !== this.context
+      || identity.target_id !== this.targetId
+      || identity.payload_schema_version !== this.schemaVersion) {
+      throw this.runtimeError('initialized_identity_mismatch', 'conflict');
+    }
+
+    this.identity = {
+      continuationId: identity.continuation_id,
+      generationId: identity.generation_id,
+    };
+    this.baseRevision = identity.base_revision;
+  }
+
+  async retryCanonicalMutation(callback) {
+    let attempt = 0;
+
+    while (!this.destroyed) {
+      const controller = this.createController();
+
+      try {
+        return await callback({ signal: controller.signal });
+      } catch (error) {
+        attempt += 1;
+
+        if ((!error?.outcomeUnknown && !error?.retryable)
+          || attempt >= this.configuration.maximumRetryAttempts) {
+          throw error;
+        }
+
+        const delay = Math.min(
+          this.configuration.retryInitialDelay * (2 ** (attempt - 1)),
+          this.configuration.retryMaximumDelay,
+        );
+        await new Promise((resolve) => {
+          const timer = this.clock.setTimeout(() => {
+            this.canonicalRetryWaiters.delete(timer);
+            resolve();
+          }, delay);
+          this.canonicalRetryWaiters.set(timer, resolve);
+        });
+      } finally {
+        this.releaseController(controller);
+      }
+    }
+
+    throw this.runtimeError('canonical_action_destroyed', 'request-aborted');
+  }
+
+  waitForRuntimeIdle() {
+    if (!this.activeMutation && !this.capturePending) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      this.idleWaiters.add(resolve);
+    });
+  }
+
+  notifyRuntimeIdle() {
+    if (this.activeMutation || this.capturePending) {
+      return;
+    }
+
+    this.idleWaiters.forEach((resolve) => resolve());
+    this.idleWaiters.clear();
+  }
+
   destroy() {
     if (this.destroyed) {
       return;
@@ -638,6 +1020,14 @@ export class AutosaveRuntime {
     this.clearRetryTimer();
     this.retryCallback = null;
     this.pendingSnapshot = null;
+    this.canonicalStatusBeforeOffline = null;
+    this.idleWaiters.forEach((resolve) => resolve());
+    this.idleWaiters.clear();
+    this.canonicalRetryWaiters.forEach((resolve, timer) => {
+      this.clock.clearTimeout(timer);
+      resolve();
+    });
+    this.canonicalRetryWaiters.clear();
     this.onlineSource?.removeEventListener?.('online', this.handleOnline);
     this.onlineSource?.removeEventListener?.('offline', this.handleOffline);
     this.visibilitySource?.removeEventListener?.('visibilitychange', this.handleVisibilityChange);
@@ -758,6 +1148,7 @@ export class AutosaveRuntime {
         return;
       } finally {
         this.capturePending = false;
+        this.notifyRuntimeIdle();
       }
 
       if (this.destroyed) {
@@ -828,6 +1219,7 @@ export class AutosaveRuntime {
     } finally {
       this.activeMutation = null;
       this.releaseController(controller);
+      this.notifyRuntimeIdle();
     }
 
     this.preservePendingSnapshot();
@@ -889,6 +1281,7 @@ export class AutosaveRuntime {
     } finally {
       this.activeMutation = null;
       this.releaseController(controller);
+      this.notifyRuntimeIdle();
     }
 
     if (this.dirty) {
@@ -996,6 +1389,7 @@ export class AutosaveRuntime {
       || !this.started
       || !this.detectionComplete
       || this.recoveryCandidate !== null
+      || this.canonicalPaused
       || this.terminal
       || [
         'authentication-required',
