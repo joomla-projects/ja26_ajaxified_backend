@@ -109,6 +109,20 @@ final class LifecycleTestStorage implements AutosaveStorageInterface
         return $this->discardStatus;
     }
 
+    public function purgeRetainedData(Date $now, int $limit = self::DEFAULT_PURGE_LIMIT): array
+    {
+        $this->events[]                     = 'storage.purgeRetainedData';
+        $this->calls['purgeRetainedData'][] = \func_get_args();
+
+        return [
+            'generations_expired'         => 0,
+            'closed_generations_released' => 0,
+            'canonical_actions_deleted'   => 0,
+            'generations_deleted'         => 0,
+            'continuations_deleted'       => 0,
+        ];
+    }
+
     public function prepareCanonicalAction(
         int $userId,
         string $continuationId,

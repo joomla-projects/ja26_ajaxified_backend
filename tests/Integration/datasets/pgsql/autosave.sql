@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS "#__autosave_continuations" (
   CONSTRAINT "#__autosave_continuation_initialization" UNIQUE ("user_id", "initialization_key")
 );
 CREATE INDEX "#__autosave_continuation_recovery" ON "#__autosave_continuations" ("user_id", "context", "target_id");
+CREATE INDEX "#__autosave_continuation_activity" ON "#__autosave_continuations" ("last_activity_at");
 
 CREATE TABLE IF NOT EXISTS "#__autosave_generations" (
   "id" bigserial NOT NULL,
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS "#__autosave_generations" (
 );
 CREATE INDEX "#__autosave_generation_continuation" ON "#__autosave_generations" ("continuation_id");
 CREATE INDEX "#__autosave_generation_expiry" ON "#__autosave_generations" ("user_id", "state", "expires_at");
+CREATE INDEX "#__autosave_generation_global_expiry" ON "#__autosave_generations" ("state", "expires_at");
 CREATE INDEX "#__autosave_generation_retention" ON "#__autosave_generations" ("retain_until");
 
 CREATE TABLE IF NOT EXISTS "#__autosave_canonical_actions" (
@@ -67,5 +69,6 @@ CREATE TABLE IF NOT EXISTS "#__autosave_canonical_actions" (
   CONSTRAINT "#__autosave_canonical_public_id" UNIQUE ("public_id"),
   CONSTRAINT "#__autosave_canonical_generation" UNIQUE ("generation_id")
 );
+CREATE INDEX "#__autosave_canonical_continuation" ON "#__autosave_canonical_actions" ("continuation_id");
 CREATE INDEX "#__autosave_canonical_owner" ON "#__autosave_canonical_actions" ("user_id", "context", "target_id");
 CREATE INDEX "#__autosave_canonical_expiry" ON "#__autosave_canonical_actions" ("outcome", "expires_at");

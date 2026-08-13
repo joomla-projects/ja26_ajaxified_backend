@@ -13,6 +13,7 @@ namespace Joomla\Tests\Unit\Libraries\Cms\Autosave;
 use Joomla\CMS\Autosave\AutosaveStorage;
 use Joomla\CMS\Date\Date;
 use Joomla\Database\DatabaseInterface;
+use Joomla\Database\DatabaseQuery;
 use Joomla\Database\Exception\ExecutionFailureException;
 use Joomla\Tests\Unit\UnitTestCase;
 
@@ -935,6 +936,146 @@ class AutosaveStorageTest extends UnitTestCase
             $this->assertInstanceOf(\Joomla\CMS\Autosave\AutosaveException::class, $cause);
             $this->assertSame('payload_too_large', $cause->getErrorCode());
         }
+    }
+
+    /**
+     * @testdox cleanup rejects unbounded limits before opening a transaction
+     *
+     * @param   integer  $limit  The invalid cleanup limit.
+     *
+     * @dataProvider invalidCleanupLimitProvider
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testInvalidCleanupLimitIsRejectedBeforeTransaction(int $limit): void
+    {
+        $db = $this->createMock(DatabaseInterface::class);
+        $db->expects($this->never())->method('transactionStart');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The Autosave cleanup limit is invalid.');
+
+        (new AutosaveStorage($db, $this->policy()))->purgeRetainedData(
+            new Date('2026-08-13 10:00:00', 'UTC'),
+            $limit
+        );
+    }
+
+    /**
+     * @testdox cleanup reuses an otherwise idle physical budget for canonical actions
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function testCleanupReusesCanonicalBudget(): void
+    {
+        $db = $this->createCleanupDatabaseMock();
+        $db->expects($this->once())->method('transactionStart');
+        $db->expects($this->once())->method('transactionCommit');
+        $db->method('loadColumn')->willReturn([], [], []);
+        $db->method('loadAssocList')->willReturnOnConsecutiveCalls(
+            $this->canonicalCleanupRows(1, 33),
+            $this->canonicalCleanupRows(34, 67)
+        );
+        $db->method('getAffectedRows')->willReturnOnConsecutiveCalls(0, 33, 0, 67);
+
+        $result = (new AutosaveStorage($db, $this->policy()))->purgeRetainedData(
+            new Date('2026-08-13 10:00:00', 'UTC'),
+            100
+        );
+
+        $this->assertSame(100, $result['canonical_actions_deleted']);
+        $this->assertSame(0, $result['generations_deleted']);
+        $this->assertSame(0, $result['continuations_deleted']);
+    }
+
+    /**
+     * @testdox cleanup reuses an otherwise idle physical budget for terminal generations
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function testCleanupReusesGenerationBudget(): void
+    {
+        $db = $this->createCleanupDatabaseMock();
+        $db->expects($this->once())->method('transactionStart');
+        $db->expects($this->once())->method('transactionCommit');
+        $db->method('loadAssocList')->willReturn([], []);
+        $db->method('loadColumn')->willReturnOnConsecutiveCalls(
+            [],
+            range(1, 50),
+            [],
+            range(51, 100)
+        );
+        $db->method('getAffectedRows')->willReturnOnConsecutiveCalls(50, 50);
+
+        $result = (new AutosaveStorage($db, $this->policy()))->purgeRetainedData(
+            new Date('2026-08-13 10:00:00', 'UTC'),
+            100
+        );
+
+        $this->assertSame(0, $result['canonical_actions_deleted']);
+        $this->assertSame(100, $result['generations_deleted']);
+        $this->assertSame(0, $result['continuations_deleted']);
+    }
+
+    /**
+     * Invalid bounded cleanup limits.
+     *
+     * @return  array<string, array{int}>
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function invalidCleanupLimitProvider(): array
+    {
+        return [
+            'zero'               => [0],
+            'negative'           => [-1],
+            'below fair minimum' => [2],
+            'above hard maximum' => [1001],
+        ];
+    }
+
+    /**
+     * Build canonical cleanup rows for a mocked bounded query.
+     *
+     * @return  array<int, array{id: int, generation_id: int}>
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function canonicalCleanupRows(int $start, int $count): array
+    {
+        return array_map(
+            static fn (int $id): array => ['id' => $id, 'generation_id' => $id],
+            range($start, $start + $count - 1)
+        );
+    }
+
+    /**
+     * Create a database mock with stringable subqueries for cleanup reference checks.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    private function createCleanupDatabaseMock(): DatabaseInterface
+    {
+        $db = $this->createMock(DatabaseInterface::class);
+
+        $db->method('createQuery')->willReturnCallback(
+            static fn () => new class ($db) extends DatabaseQuery {
+                public function groupConcat($expression, $separator = ',')
+                {
+                }
+
+                public function processLimit($query, $limit, $offset = 0)
+                {
+                    return $query;
+                }
+            }
+        );
+        $db->method('quoteName')->willReturnCallback(
+            static fn ($name, $as = null) => $as === null ? $name : $name . ' AS ' . $as
+        );
+        $db->method('setQuery')->willReturnSelf();
+
+        return $db;
     }
 
     /**
