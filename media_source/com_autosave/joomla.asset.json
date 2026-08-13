@@ -41,6 +41,21 @@
       "attributes": {
         "type": "module"
       }
+    },
+    {
+      "name": "com_autosave.integration-controller",
+      "type": "script",
+      "uri": "com_autosave/integration-controller.min.js",
+      "dependencies": [
+        "core",
+        "com_autosave.runtime",
+        "com_autosave.canonical-actions",
+        "com_autosave.ui"
+      ],
+      "importmap": true,
+      "attributes": {
+        "type": "module"
+      }
     }
   ]
 }

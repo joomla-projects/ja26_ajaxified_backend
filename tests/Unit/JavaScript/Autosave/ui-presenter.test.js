@@ -546,11 +546,12 @@ test('only recovery timestamps are validated, formatted and exposed', () => {
 });
 
 test('generic layouts preserve placement, accessibility, contrast and timestamp boundaries', async () => {
-  const [statusLayout, recoveryLayout, articleLayout, articleView, language] = await Promise.all([
+  const [statusLayout, recoveryLayout, articleLayout, articleView, viewConfigurator, language] = await Promise.all([
     readFile('layouts/joomla/autosave/status.php', 'utf8'),
     readFile('layouts/joomla/autosave/recovery.php', 'utf8'),
     readFile('administrator/components/com_content/tmpl/article/edit.php', 'utf8'),
     readFile('administrator/components/com_content/src/View/Article/HtmlView.php', 'utf8'),
+    readFile('libraries/src/Autosave/AutosaveViewConfigurator.php', 'utf8'),
     readFile('administrator/language/en-GB/com_autosave.ini', 'utf8'),
   ]);
 
@@ -577,9 +578,10 @@ test('generic layouts preserve placement, accessibility, contrast and timestamp 
       < articleLayout.indexOf("getInput('articletext')"),
   );
   assert.match(
-    articleView,
-    /getParam\([\s\S]*'timezone',[\s\S]*\$application->get\('offset', 'UTC'\)/,
+    viewConfigurator,
+    /getParam\([\s\S]*'timezone',[\s\S]*\$this->application->get\('offset', 'UTC'\)/,
   );
+  assert.match(articleView, /new AutosaveViewConfigurator/);
 });
 
 test('Restore calls only the runtime, prevents duplicate actions and follows authoritative state', async () => {

@@ -11,9 +11,7 @@
 namespace Joomla\Component\Content\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
-use Joomla\CMS\Autosave\AutosaveCanonicalActionServiceInterface;
-use Joomla\CMS\Date\Date;
-use Joomla\CMS\Language\Text;
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
@@ -33,35 +31,16 @@ use Joomla\Utilities\ArrayHelper;
  */
 class ArticleController extends FormController
 {
+    use AutosaveFormControllerTrait;
     use VersionableControllerTrait;
 
     private const AUTOSAVE_CONTEXT         = 'com_content.article';
-    private const AUTOSAVE_OPERATION_FIELD = 'autosave_operation_id';
-    private const AUTOSAVE_INTENT_FIELD    = 'autosave_operation_intent';
     private const AUTOSAVE_TASK_INTENTS    = [
         'apply'     => 'apply',
         'save'      => 'save-exit',
         'save2new'  => 'save-new',
         'save2copy' => 'save-copy',
     ];
-
-    /**
-     * Verified action awaiting the authoritative post-save model.
-     *
-     * @var array{service: AutosaveCanonicalActionServiceInterface, operationId: string, targetId: int, intent: string}|null
-     *
-     * @since  __DEPLOY_VERSION__
-     */
-    private ?array $autosaveCanonicalAction = null;
-
-    /**
-     * Authoritative Article identity captured from Joomla's successful save model.
-     *
-     * @var int|null
-     *
-     * @since  __DEPLOY_VERSION__
-     */
-    private ?int $autosaveCanonicalResultId = null;
 
     /**
      * Constructor.
@@ -113,122 +92,6 @@ class ArticleController extends FormController
     }
 
     /**
-     * Reconcile a prepared Autosave generation around Joomla's canonical save.
-     *
-     * Requests without Autosave metadata retain the ordinary controller path.
-     *
-     * @since  __DEPLOY_VERSION__
-     */
-    public function save($key = null, $urlVar = null)
-    {
-        $operationId = $this->input->post->getString(self::AUTOSAVE_OPERATION_FIELD, '');
-        $intent      = $this->input->post->getString(self::AUTOSAVE_INTENT_FIELD, '');
-        if ($operationId === '' && $intent === '') {
-            return parent::save($key, $urlVar);
-        }
-
-        $task           = $this->input->getCmd('task', '');
-        $taskAction     = str_contains($task, '.') ? substr($task, strrpos($task, '.') + 1) : $task;
-        $expectedIntent = self::AUTOSAVE_TASK_INTENTS[$taskAction] ?? null;
-        $data           = $this->input->post->get('jform', [], 'array');
-        $targetId       = isset($data['id']) ? (int) $data['id'] : 0;
-        $service        = $this->app->bootComponent('com_autosave');
-        $now            = new Date('now', 'UTC');
-        $this->app->getLanguage()->load('com_autosave', JPATH_ADMINISTRATOR);
-
-        if (
-            $operationId === ''
-            || $intent === ''
-            || $expectedIntent === null
-            || $intent !== $expectedIntent
-            || $targetId <= 0
-            || !$service instanceof AutosaveCanonicalActionServiceInterface
-        ) {
-            $this->setMessage(Text::_('COM_AUTOSAVE_CANONICAL_ACTION_INVALID'), 'error');
-            if ($targetId > 0) {
-                $this->setRedirect($this->getRedirectUrlToItem($targetId));
-            }
-
-            return false;
-        }
-
-        try {
-            $service->verifyCanonicalAction(
-                $this->app->getIdentity(),
-                $operationId,
-                self::AUTOSAVE_CONTEXT,
-                (string) $targetId,
-                $intent,
-                $now
-            );
-        } catch (\Throwable $exception) {
-            try {
-                $service->finalizeCanonicalActionFailure(
-                    $this->app->getIdentity(),
-                    $operationId,
-                    self::AUTOSAVE_CONTEXT,
-                    (string) $targetId,
-                    $intent,
-                    'canonical_verification_failed',
-                    new Date('now', 'UTC')
-                );
-            } catch (\Throwable) {
-                // Invalid or foreign metadata remains private and unmodified.
-            }
-
-            $this->setMessage(Text::_('COM_AUTOSAVE_CANONICAL_ACTION_UNVERIFIED'), 'error');
-            $this->setRedirect($this->getRedirectUrlToItem($targetId));
-
-            return false;
-        }
-
-        $this->autosaveCanonicalAction = [
-            'service'     => $service,
-            'operationId' => $operationId,
-            'targetId'    => $targetId,
-            'intent'      => $intent,
-        ];
-        $this->autosaveCanonicalResultId = null;
-        try {
-            $result = parent::save($key, $urlVar);
-        } catch (\Throwable $exception) {
-            $this->autosaveCanonicalAction   = null;
-            $this->autosaveCanonicalResultId = null;
-
-            // An exception after model persistence has an unknown canonical
-            // outcome. Keep the operation pending and the generation closed.
-            throw $exception;
-        }
-
-        if (!$result) {
-            $this->autosaveCanonicalAction   = null;
-            $this->autosaveCanonicalResultId = null;
-            try {
-                $service->finalizeCanonicalActionFailure(
-                    $this->app->getIdentity(),
-                    $operationId,
-                    self::AUTOSAVE_CONTEXT,
-                    (string) $targetId,
-                    $intent,
-                    'canonical_save_failed',
-                    new Date('now', 'UTC')
-                );
-            } catch (\Throwable $exception) {
-                $this->getLogger()->warning(
-                    'Failed to record a definitive Autosave canonical action failure.',
-                    ['category' => 'autosave']
-                );
-            }
-
-            return false;
-        }
-
-        $this->finalizeAutosaveCanonicalSuccess();
-
-        return true;
-    }
-
-    /**
      * Function that allows child controller access to model data
      * after the data has been saved.
      *
@@ -270,65 +133,7 @@ class ArticleController extends FormController
             $this->setRedirect(Route::_($return, false));
         }
 
-        $this->captureAutosaveCanonicalResult($model);
-    }
-
-    /**
-     * Capture the authoritative identity from the exact model Joomla saved.
-     *
-     * Retirement is deliberately deferred until the parent save method has
-     * completed every remaining Joomla controller success stage.
-     *
-     * @since  __DEPLOY_VERSION__
-     */
-    private function captureAutosaveCanonicalResult(BaseDatabaseModel $model): void
-    {
-        if ($this->autosaveCanonicalAction === null) {
-            return;
-        }
-
-        $this->autosaveCanonicalResultId = (int) $model->getState('article.id');
-    }
-
-    /**
-     * Retire the submitted generation after Joomla's parent save returned true.
-     *
-     * Finalization cannot change or repeat an already successful canonical save.
-     *
-     * @since  __DEPLOY_VERSION__
-     */
-    private function finalizeAutosaveCanonicalSuccess(): void
-    {
-        if ($this->autosaveCanonicalAction === null) {
-            return;
-        }
-
-        $action                          = $this->autosaveCanonicalAction;
-        $resultingId                     = $this->autosaveCanonicalResultId;
-        $this->autosaveCanonicalAction   = null;
-        $this->autosaveCanonicalResultId = null;
-        try {
-            if ($resultingId === null || $resultingId <= 0) {
-                throw new \RuntimeException('The canonical Article identity is unavailable.');
-            }
-
-            $action['service']->finalizeCanonicalActionSuccess(
-                $this->app->getIdentity(),
-                $action['operationId'],
-                self::AUTOSAVE_CONTEXT,
-                (string) $action['targetId'],
-                $action['intent'],
-                (string) $resultingId,
-                new Date('now', 'UTC')
-            );
-        } catch (\Throwable $exception) {
-            // Canonical persistence has already succeeded. Never repeat or
-            // roll it back because retirement needs later reconciliation.
-            $this->getLogger()->warning(
-                'Canonical Article save succeeded but Autosave retirement remains pending.',
-                ['category' => 'autosave']
-            );
-        }
+        $this->captureAutosaveCanonicalResult($model, 'article.id');
     }
 
     /**
