@@ -145,11 +145,11 @@ class LinkAutosaveProviderTest extends UnitTestCase
         foreach (
             [
                 ['id' => 43],
-                ['old_url' => '/changed'],
-                ['new_url' => '/changed'],
-                ['comment' => 'changed'],
-                ['published' => 0],
-                ['header' => 410],
+                ['old_url'       => '/changed'],
+                ['new_url'       => '/changed'],
+                ['comment'       => 'changed'],
+                ['published'     => 0],
+                ['header'        => 410],
                 ['modified_date' => '2026-08-12 12:00:00'],
             ] as $change
         ) {
@@ -181,12 +181,12 @@ class LinkAutosaveProviderTest extends UnitTestCase
         $payload  = [
             'comment' => " comment\t",
             'new_url' => '',
-            'old_url' => "  /caf\xC3\xA9%20draft\n",
+            'old_url' => "  /café%20draft\n",
         ];
 
         $this->assertSame(
             [
-                'old_url' => "  /caf\xC3\xA9%20draft\n",
+                'old_url' => "  /café%20draft\n",
                 'new_url' => '',
                 'comment' => " comment\t",
             ],

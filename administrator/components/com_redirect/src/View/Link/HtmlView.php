@@ -102,9 +102,9 @@ class HtmlView extends BaseHtmlView
      */
     private function prepareAutosave(): void
     {
-        $application  = Factory::getApplication();
-        $document     = $this->getDocument();
-        $configurator = new AutosaveViewConfigurator($application, $document, $application->getIdentity());
+        $application           = Factory::getApplication();
+        $document              = $this->getDocument();
+        $configurator          = new AutosaveViewConfigurator($application, $document, $application->getIdentity());
         $this->autosaveEnabled = false;
         $configurator->disable('com_redirect.autosave.link');
 

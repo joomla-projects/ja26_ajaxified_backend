@@ -89,9 +89,9 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
      */
     public function testDefinitiveSaveFailureDoesNotRetireDraft(): void
     {
-        $user       = $this->createMock(User::class);
-        $service    = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
-        $controller = $this->controller($service, 'item.apply', $this->preparedPost(), $user);
+        $user                         = $this->createMock(User::class);
+        $service                      = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $controller                   = $this->controller($service, 'item.apply', $this->preparedPost(), $user);
         $controller->parentSaveResult = false;
 
         $service->expects($this->once())->method('verifyCanonicalAction')->willReturn([]);
@@ -120,9 +120,9 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
      */
     public function testExceptionalSaveOutcomeRemainsUnknownAndIsNotReplayed(): void
     {
-        $service    = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
-        $controller = $this->controller($service, 'item.apply', $this->preparedPost());
-        $failure    = new \RuntimeException('unknown parent outcome');
+        $service                         = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $controller                      = $this->controller($service, 'item.apply', $this->preparedPost());
+        $failure                         = new \RuntimeException('unknown parent outcome');
         $controller->parentSaveException = $failure;
 
         $service->expects($this->once())->method('verifyCanonicalAction')->willReturn([]);

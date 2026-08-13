@@ -18,11 +18,11 @@ use Psr\Log\NullLogger;
  */
 class AutosaveFormControllerTraitParent
 {
-    public int $parentSaveCalls = 0;
-    public bool $parentSaveResult = true;
+    public int $parentSaveCalls             = 0;
+    public bool $parentSaveResult           = true;
     public ?\Throwable $parentSaveException = null;
-    public mixed $duringParentSave = null;
-    public ?string $redirect = null;
+    public mixed $duringParentSave          = null;
+    public ?string $redirect                = null;
 
     public function __construct(public object $input, public object $app)
     {
