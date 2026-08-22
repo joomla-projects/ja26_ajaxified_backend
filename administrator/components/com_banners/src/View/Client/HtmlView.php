@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Banners\Administrator\View\Client;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
@@ -32,6 +33,15 @@ use Joomla\Component\Banners\Administrator\Model\ClientModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether the generic Autosave interface should be rendered.
+     *
+     * @var boolean
+     *
+     * @since __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
     /**
      * The Form object
      *
@@ -95,7 +105,63 @@ class HtmlView extends BaseHtmlView
         $this->form
             ->addControlField('task');
 
+        $this->prepareAutosave();
+
         parent::display($tpl);
+    }
+
+    /**
+     * Configure Autosave for one existing Banner client.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        $application = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($application, $this->getDocument(), $application->getIdentity());
+        $configurator->disable('com_banners.autosave.client');
+
+        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+            return;
+        }
+
+        try {
+            $provider = $application->bootComponent('com_banners')->getAutosaveProvider('com_banners.client');
+            $targetId = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+
+            if (!$provider->targetExists($targetId)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $fieldIds = [];
+
+        foreach (
+            ['name', 'contact', 'email', 'extrainfo', 'metakey', 'metakey_prefix', 'version_note',
+                'purchase_type', 'track_impressions', 'track_clicks', 'own_prefix'] as $fieldName
+        ) {
+            $field = $this->form->getField($fieldName);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $fieldIds[$fieldName] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $targetId,
+            'com_banners.autosave.client',
+            'client-form',
+            $fieldIds,
+            'com_banners.client-autosave'
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**

@@ -26,7 +26,18 @@ $wa->useScript('keepalive')
 
 <form action="<?php echo Route::_('index.php?option=com_banners&layout=edit&id=' . (int) $this->item->id); ?>" method="post" name="adminForm" id="client-form" aria-label="<?php echo Text::_('COM_BANNERS_CLIENT_' . ((int) $this->item->id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="form-validate">
 
+    <?php if ($this->autosaveEnabled) : ?>
+        <?php echo LayoutHelper::render('joomla.autosave.recovery', ['id' => 'client-form-autosave-recovery']); ?>
+    <?php endif; ?>
+
     <?php echo LayoutHelper::render('joomla.edit.title_alias', $this); ?>
+
+    <?php if ($this->autosaveEnabled) : ?>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <p class="small text-body-secondary mb-0"><?php echo Text::_('COM_BANNERS_CLIENT_AUTOSAVE_SCOPE_NOTICE'); ?></p>
+            <?php echo LayoutHelper::render('joomla.autosave.status', ['id' => 'client-form-autosave-status']); ?>
+        </div>
+    <?php endif; ?>
 
     <div class="main-card">
         <?php echo HTMLHelper::_('uitab.startTabSet', 'myTab', ['active' => 'general', 'recall' => true, 'breakpoint' => 768]); ?>

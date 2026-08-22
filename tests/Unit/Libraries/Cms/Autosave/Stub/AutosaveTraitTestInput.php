@@ -18,7 +18,7 @@ class AutosaveTraitTestInput
 {
     public object $post;
 
-    public function __construct(private readonly string $task, array $post)
+    public function __construct(private readonly string $task, array $post, private readonly int $recordId = 42)
     {
         $this->post = new class ($post) {
             public function __construct(private readonly array $data)
@@ -40,5 +40,10 @@ class AutosaveTraitTestInput
     public function getCmd(string $key, string $default = ''): string
     {
         return $key === 'task' ? $this->task : $default;
+    }
+
+    public function getInt(string $key, int $default = 0): int
+    {
+        return $key === 'id' ? $this->recordId : $default;
     }
 }

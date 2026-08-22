@@ -70,8 +70,10 @@ trait AutosaveFormControllerTrait
         $task           = $this->input->getCmd('task', '');
         $taskAction     = str_contains($task, '.') ? substr($task, strrpos($task, '.') + 1) : $task;
         $expectedIntent = self::AUTOSAVE_TASK_INTENTS[$taskAction] ?? null;
-        $data           = $this->input->post->get('jform', [], 'array');
-        $targetId       = isset($data['id']) ? (int) $data['id'] : 0;
+        // Match FormController's authoritative route identity. A Joomla form
+        // is not required to render jform[id], and a posted form value must
+        // never select the record bound to a prepared Autosave action.
+        $targetId       = $this->input->getInt($urlVar ?: 'id');
         $service        = $this->app->bootComponent('com_autosave');
         $now            = new Date('now', 'UTC');
         $this->app->getLanguage()->load('com_autosave', JPATH_ADMINISTRATOR);
