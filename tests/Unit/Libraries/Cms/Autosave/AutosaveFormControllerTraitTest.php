@@ -208,11 +208,11 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
      */
     public function testCanonicalActionDoesNotTrustPostedFormId(): void
     {
-        $user       = $this->createMock(User::class);
-        $service    = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
-        $post       = $this->preparedPost();
+        $user                = $this->createMock(User::class);
+        $service             = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $post                = $this->preparedPost();
         $post['jform']['id'] = 999;
-        $controller = $this->controller($service, 'item.apply', $post, $user, 42);
+        $controller          = $this->controller($service, 'item.apply', $post, $user, 42);
 
         $service->expects($this->once())
             ->method('verifyCanonicalAction')

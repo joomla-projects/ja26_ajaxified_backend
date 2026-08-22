@@ -40,7 +40,7 @@ class HtmlViewAutosaveTest extends UnitTestCase
      */
     public function testExactFormFieldAndAssetConfiguration(): void
     {
-        $source = $this->viewSource();
+        $source         = $this->viewSource();
         $expectedFields = [
             'name',
             'contact',

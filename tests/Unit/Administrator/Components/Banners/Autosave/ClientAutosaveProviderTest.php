@@ -34,7 +34,7 @@ class ClientAutosaveProviderTest extends UnitTestCase
     public function testNormalizesOnlyTheStrictAllowListWhileRetainingIncompleteBusinessValues(): void
     {
         $provider = new ClientAutosaveProvider($this->databaseReturning());
-        $payload = $this->payload();
+        $payload  = $this->payload();
         $this->assertSame($payload, $provider->normalizePayload($payload, 1));
 
         foreach (
@@ -52,22 +52,22 @@ class ClientAutosaveProviderTest extends UnitTestCase
 
     public function testBaseRevisionIgnoresCheckoutAndChangesForCanonicalContent(): void
     {
-        $first = new ClientAutosaveProvider($this->databaseReturning($this->client()));
+        $first    = new ClientAutosaveProvider($this->databaseReturning($this->client()));
         $checkout = new ClientAutosaveProvider($this->databaseReturning($this->client(['checked_out' => 99])));
-        $changed = new ClientAutosaveProvider($this->databaseReturning($this->client(['contact' => 'Changed'])));
+        $changed  = new ClientAutosaveProvider($this->databaseReturning($this->client(['contact' => 'Changed'])));
         $this->assertSame($first->getBaseRevision('42'), $checkout->getBaseRevision('42'));
         $this->assertNotSame($first->getBaseRevision('42'), $changed->getBaseRevision('42'));
     }
 
     public function testAuthorizationEnforcesCoreEditAndCheckoutOwnership(): void
     {
-        $allowed = $this->createMock(User::class);
+        $allowed     = $this->createMock(User::class);
         $allowed->id = 7;
         $allowed->method('authorise')->with('core.edit', 'com_banners')->willReturn(true);
         (new ClientAutosaveProvider($this->databaseReturning($this->client(['checked_out' => 7]))))
             ->authorize($allowed, '42', AutosaveOperation::Preserve);
 
-        $denied = $this->createMock(User::class);
+        $denied     = $this->createMock(User::class);
         $denied->id = 7;
         $denied->method('authorise')->willReturn(false);
         $this->assertSame(
@@ -89,16 +89,16 @@ class ClientAutosaveProviderTest extends UnitTestCase
 
     private function payload(): array
     {
-        return ['name' => '', 'contact' => '', 'email' => 'invalid@', 'extrainfo' => '', 'metakey' => '',
+        return ['name'       => '', 'contact' => '', 'email' => 'invalid@', 'extrainfo' => '', 'metakey' => '',
             'metakey_prefix' => '', 'version_note' => '', 'purchase_type' => 0, 'track_impressions' => -1,
-            'track_clicks' => 1, 'own_prefix' => 0];
+            'track_clicks'   => 1, 'own_prefix' => 0];
     }
 
     private function client(array $replace = []): object
     {
         return (object) array_replace(['id' => 42, 'name' => 'Client', 'contact' => 'Contact', 'email' => 'a@example.test',
-            'extrainfo' => '', 'state' => 1, 'checked_out' => 0, 'metakey' => '', 'own_prefix' => 0,
-            'metakey_prefix' => '', 'purchase_type' => 0, 'track_clicks' => 0, 'track_impressions' => 0], $replace);
+            'extrainfo'                     => '', 'state' => 1, 'checked_out' => 0, 'metakey' => '', 'own_prefix' => 0,
+            'metakey_prefix'                => '', 'purchase_type' => 0, 'track_clicks' => 0, 'track_impressions' => 0], $replace);
     }
 
     private function databaseReturning(?object $client = null): DatabaseInterface

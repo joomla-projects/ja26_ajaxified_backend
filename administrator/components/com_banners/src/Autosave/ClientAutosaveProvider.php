@@ -182,7 +182,7 @@ final class ClientAutosaveProvider implements AutosaveProviderInterface
 
     private function loadClient(string $targetId): ?object
     {
-        $id = (int) $targetId;
+        $id     = (int) $targetId;
         $fields = ['id', 'name', 'contact', 'email', 'extrainfo', 'state', 'checked_out', 'metakey',
             'own_prefix', 'metakey_prefix', 'purchase_type', 'track_clicks', 'track_impressions'];
         $query = $this->db->createQuery()

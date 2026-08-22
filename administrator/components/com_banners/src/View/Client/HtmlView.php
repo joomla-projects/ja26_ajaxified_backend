@@ -119,7 +119,7 @@ class HtmlView extends BaseHtmlView
      */
     private function prepareAutosave(): void
     {
-        $application = Factory::getApplication();
+        $application  = Factory::getApplication();
         $configurator = new AutosaveViewConfigurator($application, $this->getDocument(), $application->getIdentity());
         $configurator->disable('com_banners.autosave.client');
 
