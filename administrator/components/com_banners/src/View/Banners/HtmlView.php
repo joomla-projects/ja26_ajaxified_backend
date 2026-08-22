@@ -12,6 +12,7 @@ namespace Joomla\Component\Banners\Administrator\View\Banners;
 
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Multilanguage;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\ListView;
 use Joomla\Component\Banners\Administrator\Model\BannersModel;
 
@@ -26,6 +27,8 @@ use Joomla\Component\Banners\Administrator\Model\BannersModel;
  */
 class HtmlView extends ListView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * Category data
      *
@@ -82,6 +85,33 @@ class HtmlView extends ListView
         if (!Multilanguage::isEnabled()) {
             unset($this->activeFilters['language']);
             $this->filterForm->removeField('language', 'filter');
+        }
+    }
+
+    /**
+     * Add the page title and toolbar.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    protected function addToolbar()
+    {
+        parent::addToolbar();
+
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'trash',
+                'checkin',
+                'delete',
+                'batch',
+            ]
+        );
+
+        if ($this->getLayout() === 'emptystate') {
+            return;
         }
     }
 }

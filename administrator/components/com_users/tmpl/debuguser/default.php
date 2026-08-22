@@ -20,14 +20,14 @@ use Joomla\CMS\Router\Route;
 $listOrder = $this->escape($this->state->get('list.ordering'));
 $listDirn  = $this->escape($this->state->get('list.direction'));
 
-/** @var Joomla\CMS\WebAsset\WebAssetManager $wa */
-$wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns');
-
 ?>
 <form action="<?php echo Route::_('index.php?option=com_users&view=debuguser&user_id=' . (int) $this->state->get('user_id')); ?>" method="post" name="adminForm" id="adminForm">
+    <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
     <div id="j-main-container" class="j-main-container">
-        <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]); ?>
+        <?php
+        echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]);
+        echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#debugUserList']);
+        ?>
         <?php if (empty($this->items)) : ?>
             <div class="alert alert-info">
                 <span class="icon-info-circle" aria-hidden="true"></span><span class="visually-hidden"><?php echo Text::_('INFO'); ?></span>
@@ -73,7 +73,7 @@ $wa->useScript('table.columns');
                 <?php endforeach; ?>
             </div>
 
-            <table class="table">
+            <table class="table" id="debugUserList">
                 <caption class="visually-hidden">
                     <?php echo Text::_('COM_USERS_DEBUG_USER_TABLE_CAPTION'); ?>,
                             <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,
@@ -160,4 +160,5 @@ $wa->useScript('table.columns');
             <?php echo $this->filterForm->renderControlFields(); ?>
         <?php endif; ?>
     </div>
+    <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
 </form>

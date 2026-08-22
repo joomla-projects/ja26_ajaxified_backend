@@ -1,0 +1,46 @@
+{
+  "$schema": "https://developer.joomla.org/schemas/json-schema/web_assets.json",
+  "name": "com_autosave",
+  "version": "6.2.0",
+  "description": "Joomla CMS",
+  "license": "GNU General Public License version 2 or later; see LICENSE.txt",
+  "assets": [
+    {
+      "name": "com_autosave.runtime",
+      "type": "script",
+      "uri": "com_autosave/runtime.min.js",
+      "importmap": true,
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
+      "name": "com_autosave.canonical-actions",
+      "type": "script",
+      "uri": "com_autosave/canonical-action-coordinator.min.js",
+      "dependencies": [
+        "core",
+        "com_autosave.runtime",
+        "joomla.dialog"
+      ],
+      "importmap": true,
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
+      "name": "com_autosave.ui",
+      "type": "script",
+      "uri": "com_autosave/ui.min.js",
+      "dependencies": [
+        "core",
+        "com_autosave.runtime",
+        "joomla.dialog"
+      ],
+      "importmap": true,
+      "attributes": {
+        "type": "module"
+      }
+    }
+  ]
+}

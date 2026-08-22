@@ -11,6 +11,7 @@
 namespace Joomla\Component\Checkin\Administrator\View\Checkin;
 
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
 use Joomla\Component\Checkin\Administrator\Model\CheckinModel;
@@ -26,6 +27,8 @@ use Joomla\Component\Checkin\Administrator\Model\CheckinModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of items
      *
@@ -112,6 +115,10 @@ class HtmlView extends BaseHtmlView
         $this->filterForm
             ->addControlField('task')
             ->addControlField('boxchecked', '0');
+
+        $this->addAjaxifiedListViewOptions([
+            'checkin',
+        ]);
 
         parent::display($tpl);
     }

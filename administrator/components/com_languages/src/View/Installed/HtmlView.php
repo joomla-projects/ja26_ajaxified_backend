@@ -12,6 +12,7 @@ namespace Joomla\Component\Languages\Administrator\View\Installed;
 
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
 use Joomla\Component\Languages\Administrator\Model\InstalledModel;
@@ -27,6 +28,8 @@ use Joomla\Component\Languages\Administrator\Model\InstalledModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * Option (component) name
      *
@@ -101,6 +104,10 @@ class HtmlView extends BaseHtmlView
             ->addControlField('boxchecked', '0');
 
         $this->addToolbar();
+
+        $this->addAjaxifiedListViewOptions(
+            (int) $this->state->get('client_id') === 0 ? ['setDefault'] : []
+        );
 
         parent::display($tpl);
     }

@@ -19,18 +19,18 @@ use Joomla\CMS\Router\Route;
 
 /** @var Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect')
+$wa->useScript('multiselect')
     ->useScript('joomla.dialog-autocreate');
 
 $listOrder = $this->escape($this->state->get('list.ordering'));
 $listDirn  = $this->escape($this->state->get('list.direction'));
 ?>
-<div id="installer-manage" class="clearfix">
-    <form action="<?php echo Route::_('index.php?option=com_installer&view=manage'); ?>" method="post" name="adminForm" id="adminForm">
-        <div class="row">
-            <div class="col-md-12">
-                <div id="j-main-container" class="j-main-container">
+<?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
+<div id="j-main-container" class="j-main-container">
+    <div id="installer-manage" class="clearfix">
+        <form action="<?php echo Route::_('index.php?option=com_installer&view=manage'); ?>" method="post" name="adminForm" id="adminForm">
+            <div class="row">
+                <div class="col-md-12">
                     <?php if ($this->showMessage) : ?>
                         <?php echo $this->loadTemplate('message'); ?>
                     <?php endif; ?>
@@ -41,7 +41,8 @@ $listDirn  = $this->escape($this->state->get('list.direction'));
                             <?php echo Text::_('JGLOBAL_NO_MATCHING_RESULTS'); ?>
                         </div>
                     <?php else : ?>
-                    <table class="table" id="manageList">
+                        <?php echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#manageList']); ?>
+                        <table class="table" id="manageList">
                         <caption class="visually-hidden">
                             <?php echo Text::_('COM_INSTALLER_MANAGE_TABLE_CAPTION'); ?>,
                             <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,
@@ -178,6 +179,7 @@ $listDirn  = $this->escape($this->state->get('list.direction'));
                     <?php echo $this->filterForm->renderControlFields(); ?>
                 </div>
             </div>
-        </div>
-    </form>
+        </form>
+    </div>
 </div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

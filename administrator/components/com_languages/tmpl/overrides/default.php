@@ -20,8 +20,7 @@ use Joomla\CMS\Router\Route;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect');
+$wa->useScript('multiselect');
 
 $client            = $this->state->get('filter.client') == 'site' ? Text::_('JSITE') : Text::_('JADMINISTRATOR');
 $language          = $this->state->get('filter.language');
@@ -41,8 +40,10 @@ $contentLanguages   = $this->contentLanguages ?? [];
 <form action="<?php echo Route::_('index.php?option=com_languages&view=overrides'); ?>" method="post" name="adminForm" id="adminForm">
     <div class="row">
         <div class="col-md-12">
+            <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
             <div id="j-main-container" class="j-main-container">
                 <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this, 'options' => ['selectorFieldName' => 'language_client']]); ?>
+                <?php echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#overrideList']); ?>
                 <div class="clearfix"></div>
                 <?php if (empty($this->items)) : ?>
                     <div class="alert alert-info">
@@ -182,6 +183,7 @@ $contentLanguages   = $this->contentLanguages ?? [];
 
                 <?php echo $this->filterForm->renderControlFields(); ?>
             </div>
+            <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
         </div>
     </div>
 </form>

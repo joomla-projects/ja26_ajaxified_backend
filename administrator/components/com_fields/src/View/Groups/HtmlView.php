@@ -14,6 +14,7 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Multilanguage;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\Router\Route;
@@ -34,6 +35,8 @@ use Joomla\Filesystem\Path;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * @var    \Joomla\CMS\Form\Form
      *
@@ -105,6 +108,18 @@ class HtmlView extends BaseHtmlView
             unset($this->activeFilters['language']);
             $this->filterForm->removeField('language', 'filter');
         }
+
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'archive',
+                'trash',
+                'checkin',
+                'delete',
+                'batch',
+            ]
+        );
 
         // Add form control fields
         $this->filterForm

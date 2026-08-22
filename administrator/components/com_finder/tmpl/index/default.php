@@ -27,7 +27,6 @@ $lang      = $this->getLanguage();
 /** @var Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
 $wa->useScript('multiselect')
-    ->useScript('table.columns')
     ->useScript('joomla.dialog-autocreate');
 
 // Show warning that the content - finder plugin is disabled
@@ -60,18 +59,22 @@ if (!$this->finderPlugins) {
 }
 
 ?>
-<form action="<?php echo Route::_('index.php?option=com_finder&view=index'); ?>" method="post" name="adminForm" id="adminForm">
-    <div class="row">
-        <div class="col-md-12">
-            <div id="j-main-container" class="j-main-container">
-                <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]); ?>
+<?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
+<div id="j-main-container" class="j-main-container">
+    <form action="<?php echo Route::_('index.php?option=com_finder&view=index'); ?>" method="post" name="adminForm" id="adminForm">
+        <div class="row">
+            <div class="col-md-12">
+                <?php
+                echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]);
+                echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#finderIndexList']);
+                ?>
                 <?php if (empty($this->items)) : ?>
                     <div class="alert alert-info">
                         <span class="icon-info-circle" aria-hidden="true"></span><span class="visually-hidden"><?php echo Text::_('INFO'); ?></span>
                         <?php echo Text::_('JGLOBAL_NO_MATCHING_RESULTS'); ?>
                     </div>
                 <?php else : ?>
-                    <table class="table">
+                    <table class="table" id="finderIndexList">
                         <caption class="visually-hidden">
                             <?php echo Text::_('COM_FINDER_INDEX_TABLE_CAPTION'); ?>,
                             <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,
@@ -172,5 +175,6 @@ if (!$this->finderPlugins) {
                 <?php echo $this->filterForm->renderControlFields(); ?>
             </div>
         </div>
-    </div>
-</form>
+    </form>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

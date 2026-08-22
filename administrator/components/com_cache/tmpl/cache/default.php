@@ -23,15 +23,15 @@ $listDirn  = $this->escape($this->state->get('list.direction'));
 /** @var Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
 $wa->useScript('keepalive')
-    ->useScript('table.columns')
     ->useScript('multiselect')
     ->useScript('com_cache.admin-cache');
 
 ?>
-<form action="<?php echo Route::_('index.php?option=com_cache'); ?>" method="post" name="adminForm" id="adminForm">
-    <div class="row">
-        <div class="col-md-12">
-            <div id="j-main-container" class="j-main-container">
+<?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
+<div id="j-main-container" class="j-main-container">
+    <form action="<?php echo Route::_('index.php?option=com_cache'); ?>" method="post" name="adminForm" id="adminForm">
+        <div class="row">
+            <div class="col-md-12">
                 <div class="alert alert-info">
                     <span class="icon-info-circle" aria-hidden="true"></span>
                     <span class="visually-hidden"><?php echo Text::_('INFO'); ?></span>
@@ -44,7 +44,8 @@ $wa->useScript('keepalive')
                         <?php echo Text::_('JGLOBAL_NO_MATCHING_RESULTS'); ?>
                     </div>
                 <?php else : ?>
-                    <table class="table">
+                    <?php echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#cacheList']); ?>
+                    <table class="table" id="cacheList">
                         <caption class="visually-hidden">
                             <?php echo Text::_('COM_CACHE_TABLE_CAPTION'); ?>,
                                 <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,
@@ -96,5 +97,6 @@ $wa->useScript('keepalive')
                 <?php echo $this->filterForm->renderControlFields(); ?>
             </div>
         </div>
-    </div>
-</form>
+    </form>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

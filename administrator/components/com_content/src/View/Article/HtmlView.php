@@ -14,6 +14,7 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\FormView;
+use Joomla\CMS\Router\Route;
 use Joomla\CMS\Toolbar\ToolbarHelper;
 use Joomla\Component\Content\Site\Helper\RouteHelper;
 
@@ -28,6 +29,15 @@ use Joomla\Component\Content\Site\Helper\RouteHelper;
  */
 class HtmlView extends FormView
 {
+    /**
+     * Whether the generic Autosave interface should be rendered.
+     *
+     * @var boolean
+     *
+     * @since __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
     /**
      * Pagebreak TOC alias
      *
@@ -84,6 +94,7 @@ class HtmlView extends FormView
         parent::initializeView();
 
         $this->canDo = ContentHelper::getActions('com_content', 'article', $this->item->id);
+        $this->prepareAutosave();
 
         $url = RouteHelper::getArticleRoute($this->item->id . ':' . $this->item->alias, $this->item->catid, $this->item->language);
 
@@ -115,6 +126,99 @@ class HtmlView extends FormView
             ->addControlField('task')
             ->addControlField('return', $input->getBase64('return', ''))
             ->addControlField('forcedLanguage', $forcedLanguage);
+    }
+
+    /**
+     * Configure the headless Autosave integration for one canonical Article.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        $document              = $this->getDocument();
+        $this->autosaveEnabled = false;
+        $document->addScriptOptions('com_content.autosave.article', ['enabled' => false], false);
+
+        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+            return;
+        }
+
+        try {
+            $provider = Factory::getApplication()
+                ->bootComponent('com_content')
+                ->getAutosaveProvider('com_content.article');
+            $targetId = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+
+            if (!$provider->targetExists($targetId)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $fieldIds = [];
+
+        foreach (['title', 'alias', 'articletext', 'catid'] as $fieldName) {
+            $field = $this->form->getField($fieldName);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $fieldIds[$fieldName] = $field->id;
+        }
+
+        $endpoints = [];
+
+        foreach (
+            [
+                'initialize',
+                'preserve',
+                'detect',
+                'read',
+                'discard',
+                'prepareCanonicalAction',
+                'getCanonicalActionOutcome',
+            ] as $operation
+        ) {
+            $endpoints[$operation] = Route::_('index.php?option=com_autosave&task=autosave.' . $operation . '&format=json', false);
+        }
+
+        $application = Factory::getApplication();
+        $language    = $application->getLanguage();
+        $language->load('com_autosave', JPATH_ADMINISTRATOR);
+        Text::script('COM_AUTOSAVE_CANCEL_DISCARD_FAILED');
+        Text::script('COM_AUTOSAVE_CANCEL_DISCARD_FAILED_TITLE');
+        $timeZone    = (string) $this->getCurrentUser()->getParam(
+            'timezone',
+            $application->get('offset', 'UTC')
+        );
+
+        $document->addScriptOptions(
+            'com_autosave.runtime',
+            ['endpoints' => $endpoints],
+            false
+        );
+        $document->addScriptOptions(
+            'com_content.autosave.article',
+            [
+                'enabled'              => true,
+                'context'              => $provider->getContext(),
+                'targetId'             => $targetId,
+                'payloadSchemaVersion' => $provider->getPayloadSchemaVersion(),
+                'formId'               => 'item-form',
+                'fieldIds'             => $fieldIds,
+                'locale'               => $language->getTag(),
+                'timeZone'             => $timeZone,
+            ],
+            false
+        );
+        $assets = $document->getWebAssetManager();
+        $assets->getRegistry()->addExtensionRegistryFile('com_autosave');
+        $assets->useScript('com_content.article-autosave');
+        $this->autosaveEnabled = true;
     }
 
     /**

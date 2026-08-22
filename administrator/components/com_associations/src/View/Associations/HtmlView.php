@@ -13,6 +13,7 @@ namespace Joomla\Component\Associations\Administrator\View\Associations;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Associations;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Router\Route;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -30,6 +31,8 @@ use Joomla\Component\Associations\Administrator\Model\AssociationsModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of items
      *
@@ -238,6 +241,13 @@ class HtmlView extends BaseHtmlView
         }
 
         $this->addToolbar();
+
+        if ($this->getLayout() === 'default') {
+            $this->addAjaxifiedListViewOptions([
+                'clean',
+                'purge',
+            ]);
+        }
 
         parent::display($tpl);
     }

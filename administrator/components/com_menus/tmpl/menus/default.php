@@ -21,8 +21,7 @@ use Joomla\CMS\Uri\Uri;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect')
+$wa->useScript('multiselect')
     ->useScript('com_menus.admin-menus')
     ->useScript('joomla.dialog-autocreate');
 
@@ -63,8 +62,10 @@ $popupOptionsAdd = [
 <form action="<?php echo Route::_('index.php?option=com_menus&view=menus'); ?>" method="post" name="adminForm" id="adminForm">
     <div class="row">
         <div class="col-md-12">
+            <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
             <div id="j-main-container" class="j-main-container">
                 <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this, 'options' => ['filterButton' => false]]); ?>
+                <?php echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#menuList']); ?>
                 <?php if (empty($this->items)) : ?>
                     <div class="alert alert-info">
                         <span class="icon-info-circle" aria-hidden="true"></span><span class="visually-hidden"><?php echo Text::_('INFO'); ?></span>
@@ -261,6 +262,7 @@ $popupOptionsAdd = [
                 <input type="hidden" name="boxchecked" value="0">
                 <?php echo HTMLHelper::_('form.token'); ?>
             </div>
+            <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
         </div>
     </div>
 </form>

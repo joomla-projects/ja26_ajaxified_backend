@@ -30,22 +30,23 @@ Text::script('COM_FINDER_MAPS_CONFIRM_DELETE_PROMPT');
 /** @var Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
 $wa->useScript('com_finder.maps')
-    ->useScript('table.columns')
     ->useScript('multiselect');
 
 ?>
-<form action="<?php echo Route::_('index.php?option=com_finder&view=maps'); ?>" method="post" name="adminForm" id="adminForm">
-    <div class="row">
-        <div class="col-md-12">
-            <div id="j-main-container" class="j-main-container">
+<?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
+<div id="j-main-container" class="j-main-container">
+    <form action="<?php echo Route::_('index.php?option=com_finder&view=maps'); ?>" method="post" name="adminForm" id="adminForm">
+        <div class="row">
+            <div class="col-md-12">
                 <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]); ?>
+                <?php echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#finderMapList']); ?>
                 <?php if (empty($this->items)) : ?>
                     <div class="alert alert-info">
                         <span class="icon-info-circle" aria-hidden="true"></span><span class="visually-hidden"><?php echo Text::_('INFO'); ?></span>
                         <?php echo Text::_('COM_FINDER_MAPS_NO_CONTENT'); ?>
                     </div>
                 <?php else : ?>
-                <table class="table">
+                <table class="table" id="finderMapList">
                     <caption class="visually-hidden">
                         <?php echo Text::_('COM_FINDER_MAPS_TABLE_CAPTION'); ?>,
                             <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,
@@ -166,9 +167,10 @@ $wa->useScript('com_finder.maps')
                     <?php echo $this->pagination->getListFooter(); ?>
 
                 <?php endif; ?>
-            </div>
 
-            <?php echo $this->filterForm->renderControlFields(); ?>
+                <?php echo $this->filterForm->renderControlFields(); ?>
+            </div>
         </div>
-    </div>
-</form>
+    </form>
+</div>
+<?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>

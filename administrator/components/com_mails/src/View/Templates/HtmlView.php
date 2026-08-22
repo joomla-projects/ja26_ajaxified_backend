@@ -14,6 +14,7 @@ use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Pagination\Pagination;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -31,6 +32,8 @@ use Joomla\Component\Mails\Administrator\Model\TemplatesModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of items
      *
@@ -125,6 +128,7 @@ class HtmlView extends BaseHtmlView
             ->addControlField('boxchecked', '0');
 
         $this->addToolbar();
+        $this->addAjaxifiedListViewOptions([]);
 
         parent::display($tpl);
     }

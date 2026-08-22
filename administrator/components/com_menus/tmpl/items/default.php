@@ -23,8 +23,7 @@ use Joomla\CMS\Session\Session;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect');
+$wa->useScript('multiselect');
 
 $user      = $this->getCurrentUser();
 $app       = Factory::getApplication();
@@ -48,8 +47,10 @@ $assoc   = Associations::isEnabled() && $this->state->get('filter.client_id') ==
       id="adminForm">
     <div class="row">
         <div class="col-md-12">
+            <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
             <div id="j-main-container" class="j-main-container">
                 <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this, 'options' => ['selectorFieldName' => 'menutype']]); ?>
+                <?php echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#menuitemList']); ?>
                 <?php if (!empty($this->items)) : ?>
                     <table class="table" id="menuitemList">
                         <caption class="visually-hidden">
@@ -277,6 +278,7 @@ $assoc   = Associations::isEnabled() && $this->state->get('filter.client_id') ==
 
                 <?php echo $this->filterForm->renderControlFields(); ?>
             </div>
+            <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
         </div>
     </div>
 </form>

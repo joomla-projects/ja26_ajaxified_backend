@@ -121,6 +121,88 @@ INSERT INTO `#__assets` (`id`, `parent_id`, `lft`, `rgt`, `level`, `name`, `titl
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `#__autosave_continuations`
+--
+
+CREATE TABLE IF NOT EXISTS `#__autosave_continuations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `public_id` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `user_id` int unsigned NOT NULL,
+  `context` varchar(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `target_id` varbinary(764) NOT NULL,
+  `initialization_key` varbinary(764) NOT NULL,
+  `created_at` datetime NOT NULL,
+  `last_activity_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_autosave_continuation_public_id` (`public_id`),
+  UNIQUE KEY `idx_autosave_continuation_initialization` (`user_id`,`initialization_key`),
+  KEY `idx_autosave_continuation_recovery` (`user_id`,`context`,`target_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Table structure for table `#__autosave_generations`
+--
+
+CREATE TABLE IF NOT EXISTS `#__autosave_generations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `public_id` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `continuation_id` bigint unsigned NOT NULL,
+  `user_id` int unsigned NOT NULL,
+  `base_revision` varbinary(1020) NOT NULL,
+  `state` varchar(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `client_revision` bigint unsigned NOT NULL DEFAULT 0,
+  `payload` mediumtext,
+  `payload_digest` char(64) CHARACTER SET ascii COLLATE ascii_bin,
+  `payload_schema_version` int unsigned,
+  `active_marker` tinyint unsigned,
+  `quota_slot` int unsigned,
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  `expires_at` datetime NOT NULL,
+  `closed_at` datetime,
+  `terminal_at` datetime,
+  `retain_until` datetime,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_autosave_generation_public_id` (`public_id`),
+  UNIQUE KEY `idx_autosave_generation_active` (`continuation_id`,`active_marker`),
+  UNIQUE KEY `idx_autosave_generation_quota` (`user_id`,`quota_slot`),
+  KEY `idx_autosave_generation_continuation` (`continuation_id`),
+  KEY `idx_autosave_generation_expiry` (`user_id`,`state`,`expires_at`),
+  KEY `idx_autosave_generation_retention` (`retain_until`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Table structure for table `#__autosave_canonical_actions`
+--
+
+CREATE TABLE IF NOT EXISTS `#__autosave_canonical_actions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `public_id` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `user_id` int unsigned NOT NULL,
+  `continuation_id` bigint unsigned NOT NULL,
+  `generation_id` bigint unsigned NOT NULL,
+  `context` varchar(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `target_id` varbinary(764) NOT NULL,
+  `intent` varchar(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `expected_base_revision` varbinary(1020) NOT NULL,
+  `outcome` varchar(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `final_target_id` varbinary(764),
+  `final_base_revision` varbinary(1020),
+  `failure_code` varchar(64) CHARACTER SET ascii COLLATE ascii_bin,
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  `expires_at` datetime NOT NULL,
+  `completed_at` datetime,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_autosave_canonical_public_id` (`public_id`),
+  UNIQUE KEY `idx_autosave_canonical_generation` (`generation_id`),
+  KEY `idx_autosave_canonical_owner` (`user_id`,`context`,`target_id`),
+  KEY `idx_autosave_canonical_expiry` (`outcome`,`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `#__extensions`
 --
 
@@ -184,6 +266,7 @@ INSERT INTO `#__extensions` (`package_id`, `name`, `type`, `element`, `folder`, 
 (0, 'com_tags', 'component', 'com_tags', '', 1, 1, 1, 0, 1, '', '{"tag_layout":"_:default","save_history":"1","history_limit":5,"show_tag_title":"0","tag_list_show_tag_image":"0","tag_list_show_tag_description":"0","tag_list_image":"","tag_list_orderby":"title","tag_list_orderby_direction":"ASC","show_headings":"0","tag_list_show_date":"0","tag_list_show_item_image":"0","tag_list_show_item_description":"0","tag_list_item_maximum_characters":0,"return_any_or_all":"1","include_children":"0","maximum":200,"tag_list_language_filter":"all","tags_layout":"_:default","all_tags_orderby":"title","all_tags_orderby_direction":"ASC","all_tags_show_tag_image":"0","all_tags_show_tag_description":"0","all_tags_tag_maximum_characters":20,"all_tags_show_tag_hits":"0","filter_field":"1","show_pagination_limit":"1","show_pagination":"2","show_pagination_results":"1","tag_field_ajax_mode":"1","show_feed_link":"1"}', ''),
 (0, 'com_contenthistory', 'component', 'com_contenthistory', '', 1, 1, 1, 0, 1, '', '', ''),
 (0, 'com_ajax', 'component', 'com_ajax', '', 1, 1, 1, 1, 1, '', '', ''),
+(0, 'com_autosave', 'component', 'com_autosave', '', 1, 1, 1, 1, 1, '', '', ''),
 (0, 'com_postinstall', 'component', 'com_postinstall', '', 1, 1, 1, 1, 1, '', '', ''),
 (0, 'com_fields', 'component', 'com_fields', '', 1, 1, 1, 0, 1, '', '', ''),
 (0, 'com_associations', 'component', 'com_associations', '', 1, 1, 1, 0, 1, '', '', ''),

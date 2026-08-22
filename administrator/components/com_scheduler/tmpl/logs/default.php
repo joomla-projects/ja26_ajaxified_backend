@@ -18,8 +18,7 @@ use Joomla\CMS\Uri\Uri;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->document->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect');
+$wa->useScript('multiselect');
 
 $user      = $this->getCurrentUser();
 $listOrder = $this->escape($this->state->get('list.ordering'));
@@ -30,15 +29,19 @@ $canChange = $user->authorise('core.edit.state', 'com_scheduler');
 <form action="<?php echo Route::_('index.php?option=com_scheduler&view=logs'); ?>" method="post" name="adminForm" id="adminForm">
     <div class="row">
         <div class="col-md-12">
+            <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
             <div id="j-main-container" class="j-main-container">
-                <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]); ?>
+                <?php
+                echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]);
+                echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#schedulerLogList']);
+                ?>
                 <?php if (empty($this->items)) : ?>
                     <div class="alert alert-info">
                         <span class="icon-info-circle" aria-hidden="true"></span><span class="sr-only"><?php echo Text::_('INFO'); ?></span>
                         <?php echo Text::_('JGLOBAL_NO_MATCHING_RESULTS'); ?>
                     </div>
                 <?php else : ?>
-                    <table class="table itemList">
+                    <table class="table itemList" id="schedulerLogList">
                         <caption id="captionTable" class="visually-hidden">
                             <?php echo Text::_('COM_SCHEDULER_TABLE_CAPTION'); ?>,
                             <span id="orderedBy"><?php echo Text::_('JGLOBAL_SORTED_BY'); ?> </span>,
@@ -136,6 +139,7 @@ $canChange = $user->authorise('core.edit.state', 'com_scheduler');
 
                 <?php echo $this->filterForm->renderControlFields(); ?>
             </div>
+            <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
         </div>
     </div>
 </form>

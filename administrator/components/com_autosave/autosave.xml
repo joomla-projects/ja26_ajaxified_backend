@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<extension type="component" method="upgrade">
+	<name>com_autosave</name>
+	<author>Joomla! Project</author>
+	<creationDate>2026-07</creationDate>
+	<copyright>(C) 2026 Open Source Matters, Inc.</copyright>
+	<license>GNU General Public License version 2 or later; see LICENSE.txt</license>
+	<authorEmail>admin@joomla.org</authorEmail>
+	<authorUrl>www.joomla.org</authorUrl>
+	<version>6.2.0</version>
+	<description>COM_AUTOSAVE_XML_DESCRIPTION</description>
+	<namespace path="src">Joomla\Component\Autosave</namespace>
+	<media destination="com_autosave" folder="media">
+		<filename>joomla.asset.json</filename>
+		<folder>js</folder>
+	</media>
+	<administration>
+		<files folder="admin">
+			<filename>autosave.xml</filename>
+			<folder>services</folder>
+			<folder>src</folder>
+		</files>
+		<languages folder="admin">
+			<language tag="en-GB">language/en-GB/com_autosave.ini</language>
+			<language tag="en-GB">language/en-GB/com_autosave.sys.ini</language>
+		</languages>
+	</administration>
+</extension>

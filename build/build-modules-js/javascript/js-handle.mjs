@@ -24,6 +24,9 @@ const getExternalModules = async () => {
   externalModules.push(
     'cropper-module',
     'codemirror',
+    'com_autosave.runtime',
+    'com_autosave.canonical-actions',
+    'com_autosave.ui',
     'joomla.dialog',
     'editor-api',
     'editor-decorator',

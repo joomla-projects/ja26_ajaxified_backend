@@ -12,6 +12,7 @@ namespace Joomla\Component\Workflow\Administrator\View\Transitions;
 
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Router\Route;
 use Joomla\CMS\Toolbar\Button\DropdownButton;
@@ -29,6 +30,8 @@ use Joomla\Component\Workflow\Administrator\Model\TransitionsModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of transitions
      *
@@ -151,6 +154,15 @@ class HtmlView extends BaseHtmlView
             ->addControlField('extension', $this->extension);
 
         $this->addToolbar();
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'trash',
+                'checkin',
+                'delete',
+            ]
+        );
 
         parent::display($tpl);
     }

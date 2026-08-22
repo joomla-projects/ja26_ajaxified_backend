@@ -12,6 +12,7 @@ namespace Joomla\Component\Installer\Administrator\View\Updatesites;
 
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Helper\ContentHelper;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\Pagination\Pagination;
 use Joomla\CMS\Toolbar\Button\DropdownButton;
 use Joomla\Component\Installer\Administrator\Model\UpdatesitesModel;
@@ -28,6 +29,8 @@ use Joomla\Component\Installer\Administrator\View\Installer\HtmlView as Installe
  */
 class HtmlView extends InstallerViewDefault
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * The search tools form
      *
@@ -86,6 +89,15 @@ class HtmlView extends InstallerViewDefault
         $this->filterForm
             ->addControlField('task')
             ->addControlField('boxchecked', '0');
+
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'delete',
+                'checkin',
+            ]
+        );
 
         // Display the view
         parent::display($tpl);

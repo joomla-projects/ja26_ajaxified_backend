@@ -20,8 +20,7 @@ use Joomla\CMS\Session\Session;
 
 /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
 $wa = $this->getDocument()->getWebAssetManager();
-$wa->useScript('table.columns')
-    ->useScript('multiselect');
+$wa->useScript('multiselect');
 
 $user      = $this->getCurrentUser();
 $listOrder = $this->escape($this->state->get('list.ordering'));
@@ -37,8 +36,10 @@ if ($saveOrder && !empty($this->items)) {
 <form action="<?php echo Route::_('index.php?option=com_languages&view=languages'); ?>" method="post" name="adminForm" id="adminForm">
     <div class="row">
         <div class="col-md-12">
+            <?php echo HTMLHelper::_('progressiveSynchronization.start', 'j-main-container'); ?>
             <div id="j-main-container" class="j-main-container">
                 <?php echo LayoutHelper::render('joomla.searchtools.default', ['view' => $this]); ?>
+                <?php echo LayoutHelper::render('joomla.system.toggle-columns', ['table-selector' => '#languageList']); ?>
                 <?php if (empty($this->items)) : ?>
                     <div class="alert alert-info">
                         <span class="icon-info-circle" aria-hidden="true"></span><span class="visually-hidden"><?php echo Text::_('INFO'); ?></span>
@@ -168,6 +169,7 @@ if ($saveOrder && !empty($this->items)) {
 
                 <?php echo $this->filterForm->renderControlFields(); ?>
             </div>
+            <?php echo HTMLHelper::_('progressiveSynchronization.end'); ?>
         </div>
     </div>
 </form>

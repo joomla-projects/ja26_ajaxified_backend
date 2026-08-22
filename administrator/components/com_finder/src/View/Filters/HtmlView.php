@@ -12,6 +12,7 @@ namespace Joomla\Component\Finder\Administrator\View\Filters;
 
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\AjaxifiedListViewTrait;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Button\DropdownButton;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -28,6 +29,8 @@ use Joomla\Component\Finder\Administrator\Model\FiltersModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use AjaxifiedListViewTrait;
+
     /**
      * An array of items
      *
@@ -119,6 +122,14 @@ class HtmlView extends BaseHtmlView
 
         // Configure the toolbar.
         $this->addToolbar();
+        $this->addAjaxifiedListViewOptions(
+            [
+                'publish',
+                'unpublish',
+                'checkin',
+                'delete',
+            ]
+        );
 
         parent::display($tpl);
     }
