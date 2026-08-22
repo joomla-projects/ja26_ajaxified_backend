@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import {
   AUTOSAVE_DRAFT_EVENT,
+  AUTOSAVE_RECOVERY_FOCUS_EVENT,
   AUTOSAVE_STATE_EVENT,
 } from 'com_autosave.runtime';
 import createAutosavePresenter, {
@@ -32,6 +33,12 @@ const STATUSES = [
   'recovery-required',
   'recovery-applying',
   'recovery-discarding',
+  'canonical-preparing',
+  'canonical-submitting',
+  'canonical-outcome-pending',
+  'canonical-failed',
+  'canonical-prepare-failed',
+  'canonical-outcome-unknown',
   'destroyed',
   'unknown',
 ];
@@ -351,6 +358,24 @@ test('valid construction renders runtime.state immediately and malformed layouts
     statusMount: optional.statusMount,
     runtime: optionalRuntime,
   }), null);
+});
+
+test('canonical recovery blocking focuses the generic recovery region without exposing content', () => {
+  const fixture = createFixture({
+    state: {
+      ...defaultState(),
+      status: 'recovery-required',
+      recoveryCandidate: candidate(),
+    },
+  });
+
+  fixture.eventTarget.dispatchEvent(stateEvent(AUTOSAVE_RECOVERY_FOCUS_EVENT, {
+    context: 'com_content.article',
+    targetId: '42',
+  }));
+
+  assert.equal(fixture.document.activeElement, fixture.recovery);
+  assert.equal(fixture.recovery.hasAttribute('tabindex'), false);
 });
 
 test('status and recovery layouts degrade independently', () => {

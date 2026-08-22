@@ -17,6 +17,8 @@ const endpoints = {
   detect: '/subdir/administrator/index.php?option=com_autosave&task=autosave.detect&format=json',
   read: '/subdir/administrator/index.php?option=com_autosave&task=autosave.read&format=json',
   discard: '/subdir/administrator/index.php?option=com_autosave&task=autosave.discard&format=json',
+  prepareCanonicalAction: '/subdir/administrator/index.php?option=com_autosave&task=autosave.prepareCanonicalAction&format=json',
+  getCanonicalActionOutcome: '/subdir/administrator/index.php?option=com_autosave&task=autosave.getCanonicalActionOutcome&format=json',
 };
 
 const metadata = {
@@ -108,6 +110,29 @@ test('uses the literal PR 7 requests, injected endpoints, and transport options'
     detect: metadata,
     read: { ...metadata, created_at: '2026-08-01T00:00:00Z', payload: { title: 'Draft' } },
     discard: { status: 'discarded' },
+    prepareCanonicalAction: {
+      operation_id: 'operation',
+      intent: 'apply',
+      outcome: 'pending',
+      expires_at: '2026-08-03T00:00:00Z',
+    },
+    getCanonicalActionOutcome: {
+      operation_id: 'operation',
+      context: 'com_example.record',
+      target_id: '42',
+      continuation_id: 'continuation',
+      generation_id: 'generation',
+      intent: 'apply',
+      outcome: 'successful',
+      expected_base_revision: 'base-1',
+      final_target_id: '42',
+      final_base_revision: 'base-2',
+      failure_code: null,
+      created_at: '2026-08-02T00:00:00Z',
+      updated_at: '2026-08-02T00:00:01Z',
+      expires_at: '2026-08-03T00:00:00Z',
+      completed_at: '2026-08-02T00:00:01Z',
+    },
   };
   let currentOperation;
   const client = createClient(async (url, options) => {
@@ -127,6 +152,22 @@ test('uses the literal PR 7 requests, injected endpoints, and transport options'
     detect: { context: 'com_example.record', target_id: '42' },
     read: { continuation_id: 'continuation', generation_id: 'generation' },
     discard: { continuation_id: 'continuation', generation_id: 'generation' },
+    prepareCanonicalAction: {
+      context: 'com_example.record',
+      target_id: '42',
+      continuation_id: 'continuation',
+      generation_id: 'generation',
+      client_revision: 2,
+      payload_schema_version: 1,
+      payload: { title: 'Submitted' },
+      intent: 'apply',
+      expected_base_revision: 'base-1',
+    },
+    getCanonicalActionOutcome: {
+      operation_id: 'operation',
+      context: 'com_example.record',
+      target_id: '42',
+    },
   };
 
   for (const [operation, request] of Object.entries(operationRequests)) {
@@ -159,6 +200,85 @@ test('accepts a null detect result and idempotent mutation acknowledgements', as
   assert.deepEqual(await client.discard(identityRequest), { status: 'idempotent' });
 });
 
+test('canonical outcome validation enforces truthful state-specific metadata', async (t) => {
+  const base = {
+    operation_id: 'operation',
+    context: 'com_example.record',
+    target_id: '42',
+    continuation_id: 'continuation',
+    generation_id: 'generation',
+    intent: 'apply',
+    outcome: 'pending',
+    expected_base_revision: 'base-1',
+    final_target_id: null,
+    final_base_revision: null,
+    failure_code: null,
+    created_at: '2026-08-02T00:00:00Z',
+    updated_at: '2026-08-02T00:00:01Z',
+    expires_at: '2026-08-03T00:00:00Z',
+    completed_at: null,
+  };
+  const valid = [
+    base,
+    {
+      ...base,
+      outcome: 'successful',
+      final_target_id: '42',
+      final_base_revision: 'base-2',
+      completed_at: '2026-08-02T00:00:02Z',
+    },
+    {
+      ...base,
+      outcome: 'failed',
+      failure_code: 'canonical_save_failed',
+      completed_at: '2026-08-02T00:00:02Z',
+    },
+    {
+      ...base,
+      outcome: 'unknown',
+      completed_at: '2026-08-03T00:00:00Z',
+    },
+  ];
+
+  for (const data of valid) {
+    await t.test(`accepts ${data.outcome}`, async () => {
+      const client = createClient(async () => response({
+        body: { success: true, data },
+      }));
+
+      assert.deepEqual(await client.getCanonicalActionOutcome({
+        operation_id: 'operation',
+        context: 'com_example.record',
+        target_id: '42',
+      }), data);
+    });
+  }
+
+  const malformed = [
+    { ...base, extra: true },
+    { ...base, outcome: 'successful' },
+    { ...base, outcome: 'failed', completed_at: '2026-08-02T00:00:02Z' },
+    { ...base, outcome: 'unknown', failure_code: 'private-detail', completed_at: '2026-08-03T00:00:00Z' },
+  ];
+
+  for (const data of malformed) {
+    await t.test('rejects contradictory metadata', async () => {
+      const client = createClient(async () => response({
+        body: { success: true, data },
+      }));
+
+      await assert.rejects(
+        client.getCanonicalActionOutcome({
+          operation_id: 'operation',
+          context: 'com_example.record',
+          target_id: '42',
+        }),
+        (error) => error.code === 'malformed_success_envelope',
+      );
+    });
+  }
+});
+
 test('rejects redirects, HTML, wrong media types, malformed JSON, and malformed success envelopes', async (t) => {
   const cases = [
     ['redirect', response({ redirected: true }), 'authentication-required'],
@@ -184,7 +304,7 @@ test('rejects redirects, HTML, wrong media types, malformed JSON, and malformed 
   }
 });
 
-test('classifies every PR 7 error family without exposing server messages', async (t) => {
+test('classifies every Autosave API error family without exposing server messages', async (t) => {
   const cases = [
     [401, 'authentication_required', 'authentication-required', false],
     [403, 'backend_access_denied', 'permission-denied', false],
@@ -197,7 +317,13 @@ test('classifies every PR 7 error family without exposing server messages', asyn
     [409, 'revision_conflict', 'conflict', false],
     [409, 'stale_client_revision', 'conflict', false],
     [409, 'draft_terminal', 'terminal-generation', false],
+    [409, 'draft_closed', 'terminal-generation', false],
     [410, 'draft_expired', 'terminal-generation', false],
+    [404, 'canonical_action_not_found', 'canonical-outcome-unknown', false],
+    [409, 'canonical_action_conflict', 'conflict', false],
+    [409, 'canonical_intent_conflict', 'conflict', false],
+    [409, 'canonical_action_consumed', 'conflict', false],
+    [409, 'canonical_generation_not_closed', 'conflict', false],
     [429, 'draft_limit_reached', 'rate-limited', true],
     [500, 'internal_error', 'temporary-server-failure', true],
   ];

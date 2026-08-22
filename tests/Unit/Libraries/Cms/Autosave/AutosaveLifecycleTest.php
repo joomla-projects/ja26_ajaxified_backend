@@ -948,6 +948,122 @@ class AutosaveLifecycleTest extends UnitTestCase
     }
 
     /**
+     * @testdox  canonical preparation validates provider state and stores only normalized exact data
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testPrepareCanonicalActionOrchestratesProviderAndStorage(): void
+    {
+        $events                   = [];
+        $provider                 = new LifecycleTestProvider($events);
+        $provider->normalized     = ['title' => 'Normalized'];
+        $storage                  = new LifecycleTestStorage($events);
+        $storage->canonicalResult = ['operation_id' => 'operation', 'outcome' => 'pending'];
+        $lifecycle                = $this->lifecycle($provider, $storage, $events);
+        $now                      = $this->now();
+        $result                   = $lifecycle->prepareCanonicalAction($this->user(), 'com_example.record', 'client-target', self::CONTINUATION_ID, self::GENERATION_ID, 4, ['title' => 'Client value'], 1, 'apply', 'base-1', $now);
+        $this->assertSame($storage->canonicalResult, $result);
+        $this->assertSame(['title' => 'Client value'], $provider->normalizationArguments[0]);
+        $this->assertSame([
+                'resolve',
+                'canonicalizeTargetId',
+                'targetExists',
+                'authorize:prepare-canonical-action',
+                'getBaseRevision',
+                'getPayloadSchemaVersion',
+                'normalizePayload',
+                'storage.prepareCanonicalAction',
+            ], $events);
+        $this->assertSame([
+                7,
+                self::CONTINUATION_ID,
+                self::GENERATION_ID,
+                'com_example.record',
+                'target-42',
+                'base-1',
+                4,
+                ['title' => 'Normalized'],
+                1,
+                'apply',
+                $now,
+            ], $storage->calls['prepareCanonicalAction'][0]);
+    }
+
+    /**
+     * @testdox  canonical preparation failures before storage cannot close a generation
+     *
+     * @param   string  $failurePoint  Provider validation point.
+     * @param   string  $errorCode     Expected stable failure.
+     *
+     * @dataProvider canonicalPreparationFailureProvider
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testPrepareCanonicalActionProviderFailureStopsStorage(string $failurePoint, string $errorCode): void
+    {
+        $events   = [];
+        $provider = new LifecycleTestProvider($events);
+        $storage  = new LifecycleTestStorage($events);
+        if ($failurePoint === 'target') {
+            $provider->exists = false;
+        } elseif ($failurePoint === 'authorize') {
+            $provider->authorizeFailure = new AutosaveException($errorCode, 'Denied.');
+        } elseif ($failurePoint === 'base') {
+            $provider->baseRevision = 'base-2';
+        } elseif ($failurePoint === 'schema') {
+            $provider->schemaVersion = 2;
+        } else {
+            $provider->normalizeFailure = new AutosaveException($errorCode, 'Invalid payload.');
+        }
+
+        $lifecycle = $this->lifecycle($provider, $storage, $events);
+        $this->assertAutosaveFailure($errorCode, fn () => $lifecycle->prepareCanonicalAction($this->user(), 'com_example.record', 'client-target', self::CONTINUATION_ID, self::GENERATION_ID, 4, ['title' => 'Client value'], 1, 'apply', 'base-1', $this->now()));
+        $this->assertArrayNotHasKey('prepareCanonicalAction', $storage->calls);
+    }
+
+    /**
+     * Canonical preparation failures before persistence.
+     *
+     * @return  array<string, array{string, string}>
+     */
+    public function canonicalPreparationFailureProvider(): array
+    {
+        return [
+            'missing target'       => ['target', 'target_not_found'],
+            'authorization denied' => ['authorize', 'forbidden'],
+            'stale base'           => ['base', 'base_revision_conflict'],
+            'unsupported schema'   => ['schema', 'unsupported_schema_version'],
+            'invalid payload'      => ['payload', 'invalid_payload'],
+        ];
+    }
+
+    /**
+     * @testdox  canonical query, verification and finalization preserve generic provider ownership boundaries
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalOperationLifecycleDelegatesLiteralMetadata(): void
+    {
+        $events                   = [];
+        $provider                 = new LifecycleTestProvider($events);
+        $storage                  = new LifecycleTestStorage($events);
+        $storage->canonicalResult = ['operation_id' => 'operation', 'outcome' => 'pending'];
+        $lifecycle                = $this->lifecycle($provider, $storage, $events);
+        $user                     = $this->user();
+        $now                      = $this->now();
+        $this->assertSame($storage->canonicalResult, $lifecycle->getCanonicalActionOutcome($user, 'operation', 'com_example.record', 'client-target', $now));
+        $this->assertSame($storage->canonicalResult, $lifecycle->verifyCanonicalAction($user, 'operation', 'com_example.record', 'client-target', 'apply', $now));
+        $this->assertSame($storage->canonicalResult, $lifecycle->finalizeCanonicalActionSuccess($user, 'operation', 'com_example.record', 'client-target', 'apply', 'final-target', $now));
+        $this->assertSame($storage->canonicalResult, $lifecycle->finalizeCanonicalActionFailure($user, 'operation', 'com_example.record', 'client-target', 'apply', 'canonical_save_failed', $now));
+        $this->assertSame([7, 'operation', 'com_example.record', 'target-42', $now], $storage->calls['inspectCanonicalAction'][0]);
+        $this->assertSame([7, 'operation', 'com_example.record', 'target-42', 'apply', 'base-1', $now], $storage->calls['verifyCanonicalAction'][0]);
+        $this->assertSame('target-42', $storage->calls['finalizeCanonicalActionSuccess'][0][5]);
+        $this->assertSame('base-1', $storage->calls['finalizeCanonicalActionSuccess'][0][6]);
+        $this->assertSame('canonical_save_failed', $storage->calls['finalizeCanonicalActionFailure'][0][5]);
+        $this->assertContains('authorize:query-canonical-action', $events);
+        $this->assertContains('authorize:prepare-canonical-action', $events);
+    }
+    /**
      * @testdox  all operations reject invalid owner and time before resolver or storage access
      *
      * @param   string  $operation  The lifecycle operation.
@@ -979,9 +1095,14 @@ class AutosaveLifecycleTest extends UnitTestCase
                     1,
                     $now
                 ),
-                'detect'  => $lifecycle->detect($user, 'com_example.record', 'target', $now),
-                'read'    => $lifecycle->read($user, self::CONTINUATION_ID, self::GENERATION_ID, $now),
-                'discard' => $lifecycle->discard($user, self::CONTINUATION_ID, self::GENERATION_ID, $now),
+                'detect'                         => $lifecycle->detect($user, 'com_example.record', 'target', $now),
+                'read'                           => $lifecycle->read($user, self::CONTINUATION_ID, self::GENERATION_ID, $now),
+                'discard'                        => $lifecycle->discard($user, self::CONTINUATION_ID, self::GENERATION_ID, $now),
+                'prepareCanonicalAction'         => $lifecycle->prepareCanonicalAction($user, 'com_example.record', 'target', self::CONTINUATION_ID, self::GENERATION_ID, 1, [], 1, 'apply', 'base-1', $now),
+                'getCanonicalActionOutcome'      => $lifecycle->getCanonicalActionOutcome($user, 'operation', 'com_example.record', 'target', $now),
+                'verifyCanonicalAction'          => $lifecycle->verifyCanonicalAction($user, 'operation', 'com_example.record', 'target', 'apply', $now),
+                'finalizeCanonicalActionSuccess' => $lifecycle->finalizeCanonicalActionSuccess($user, 'operation', 'com_example.record', 'target', 'apply', 'target', $now),
+                'finalizeCanonicalActionFailure' => $lifecycle->finalizeCanonicalActionFailure($user, 'operation', 'com_example.record', 'target', 'apply', 'canonical_save_failed', $now),
             }
         );
 
@@ -1002,7 +1123,20 @@ class AutosaveLifecycleTest extends UnitTestCase
         $localTime = new Date('2026-07-30 10:00:00', 'Asia/Kolkata');
         $cases     = [];
 
-        foreach (['initialize', 'preserve', 'detect', 'read', 'discard'] as $operation) {
+        foreach (
+            [
+                'initialize',
+                'preserve',
+                'detect',
+                'read',
+                'discard',
+                'prepareCanonicalAction',
+                'getCanonicalActionOutcome',
+                'verifyCanonicalAction',
+                'finalizeCanonicalActionSuccess',
+                'finalizeCanonicalActionFailure',
+            ] as $operation
+        ) {
             $cases[$operation . ' anonymous'] = [$operation, $anonymous, $this->now()];
             $cases[$operation . ' non-UTC']   = [$operation, $this->user(), $localTime];
         }
@@ -1020,7 +1154,14 @@ class AutosaveLifecycleTest extends UnitTestCase
     public function testDiscardIsNotAProviderOperation(): void
     {
         $this->assertSame(
-            ['initialize', 'preserve', 'detect', 'read'],
+            [
+                'initialize',
+                'preserve',
+                'detect',
+                'read',
+                'prepare-canonical-action',
+                'query-canonical-action',
+            ],
             array_column(AutosaveOperation::cases(), 'value')
         );
     }

@@ -30,6 +30,12 @@ $states = [
     'recovery-required'       => ['COM_AUTOSAVE_STATUS_RECOVERY_REQUIRED', 'icon-info-circle'],
     'recovery-applying'       => ['COM_AUTOSAVE_STATUS_RECOVERY_APPLYING', 'icon-spinner icon-spin'],
     'recovery-discarding'     => ['COM_AUTOSAVE_STATUS_RECOVERY_DISCARDING', 'icon-spinner icon-spin'],
+    'canonical-preparing'     => ['COM_AUTOSAVE_STATUS_CANONICAL_PREPARING', 'icon-spinner icon-spin'],
+    'canonical-submitting'    => ['COM_AUTOSAVE_STATUS_CANONICAL_SUBMITTING', 'icon-spinner icon-spin'],
+    'canonical-outcome-pending' => ['COM_AUTOSAVE_STATUS_CANONICAL_OUTCOME_PENDING', 'icon-spinner icon-spin'],
+    'canonical-failed'        => ['COM_AUTOSAVE_STATUS_CANONICAL_FAILED', 'icon-exclamation-triangle'],
+    'canonical-prepare-failed' => ['COM_AUTOSAVE_STATUS_CANONICAL_PREPARE_FAILED', 'icon-exclamation-triangle'],
+    'canonical-outcome-unknown' => ['COM_AUTOSAVE_STATUS_CANONICAL_OUTCOME_UNKNOWN', 'icon-exclamation-triangle'],
     'destroyed'               => ['COM_AUTOSAVE_STATUS_DESTROYED', 'icon-times'],
     'unknown'                 => ['COM_AUTOSAVE_STATUS_UNKNOWN', 'icon-info-circle'],
 ];

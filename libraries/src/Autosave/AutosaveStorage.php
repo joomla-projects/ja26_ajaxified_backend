@@ -28,14 +28,15 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  */
 final class AutosaveStorage implements AutosaveStorageInterface
 {
-    private const MAX_INSERT_ATTEMPTS       = 3;
-    private const MAX_ID_ATTEMPTS           = 3;
-    private const MAX_PAYLOAD_BYTES         = 16777215;
-    private const MAX_QUOTA_SLOTS           = 2147483647;
-    private const PAYLOAD_DIGEST_DOMAIN     = 'autosave:payload-digest:v1';
-    private const INSERT_PHASE_NONE         = 'none';
-    private const INSERT_PHASE_CONTINUATION = 'continuation_insert';
-    private const INSERT_PHASE_GENERATION   = 'generation_insert';
+    private const MAX_INSERT_ATTEMPTS         = 3;
+    private const MAX_ID_ATTEMPTS             = 3;
+    private const MAX_PAYLOAD_BYTES           = 16777215;
+    private const MAX_QUOTA_SLOTS             = 2147483647;
+    private const MAX_CANONICAL_OPERATION_TTL = 86400;
+    private const PAYLOAD_DIGEST_DOMAIN       = 'autosave:payload-digest:v1';
+    private const INSERT_PHASE_NONE           = 'none';
+    private const INSERT_PHASE_CONTINUATION   = 'continuation_insert';
+    private const INSERT_PHASE_GENERATION     = 'generation_insert';
 
     /**
      * Validated storage policy.
@@ -477,6 +478,12 @@ final class AutosaveStorage implements AutosaveStorageInterface
             $this->db->setQuery($query)->execute();
 
             if ((int) $this->db->getAffectedRows() !== 1) {
+                $current = $this->loadOwnedGeneration($userId, $continuationId, $generationId);
+
+                if ($current !== null && $current['state'] === GenerationState::Closed->value) {
+                    throw $this->failure('draft_closed', 'The Autosave draft was closed for a canonical action.');
+                }
+
                 throw new \RuntimeException('The Autosave generation changed during preservation.');
             }
 
@@ -652,6 +659,506 @@ final class AutosaveStorage implements AutosaveStorageInterface
     }
 
     /**
+     * Preserve the exact submitted snapshot and durably close its generation.
+     */
+    public function prepareCanonicalAction(
+        int $userId,
+        string $continuationId,
+        string $generationId,
+        string $context,
+        string $targetId,
+        string $baseRevision,
+        int $clientRevision,
+        array $payload,
+        int $schemaVersion,
+        string $intent,
+        Date $now
+    ): array {
+        $this->validateOwnedOperation($userId, $continuationId, $generationId, $now);
+        $this->validateBinding($context, $targetId, $baseRevision);
+        $this->validateCanonicalIntent($intent);
+
+        if ($clientRevision < 1 || $schemaVersion < 1) {
+            throw new \InvalidArgumentException('The Autosave canonical revision values are invalid.');
+        }
+
+        $encodedPayload     = $this->encodePayload($payload, $schemaVersion);
+        $transactionStarted = false;
+
+        try {
+            $this->db->transactionStart();
+            $transactionStarted = true;
+            $generation         = $this->loadOwnedGeneration($userId, $continuationId, $generationId);
+
+            if ($generation === null) {
+                throw $this->privateNotFound();
+            }
+
+            if ($generation['context'] !== $context || $generation['target_id'] !== $targetId) {
+                throw $this->privateNotFound();
+            }
+
+            if (!hash_equals($generation['base_revision'], $baseRevision)) {
+                throw $this->failure('base_revision_conflict', 'The Autosave base revision does not match.');
+            }
+
+            if ($generation['state'] === GenerationState::Closed->value) {
+                $operation = $this->loadCanonicalActionByGeneration((int) $generation['generation_pk'], $userId);
+
+                if (
+                    $operation === null
+                    || $operation['intent'] !== $intent
+                    || (int) $generation['client_revision'] !== $clientRevision
+                    || (int) $generation['payload_schema_version'] !== $schemaVersion
+                    || !hash_equals((string) $generation['payload_digest'], $encodedPayload['digest'])
+                    || $generation['payload'] !== $encodedPayload['encoded']
+                ) {
+                    throw $this->failure(
+                        'canonical_action_conflict',
+                        'The Autosave canonical action conflicts with an existing preparation.'
+                    );
+                }
+
+                $this->db->transactionCommit();
+                $transactionStarted = false;
+
+                return $this->formatPreparedCanonicalAction($operation);
+            }
+
+            if ($generation['state'] !== GenerationState::Active->value) {
+                throw $this->failure('draft_terminal', 'The Autosave draft is no longer mutable.');
+            }
+
+            if ($this->isExpired($generation, $now)) {
+                if ($this->terminalize($generationId, $userId, GenerationState::Expired, $now) !== 1) {
+                    throw new \RuntimeException('The Autosave generation changed during expiry.');
+                }
+
+                $this->db->transactionCommit();
+                $transactionStarted = false;
+
+                throw $this->failure('draft_expired', 'The Autosave draft has expired.');
+            }
+
+            $storedRevision = (int) $generation['client_revision'];
+            $storedSchema   = $generation['payload_schema_version'] === null
+                ? null
+                : (int) $generation['payload_schema_version'];
+
+            if ($clientRevision < $storedRevision) {
+                throw $this->failure('stale_client_revision', 'The Autosave client revision is stale.');
+            }
+
+            if (
+                $clientRevision === $storedRevision
+                && ($storedSchema !== $schemaVersion
+                    || $generation['payload_digest'] === null
+                    || !hash_equals($generation['payload_digest'], $encodedPayload['digest'])
+                    || $generation['payload'] !== $encodedPayload['encoded'])
+            ) {
+                throw $this->failure(
+                    'revision_conflict',
+                    'The Autosave client revision contains different draft content.'
+                );
+            }
+
+            if ($storedSchema !== null && $storedSchema !== $schemaVersion) {
+                throw $this->failure(
+                    'schema_version_conflict',
+                    'The Autosave payload schema version does not match.'
+                );
+            }
+
+            $nowSql      = $now->toSql();
+            $activeState = GenerationState::Active->value;
+            $closedState = GenerationState::Closed->value;
+            $close       = $this->db->createQuery()
+                ->update($this->db->quoteName('#__autosave_generations'))
+                ->set(
+                    [
+                        $this->db->quoteName('state') . ' = :closed_state',
+                        $this->db->quoteName('client_revision') . ' = :client_revision',
+                        $this->db->quoteName('payload') . ' = :payload',
+                        $this->db->quoteName('payload_digest') . ' = :payload_digest',
+                        $this->db->quoteName('payload_schema_version') . ' = :schema_version',
+                        $this->db->quoteName('updated_at') . ' = :updated_at',
+                        $this->db->quoteName('closed_at') . ' = :closed_at',
+                        $this->db->quoteName('active_marker') . ' = NULL',
+                        $this->db->quoteName('quota_slot') . ' = NULL',
+                    ]
+                )
+                ->where($this->db->quoteName('public_id') . ' = :generation_id')
+                ->where($this->db->quoteName('user_id') . ' = :user_id')
+                ->where($this->db->quoteName('state') . ' = :active_state')
+                ->where($this->db->quoteName('client_revision') . ' = :stored_revision')
+                ->where($this->db->quoteName('base_revision') . ' = :base_revision')
+                ->bind(':closed_state', $closedState)
+                ->bind(':client_revision', $clientRevision, ParameterType::INTEGER)
+                ->bind(':payload', $encodedPayload['encoded'])
+                ->bind(':payload_digest', $encodedPayload['digest'])
+                ->bind(':schema_version', $schemaVersion, ParameterType::INTEGER)
+                ->bind(':updated_at', $nowSql)
+                ->bind(':closed_at', $nowSql)
+                ->bind(':generation_id', $generationId)
+                ->bind(':user_id', $userId, ParameterType::INTEGER)
+                ->bind(':active_state', $activeState)
+                ->bind(':stored_revision', $storedRevision, ParameterType::INTEGER)
+                ->bind(':base_revision', $baseRevision);
+
+            $this->db->setQuery($close)->execute();
+
+            if ((int) $this->db->getAffectedRows() !== 1) {
+                throw $this->failure(
+                    'canonical_action_conflict',
+                    'The Autosave draft changed while preparing the canonical action.'
+                );
+            }
+
+            $operation = $this->insertCanonicalAction(
+                (int) $generation['continuation_pk'],
+                (int) $generation['generation_pk'],
+                $userId,
+                $context,
+                $targetId,
+                $intent,
+                $baseRevision,
+                $now
+            );
+
+            $this->db->transactionCommit();
+            $transactionStarted = false;
+
+            return $this->formatPreparedCanonicalAction($operation);
+        } catch (\Throwable $exception) {
+            if ($transactionStarted) {
+                $this->db->transactionRollback();
+            }
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * Inspect metadata-only canonical action state.
+     */
+    public function inspectCanonicalAction(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        Date $now
+    ): array {
+        return $this->formatCanonicalAction(
+            $this->inspectCanonicalActionRecord($userId, $operationId, $context, $targetId, $now)
+        );
+    }
+
+    /**
+     * Inspect one canonical action while retaining internal generation state.
+     */
+    private function inspectCanonicalActionRecord(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        Date $now
+    ): array {
+        $this->validateCanonicalOperationIdentity($userId, $operationId, $context, $targetId, $now);
+        $operation = $this->loadCanonicalAction($operationId, $userId);
+
+        if (
+            $operation === null
+            || $operation['context'] !== $context
+            || $operation['target_id'] !== $targetId
+        ) {
+            throw $this->canonicalActionNotFound();
+        }
+
+        if (
+            $operation['outcome'] === CanonicalActionState::Pending->value
+            && new Date($operation['expires_at'], 'UTC') <= $now
+        ) {
+            $unknown = CanonicalActionState::Unknown->value;
+            $pending = CanonicalActionState::Pending->value;
+            $nowSql  = $now->toSql();
+            $query   = $this->db->createQuery()
+                ->update($this->db->quoteName('#__autosave_canonical_actions'))
+                ->set(
+                    [
+                        $this->db->quoteName('outcome') . ' = :unknown',
+                        $this->db->quoteName('updated_at') . ' = :updated_at',
+                        $this->db->quoteName('completed_at') . ' = :completed_at',
+                    ]
+                )
+                ->where($this->db->quoteName('public_id') . ' = :operation_id')
+                ->where($this->db->quoteName('user_id') . ' = :user_id')
+                ->where($this->db->quoteName('outcome') . ' = :pending')
+                ->bind(':unknown', $unknown)
+                ->bind(':updated_at', $nowSql)
+                ->bind(':completed_at', $nowSql)
+                ->bind(':operation_id', $operationId)
+                ->bind(':user_id', $userId, ParameterType::INTEGER)
+                ->bind(':pending', $pending);
+            $this->db->setQuery($query)->execute();
+            $operation = $this->loadCanonicalAction($operationId, $userId);
+        }
+
+        return $operation;
+    }
+
+    /**
+     * Verify an operation before Joomla's canonical controller is invoked.
+     */
+    public function verifyCanonicalAction(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $currentBaseRevision,
+        Date $now
+    ): array {
+        $this->validateCanonicalIntent($intent);
+        $operation = $this->inspectCanonicalActionRecord($userId, $operationId, $context, $targetId, $now);
+
+        if ($operation['intent'] !== $intent) {
+            throw $this->failure('canonical_intent_conflict', 'The canonical action intent does not match.');
+        }
+
+        if ($operation['generation_state'] !== GenerationState::Closed->value) {
+            throw $this->failure(
+                'canonical_generation_not_closed',
+                'The canonical action generation is not durably closed.'
+            );
+        }
+
+        if ($operation['outcome'] !== CanonicalActionState::Pending->value) {
+            throw $this->failure('canonical_action_consumed', 'The canonical action is no longer pending.');
+        }
+
+        if (!hash_equals($operation['expected_base_revision'], $currentBaseRevision)) {
+            throw $this->failure('base_revision_conflict', 'The canonical base revision changed before submission.');
+        }
+
+        return [
+            'operation_id'           => $operation['operation_id'],
+            'intent'                 => $operation['intent'],
+            'outcome'                => $operation['outcome'],
+            'expected_base_revision' => $operation['expected_base_revision'],
+        ];
+    }
+
+    /**
+     * Atomically record canonical success and retire the submitted generation.
+     */
+    public function finalizeCanonicalActionSuccess(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $finalTargetId,
+        string $finalBaseRevision,
+        Date $now
+    ): array {
+        $this->validateCanonicalIntent($intent);
+        $this->validateCanonicalOperationIdentity($userId, $operationId, $context, $targetId, $now);
+        $this->validateOpaqueString($finalTargetId, 764, 'final target');
+        $this->validateOpaqueString($finalBaseRevision, 1020, 'final base revision');
+        $transactionStarted = false;
+
+        try {
+            $this->db->transactionStart();
+            $transactionStarted = true;
+            $operation          = $this->loadCanonicalAction($operationId, $userId);
+
+            if (
+                $operation === null
+                || $operation['context'] !== $context
+                || $operation['target_id'] !== $targetId
+            ) {
+                throw $this->canonicalActionNotFound();
+            }
+
+            if ($operation['intent'] !== $intent) {
+                throw $this->failure('canonical_intent_conflict', 'The canonical action intent does not match.');
+            }
+
+            if ($operation['outcome'] === CanonicalActionState::Successful->value) {
+                if (
+                    $operation['final_target_id'] !== $finalTargetId
+                    || !hash_equals((string) $operation['final_base_revision'], $finalBaseRevision)
+                ) {
+                    throw $this->failure('canonical_action_conflict', 'The canonical completion metadata conflicts.');
+                }
+
+                $this->db->transactionCommit();
+                $transactionStarted = false;
+
+                return $this->formatCanonicalSuccess($operation);
+            }
+
+            if ($operation['outcome'] !== CanonicalActionState::Pending->value) {
+                throw $this->failure('canonical_action_consumed', 'The canonical action is no longer pending.');
+            }
+
+            $nowSql     = $now->toSql();
+            $successful = CanonicalActionState::Successful->value;
+            $pending    = CanonicalActionState::Pending->value;
+            $complete   = $this->db->createQuery()
+                ->update($this->db->quoteName('#__autosave_canonical_actions'))
+                ->set(
+                    [
+                        $this->db->quoteName('outcome') . ' = :successful',
+                        $this->db->quoteName('final_target_id') . ' = :final_target_id',
+                        $this->db->quoteName('final_base_revision') . ' = :final_base_revision',
+                        $this->db->quoteName('updated_at') . ' = :updated_at',
+                        $this->db->quoteName('completed_at') . ' = :completed_at',
+                    ]
+                )
+                ->where($this->db->quoteName('public_id') . ' = :operation_id')
+                ->where($this->db->quoteName('user_id') . ' = :user_id')
+                ->where($this->db->quoteName('outcome') . ' = :pending')
+                ->bind(':successful', $successful)
+                ->bind(':final_target_id', $finalTargetId)
+                ->bind(':final_base_revision', $finalBaseRevision)
+                ->bind(':updated_at', $nowSql)
+                ->bind(':completed_at', $nowSql)
+                ->bind(':operation_id', $operationId)
+                ->bind(':user_id', $userId, ParameterType::INTEGER)
+                ->bind(':pending', $pending);
+            $this->db->setQuery($complete)->execute();
+
+            if ((int) $this->db->getAffectedRows() !== 1) {
+                throw new \RuntimeException('The canonical action changed during successful finalization.');
+            }
+
+            $closed       = GenerationState::Closed->value;
+            $retired      = GenerationState::Retired->value;
+            $generationPk = (int) $operation['generation_pk'];
+            $retainUntil  = (clone $now)
+                ->add(new \DateInterval('PT' . $this->policy['tombstone_retention'] . 'S'))
+                ->toSql();
+            $retire = $this->db->createQuery()
+                ->update($this->db->quoteName('#__autosave_generations'))
+                ->set(
+                    [
+                        $this->db->quoteName('state') . ' = :retired',
+                        $this->db->quoteName('payload') . ' = NULL',
+                        $this->db->quoteName('payload_digest') . ' = NULL',
+                        $this->db->quoteName('updated_at') . ' = :updated_at',
+                        $this->db->quoteName('terminal_at') . ' = :terminal_at',
+                        $this->db->quoteName('retain_until') . ' = :retain_until',
+                    ]
+                )
+                ->where($this->db->quoteName('id') . ' = :generation_pk')
+                ->where($this->db->quoteName('user_id') . ' = :user_id')
+                ->where($this->db->quoteName('state') . ' = :closed')
+                ->bind(':retired', $retired)
+                ->bind(':updated_at', $nowSql)
+                ->bind(':terminal_at', $nowSql)
+                ->bind(':retain_until', $retainUntil)
+                ->bind(':generation_pk', $generationPk, ParameterType::INTEGER)
+                ->bind(':user_id', $userId, ParameterType::INTEGER)
+                ->bind(':closed', $closed);
+            $this->db->setQuery($retire)->execute();
+
+            if ((int) $this->db->getAffectedRows() !== 1) {
+                throw new \RuntimeException('The submitted Autosave generation was not retired.');
+            }
+
+            $this->db->transactionCommit();
+            $transactionStarted = false;
+            $operation          = $this->loadCanonicalAction($operationId, $userId);
+
+            return $this->formatCanonicalSuccess($operation);
+        } catch (\Throwable $exception) {
+            if ($transactionStarted) {
+                $this->db->transactionRollback();
+            }
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * Record definitive canonical failure without reopening the generation.
+     */
+    public function finalizeCanonicalActionFailure(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $failureCode,
+        Date $now
+    ): array {
+        $this->validateCanonicalIntent($intent);
+        $this->validateCanonicalOperationIdentity($userId, $operationId, $context, $targetId, $now);
+        $this->validateOpaqueString($failureCode, 64, 'canonical failure code');
+        $operation = $this->loadCanonicalAction($operationId, $userId);
+
+        if (
+            $operation === null
+            || $operation['context'] !== $context
+            || $operation['target_id'] !== $targetId
+        ) {
+            throw $this->canonicalActionNotFound();
+        }
+
+        if ($operation['intent'] !== $intent) {
+            throw $this->failure('canonical_intent_conflict', 'The canonical action intent does not match.');
+        }
+
+        if ($operation['outcome'] === CanonicalActionState::Failed->value) {
+            return [
+                'operation_id' => $operationId,
+                'outcome'      => CanonicalActionState::Failed->value,
+                'failure_code' => (string) $operation['failure_code'],
+            ];
+        }
+
+        if ($operation['outcome'] !== CanonicalActionState::Pending->value) {
+            throw $this->failure('canonical_action_consumed', 'The canonical action is no longer pending.');
+        }
+
+        $failed  = CanonicalActionState::Failed->value;
+        $pending = CanonicalActionState::Pending->value;
+        $nowSql  = $now->toSql();
+        $query   = $this->db->createQuery()
+            ->update($this->db->quoteName('#__autosave_canonical_actions'))
+            ->set(
+                [
+                    $this->db->quoteName('outcome') . ' = :failed',
+                    $this->db->quoteName('failure_code') . ' = :failure_code',
+                    $this->db->quoteName('updated_at') . ' = :updated_at',
+                    $this->db->quoteName('completed_at') . ' = :completed_at',
+                ]
+            )
+            ->where($this->db->quoteName('public_id') . ' = :operation_id')
+            ->where($this->db->quoteName('user_id') . ' = :user_id')
+            ->where($this->db->quoteName('outcome') . ' = :pending')
+            ->bind(':failed', $failed)
+            ->bind(':failure_code', $failureCode)
+            ->bind(':updated_at', $nowSql)
+            ->bind(':completed_at', $nowSql)
+            ->bind(':operation_id', $operationId)
+            ->bind(':user_id', $userId, ParameterType::INTEGER)
+            ->bind(':pending', $pending);
+        $this->db->setQuery($query)->execute();
+
+        if ((int) $this->db->getAffectedRows() !== 1) {
+            throw new \RuntimeException('The canonical action changed during failure finalization.');
+        }
+
+        return [
+            'operation_id' => $operationId,
+            'outcome'      => $failed,
+            'failure_code' => $failureCode,
+        ];
+    }
+
+    /**
      * Validate initialization values before opening a transaction.
      */
     private function validateInitialization(
@@ -726,6 +1233,38 @@ final class AutosaveStorage implements AutosaveStorageInterface
         ) {
             throw new \InvalidArgumentException('The Autosave draft identity is invalid.');
         }
+    }
+
+    /**
+     * Validate one normalized canonical intent.
+     */
+    private function validateCanonicalIntent(string $intent): void
+    {
+        if (!\in_array($intent, ['apply', 'save-exit', 'save-new', 'save-copy'], true)) {
+            throw new \InvalidArgumentException('The Autosave canonical intent is invalid.');
+        }
+    }
+
+    /**
+     * Validate metadata-only operation identity and binding values.
+     */
+    private function validateCanonicalOperationIdentity(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        Date $now
+    ): void {
+        if (
+            $userId <= 0
+            || preg_match('/^[a-f0-9]{64}$/D', $operationId) !== 1
+            || $now->getOffset() !== 0
+        ) {
+            throw new \InvalidArgumentException('The Autosave canonical operation identity is invalid.');
+        }
+
+        $this->validateOpaqueString($context, 255, 'context');
+        $this->validateOpaqueString($targetId, 764, 'target');
     }
 
     /**
@@ -1009,9 +1548,11 @@ final class AutosaveStorage implements AutosaveStorageInterface
         $query = $this->db->createQuery()
             ->select(
                 [
+                    $this->db->quoteName('c.id', 'continuation_pk'),
                     $this->db->quoteName('c.public_id', 'continuation_id'),
                     $this->db->quoteName('c.context'),
                     $this->db->quoteName('c.target_id'),
+                    $this->db->quoteName('g.id', 'generation_pk'),
                     $this->db->quoteName('g.public_id', 'generation_id'),
                     $this->db->quoteName('g.base_revision'),
                     $this->db->quoteName('g.state'),
@@ -1022,6 +1563,7 @@ final class AutosaveStorage implements AutosaveStorageInterface
                     $this->db->quoteName('g.created_at'),
                     $this->db->quoteName('g.updated_at'),
                     $this->db->quoteName('g.expires_at'),
+                    $this->db->quoteName('g.closed_at'),
                     $this->db->quoteName('g.terminal_at'),
                     $this->db->quoteName('g.retain_until'),
                 ]
@@ -1042,6 +1584,196 @@ final class AutosaveStorage implements AutosaveStorageInterface
             ->bind(':generation_user_id', $userId, ParameterType::INTEGER);
 
         return $this->db->setQuery($query)->loadAssoc() ?: null;
+    }
+
+    /**
+     * Insert one opaque canonical action for a newly closed generation.
+     */
+    private function insertCanonicalAction(
+        int $continuationPk,
+        int $generationPk,
+        int $userId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $baseRevision,
+        Date $now
+    ): array {
+        $operationId = bin2hex(Crypt::genRandomBytes(32));
+        $nowSql      = $now->toSql();
+        $expiresAt   = (clone $now)
+            ->add(
+                new \DateInterval(
+                    'PT' . min($this->policy['idle_ttl'], self::MAX_CANONICAL_OPERATION_TTL) . 'S'
+                )
+            )
+            ->toSql();
+        $pending = CanonicalActionState::Pending->value;
+        $query   = $this->db->createQuery()
+            ->insert($this->db->quoteName('#__autosave_canonical_actions'))
+            ->columns(
+                [
+                    $this->db->quoteName('public_id'),
+                    $this->db->quoteName('user_id'),
+                    $this->db->quoteName('continuation_id'),
+                    $this->db->quoteName('generation_id'),
+                    $this->db->quoteName('context'),
+                    $this->db->quoteName('target_id'),
+                    $this->db->quoteName('intent'),
+                    $this->db->quoteName('expected_base_revision'),
+                    $this->db->quoteName('outcome'),
+                    $this->db->quoteName('created_at'),
+                    $this->db->quoteName('updated_at'),
+                    $this->db->quoteName('expires_at'),
+                ]
+            )
+            ->values(
+                ':public_id, :user_id, :continuation_id, :generation_id, :context, :target_id, '
+                . ':intent, :expected_base_revision, :outcome, :created_at, :updated_at, :expires_at'
+            )
+            ->bind(':public_id', $operationId)
+            ->bind(':user_id', $userId, ParameterType::INTEGER)
+            ->bind(':continuation_id', $continuationPk, ParameterType::INTEGER)
+            ->bind(':generation_id', $generationPk, ParameterType::INTEGER)
+            ->bind(':context', $context)
+            ->bind(':target_id', $targetId)
+            ->bind(':intent', $intent)
+            ->bind(':expected_base_revision', $baseRevision)
+            ->bind(':outcome', $pending)
+            ->bind(':created_at', $nowSql)
+            ->bind(':updated_at', $nowSql)
+            ->bind(':expires_at', $expiresAt);
+        $this->db->setQuery($query)->execute();
+
+        return $this->loadCanonicalAction($operationId, $userId)
+            ?? throw new \RuntimeException('The canonical action could not be loaded after insertion.');
+    }
+
+    /**
+     * Load one canonical action by its opaque owner-bound identity.
+     */
+    private function loadCanonicalAction(string $operationId, int $userId): ?array
+    {
+        $query = $this->canonicalActionQuery()
+            ->where($this->db->quoteName('o.public_id') . ' = :operation_id')
+            ->where($this->db->quoteName('o.user_id') . ' = :user_id')
+            ->bind(':operation_id', $operationId)
+            ->bind(':user_id', $userId, ParameterType::INTEGER);
+
+        return $this->db->setQuery($query)->loadAssoc() ?: null;
+    }
+
+    /**
+     * Load the idempotent action owned by one generation.
+     */
+    private function loadCanonicalActionByGeneration(int $generationPk, int $userId): ?array
+    {
+        $query = $this->canonicalActionQuery()
+            ->where($this->db->quoteName('o.generation_id') . ' = :generation_id')
+            ->where($this->db->quoteName('o.user_id') . ' = :user_id')
+            ->bind(':generation_id', $generationPk, ParameterType::INTEGER)
+            ->bind(':user_id', $userId, ParameterType::INTEGER);
+
+        return $this->db->setQuery($query)->loadAssoc() ?: null;
+    }
+
+    /**
+     * Build the metadata-only canonical action query.
+     */
+    private function canonicalActionQuery()
+    {
+        return $this->db->createQuery()
+            ->select(
+                [
+                    $this->db->quoteName('o.public_id', 'operation_id'),
+                    $this->db->quoteName('o.user_id'),
+                    $this->db->quoteName('o.generation_id', 'generation_pk'),
+                    $this->db->quoteName('c.public_id', 'continuation_id'),
+                    $this->db->quoteName('g.public_id', 'generation_id'),
+                    $this->db->quoteName('g.state', 'generation_state'),
+                    $this->db->quoteName('o.context'),
+                    $this->db->quoteName('o.target_id'),
+                    $this->db->quoteName('o.intent'),
+                    $this->db->quoteName('o.expected_base_revision'),
+                    $this->db->quoteName('o.outcome'),
+                    $this->db->quoteName('o.final_target_id'),
+                    $this->db->quoteName('o.final_base_revision'),
+                    $this->db->quoteName('o.failure_code'),
+                    $this->db->quoteName('o.created_at'),
+                    $this->db->quoteName('o.updated_at'),
+                    $this->db->quoteName('o.expires_at'),
+                    $this->db->quoteName('o.completed_at'),
+                ]
+            )
+            ->from($this->db->quoteName('#__autosave_canonical_actions', 'o'))
+            ->join(
+                'INNER',
+                $this->db->quoteName('#__autosave_generations', 'g')
+                . ' ON ' . $this->db->quoteName('g.id') . ' = ' . $this->db->quoteName('o.generation_id')
+            )
+            ->join(
+                'INNER',
+                $this->db->quoteName('#__autosave_continuations', 'c')
+                . ' ON ' . $this->db->quoteName('c.id') . ' = ' . $this->db->quoteName('o.continuation_id')
+            );
+    }
+
+    /**
+     * Format a successful preparation without exposing its payload.
+     */
+    private function formatPreparedCanonicalAction(array $operation): array
+    {
+        return [
+            'operation_id' => $operation['operation_id'],
+            'intent'       => $operation['intent'],
+            'outcome'      => $operation['outcome'],
+            'expires_at'   => $operation['expires_at'],
+        ];
+    }
+
+    /**
+     * Format metadata-only operation state.
+     */
+    private function formatCanonicalAction(array $operation): array
+    {
+        return [
+            'operation_id'           => $operation['operation_id'],
+            'context'                => $operation['context'],
+            'target_id'              => $operation['target_id'],
+            'continuation_id'        => $operation['continuation_id'],
+            'generation_id'          => $operation['generation_id'],
+            'intent'                 => $operation['intent'],
+            'outcome'                => $operation['outcome'],
+            'expected_base_revision' => $operation['expected_base_revision'],
+            'final_target_id'        => $operation['final_target_id'],
+            'final_base_revision'    => $operation['final_base_revision'],
+            'failure_code'           => $operation['failure_code'],
+            'created_at'             => $operation['created_at'],
+            'updated_at'             => $operation['updated_at'],
+            'expires_at'             => $operation['expires_at'],
+            'completed_at'           => $operation['completed_at'],
+        ];
+    }
+
+    /**
+     * Format idempotent successful completion metadata.
+     */
+    private function formatCanonicalSuccess(array $operation): array
+    {
+        return [
+            'operation_id'        => $operation['operation_id'],
+            'outcome'             => CanonicalActionState::Successful->value,
+            'final_target_id'     => $operation['final_target_id'],
+            'final_base_revision' => $operation['final_base_revision'],
+        ];
+    }
+
+    /**
+     * Return a privacy-preserving missing operation failure.
+     */
+    private function canonicalActionNotFound(): AutosaveException
+    {
+        return $this->failure('canonical_action_not_found', 'The canonical action was not found.');
     }
 
     /**
@@ -1317,13 +2049,14 @@ final class AutosaveStorage implements AutosaveStorageInterface
                     $this->db->quoteName('created_at'),
                     $this->db->quoteName('updated_at'),
                     $this->db->quoteName('expires_at'),
+                    $this->db->quoteName('closed_at'),
                     $this->db->quoteName('terminal_at'),
                     $this->db->quoteName('retain_until'),
                 ]
             )
             ->values(
                 ':public_id, :continuation_id, :user_id, :base_revision, :state, :client_revision, '
-                . 'NULL, NULL, NULL, :active_marker, :quota_slot, :created_at, :updated_at, :expires_at, NULL, NULL'
+                . 'NULL, NULL, NULL, :active_marker, :quota_slot, :created_at, :updated_at, :expires_at, NULL, NULL, NULL'
             )
             ->bind(':public_id', $publicId)
             ->bind(':continuation_id', $continuationId, ParameterType::INTEGER)

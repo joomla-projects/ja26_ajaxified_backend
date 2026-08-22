@@ -115,7 +115,9 @@ final class ArticleAutosaveProvider implements AutosaveProviderInterface
             AutosaveOperation::Initialize,
             AutosaveOperation::Preserve,
             AutosaveOperation::Detect,
-            AutosaveOperation::Read => null,
+            AutosaveOperation::Read,
+            AutosaveOperation::PrepareCanonicalAction,
+            AutosaveOperation::QueryCanonicalAction => null,
         };
 
         $article = $this->loadArticle($targetId);

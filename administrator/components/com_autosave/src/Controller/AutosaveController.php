@@ -46,12 +46,14 @@ final class AutosaveController
     public function execute(string $operation, array $request, User $user, Date $now): ?array
     {
         return match ($operation) {
-            'initialize' => $this->initialize($request, $user, $now),
-            'preserve'   => $this->preserve($request, $user, $now),
-            'detect'     => $this->detect($request, $user, $now),
-            'read'       => $this->read($request, $user, $now),
-            'discard'    => $this->discard($request, $user, $now),
-            default      => throw new \InvalidArgumentException('The Autosave operation is unsupported.'),
+            'initialize'                => $this->initialize($request, $user, $now),
+            'preserve'                  => $this->preserve($request, $user, $now),
+            'detect'                    => $this->detect($request, $user, $now),
+            'read'                      => $this->read($request, $user, $now),
+            'discard'                   => $this->discard($request, $user, $now),
+            'prepareCanonicalAction'    => $this->prepareCanonicalAction($request, $user, $now),
+            'getCanonicalActionOutcome' => $this->getCanonicalActionOutcome($request, $user, $now),
+            default                     => throw new \InvalidArgumentException('The Autosave operation is unsupported.'),
         };
     }
 
@@ -111,6 +113,64 @@ final class AutosaveController
         $this->requireStrings($request, ['continuation_id', 'generation_id']);
 
         return $this->lifecycle->discard($user, $request['continuation_id'], $request['generation_id'], $now);
+    }
+
+    private function prepareCanonicalAction(array $request, User $user, Date $now): array
+    {
+        $this->requireExactKeys(
+            $request,
+            [
+                'context',
+                'target_id',
+                'continuation_id',
+                'generation_id',
+                'client_revision',
+                'payload_schema_version',
+                'payload',
+                'intent',
+                'expected_base_revision',
+            ]
+        );
+        $this->requireStrings(
+            $request,
+            [
+                'context',
+                'target_id',
+                'continuation_id',
+                'generation_id',
+                'intent',
+                'expected_base_revision',
+            ]
+        );
+        $this->requirePositiveIntegers($request, ['client_revision', 'payload_schema_version']);
+
+        return $this->lifecycle->prepareCanonicalAction(
+            $user,
+            $request['context'],
+            $request['target_id'],
+            $request['continuation_id'],
+            $request['generation_id'],
+            $request['client_revision'],
+            $request['payload'],
+            $request['payload_schema_version'],
+            $request['intent'],
+            $request['expected_base_revision'],
+            $now
+        );
+    }
+
+    private function getCanonicalActionOutcome(array $request, User $user, Date $now): array
+    {
+        $this->requireExactKeys($request, ['operation_id', 'context', 'target_id']);
+        $this->requireStrings($request, ['operation_id', 'context', 'target_id']);
+
+        return $this->lifecycle->getCanonicalActionOutcome(
+            $user,
+            $request['operation_id'],
+            $request['context'],
+            $request['target_id'],
+            $now
+        );
     }
 
     private function requireExactKeys(array $request, array $expected): void

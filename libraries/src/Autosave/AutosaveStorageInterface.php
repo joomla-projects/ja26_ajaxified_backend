@@ -117,4 +117,119 @@ interface AutosaveStorageInterface
      * @since   __DEPLOY_VERSION__
      */
     public function discard(int $userId, string $continuationId, string $generationId, Date $now): string;
+
+    /**
+     * Preserve the exact submitted snapshot, close its generation, and create
+     * or return one idempotent canonical action operation.
+     *
+     * @return  array{operation_id: string, intent: string, outcome: string, expires_at: string}
+     *
+     * @throws  AutosaveException
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function prepareCanonicalAction(
+        int $userId,
+        string $continuationId,
+        string $generationId,
+        string $context,
+        string $targetId,
+        string $baseRevision,
+        int $clientRevision,
+        array $payload,
+        int $schemaVersion,
+        string $intent,
+        Date $now
+    ): array;
+
+    /**
+     * Inspect one owner-bound canonical action without exposing draft data.
+     *
+     * @return  array{
+     *     operation_id: string,
+     *     context: string,
+     *     target_id: string,
+     *     continuation_id: string,
+     *     generation_id: string,
+     *     intent: string,
+     *     outcome: string,
+     *     expected_base_revision: string,
+     *     final_target_id: ?string,
+     *     final_base_revision: ?string,
+     *     failure_code: ?string,
+     *     created_at: string,
+     *     updated_at: string,
+     *     expires_at: string,
+     *     completed_at: ?string
+     * }
+     *
+     * @throws  AutosaveException
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function inspectCanonicalAction(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        Date $now
+    ): array;
+
+    /**
+     * Verify that one operation can authorize the submitted canonical task.
+     *
+     * @return  array{operation_id: string, intent: string, outcome: string, expected_base_revision: string}
+     *
+     * @throws  AutosaveException
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function verifyCanonicalAction(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $currentBaseRevision,
+        Date $now
+    ): array;
+
+    /**
+     * Record authoritative success and retire only the submitted generation.
+     *
+     * @return  array{operation_id: string, outcome: string, final_target_id: string, final_base_revision: string}
+     *
+     * @throws  AutosaveException
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function finalizeCanonicalActionSuccess(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $finalTargetId,
+        string $finalBaseRevision,
+        Date $now
+    ): array;
+
+    /**
+     * Record a definitive canonical failure while retaining the closed draft.
+     *
+     * @return  array{operation_id: string, outcome: string, failure_code: string}
+     *
+     * @throws  AutosaveException
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function finalizeCanonicalActionFailure(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $failureCode,
+        Date $now
+    ): array;
 }

@@ -13,6 +13,7 @@
         "core",
         "editors",
         "com_autosave.runtime",
+        "com_autosave.canonical-actions",
         "com_autosave.ui"
       ],
       "attributes": {

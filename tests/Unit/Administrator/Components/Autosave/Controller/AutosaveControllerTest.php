@@ -88,6 +88,64 @@ class AutosaveControllerTest extends UnitTestCase
         $this->assertSame($provider->normalized, $storage->calls['preserve'][0][7]);
     }
 
+    public function testPrepareCanonicalActionUsesExactValidatedSnapshotAndBinding(): void
+    {
+        [$controller, $storage, $provider] = $this->controller();
+        $storage->canonicalResult          = [
+            'operation_id' => str_repeat('c', 64),
+            'intent'       => 'apply',
+            'outcome'      => 'pending',
+            'expires_at'   => '2026-08-01 10:00:00',
+        ];
+        $payload = ['articletext' => '<p>submitted</p>'];
+
+        $result = $controller->execute(
+            'prepareCanonicalAction',
+            [
+                'context'                => 'com_example.record',
+                'target_id'              => '42',
+                'continuation_id'        => str_repeat('a', 64),
+                'generation_id'          => str_repeat('b', 64),
+                'client_revision'        => 2,
+                'payload_schema_version' => 1,
+                'payload'                => $payload,
+                'intent'                 => 'apply',
+                'expected_base_revision' => 'base-1',
+            ],
+            $this->user(),
+            $this->now()
+        );
+
+        $this->assertSame($storage->canonicalResult, $result);
+        $this->assertSame([$payload, 1], $provider->normalizationArguments);
+        $this->assertSame($provider->normalized, $storage->calls['prepareCanonicalAction'][0][7]);
+        $this->assertSame('apply', $storage->calls['prepareCanonicalAction'][0][9]);
+    }
+
+    public function testCanonicalOutcomeQueryReturnsMetadataOnly(): void
+    {
+        [$controller, $storage]   = $this->controller();
+        $storage->canonicalResult = [
+            'operation_id' => str_repeat('c', 64),
+            'outcome'      => 'pending',
+        ];
+
+        $result = $controller->execute(
+            'getCanonicalActionOutcome',
+            [
+                'operation_id' => str_repeat('c', 64),
+                'context'      => 'com_example.record',
+                'target_id'    => '42',
+            ],
+            $this->user(),
+            $this->now()
+        );
+
+        $this->assertSame($storage->canonicalResult, $result);
+        $this->assertSame(str_repeat('c', 64), $storage->calls['inspectCanonicalAction'][0][1]);
+        $this->assertArrayNotHasKey('payload', $result);
+    }
+
     /**
      * @dataProvider invalidEnvelopeProvider
      */
@@ -136,6 +194,28 @@ class AutosaveControllerTest extends UnitTestCase
             'read client binding' => [
                 'read',
                 ['continuation_id' => 'a', 'generation_id' => 'b', 'target_id' => '42'],
+            ],
+            'prepare missing intent' => [
+                'prepareCanonicalAction',
+                [
+                    'context'                => 'com_example.record',
+                    'target_id'              => '42',
+                    'continuation_id'        => 'a',
+                    'generation_id'          => 'b',
+                    'client_revision'        => 1,
+                    'payload_schema_version' => 1,
+                    'payload'                => [],
+                    'expected_base_revision' => 'base-1',
+                ],
+            ],
+            'outcome extra payload' => [
+                'getCanonicalActionOutcome',
+                [
+                    'operation_id' => 'c',
+                    'context'      => 'com_example.record',
+                    'target_id'    => '42',
+                    'payload'      => [],
+                ],
             ],
         ];
     }

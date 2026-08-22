@@ -24,6 +24,8 @@ final class LifecycleTestStorage implements AutosaveStorageInterface
     public ?\Throwable $detectFailure     = null;
     public ?\Throwable $preserveFailure   = null;
     public ?\Throwable $discardFailure    = null;
+    public array $canonicalResult         = [];
+    public ?\Throwable $canonicalFailure  = null;
     private array $events;
 
     public function __construct(array &$events)
@@ -105,5 +107,98 @@ final class LifecycleTestStorage implements AutosaveStorageInterface
         }
 
         return $this->discardStatus;
+    }
+
+    public function prepareCanonicalAction(
+        int $userId,
+        string $continuationId,
+        string $generationId,
+        string $context,
+        string $targetId,
+        string $baseRevision,
+        int $clientRevision,
+        array $payload,
+        int $schemaVersion,
+        string $intent,
+        Date $now
+    ): array {
+        $this->events[]                          = 'storage.prepareCanonicalAction';
+        $this->calls['prepareCanonicalAction'][] = \func_get_args();
+        if ($this->canonicalFailure !== null) {
+            throw $this->canonicalFailure;
+        }
+
+        return $this->canonicalResult;
+    }
+
+    public function inspectCanonicalAction(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        Date $now
+    ): array {
+        $this->events[]                          = 'storage.inspectCanonicalAction';
+        $this->calls['inspectCanonicalAction'][] = \func_get_args();
+        if ($this->canonicalFailure !== null) {
+            throw $this->canonicalFailure;
+        }
+
+        return $this->canonicalResult;
+    }
+
+    public function verifyCanonicalAction(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $currentBaseRevision,
+        Date $now
+    ): array {
+        $this->events[]                         = 'storage.verifyCanonicalAction';
+        $this->calls['verifyCanonicalAction'][] = \func_get_args();
+        if ($this->canonicalFailure !== null) {
+            throw $this->canonicalFailure;
+        }
+
+        return $this->canonicalResult;
+    }
+
+    public function finalizeCanonicalActionSuccess(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $finalTargetId,
+        string $finalBaseRevision,
+        Date $now
+    ): array {
+        $this->events[]                                  = 'storage.finalizeCanonicalActionSuccess';
+        $this->calls['finalizeCanonicalActionSuccess'][] = \func_get_args();
+        if ($this->canonicalFailure !== null) {
+            throw $this->canonicalFailure;
+        }
+
+        return $this->canonicalResult;
+    }
+
+    public function finalizeCanonicalActionFailure(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $targetId,
+        string $intent,
+        string $failureCode,
+        Date $now
+    ): array {
+        $this->events[]                                  = 'storage.finalizeCanonicalActionFailure';
+        $this->calls['finalizeCanonicalActionFailure'][] = \func_get_args();
+        if ($this->canonicalFailure !== null) {
+            throw $this->canonicalFailure;
+        }
+
+        return $this->canonicalResult;
     }
 }

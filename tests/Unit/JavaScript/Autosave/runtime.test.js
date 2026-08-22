@@ -137,6 +137,24 @@ const recovered = {
   payload: { title: 'Recovered' },
 };
 
+const successfulOutcome = {
+  operation_id: 'operation',
+  context: identity.context,
+  target_id: identity.target_id,
+  continuation_id: identity.continuation_id,
+  generation_id: identity.generation_id,
+  intent: 'apply',
+  outcome: 'successful',
+  expected_base_revision: identity.base_revision,
+  final_target_id: identity.target_id,
+  final_base_revision: 'base-2',
+  failure_code: null,
+  created_at: '2026-08-05T00:00:00Z',
+  updated_at: '2026-08-05T00:00:01Z',
+  expires_at: '2026-08-06T00:00:00Z',
+  completed_at: '2026-08-05T00:00:01Z',
+};
+
 const apiFailure = (classification, options = {}) => Object.assign(
   new Error('API failure'),
   {
@@ -155,6 +173,8 @@ const createApi = (overrides = {}) => {
     detect: [],
     read: [],
     discard: [],
+    prepareCanonicalAction: [],
+    getCanonicalActionOutcome: [],
   };
   const api = { calls };
   const defaults = {
@@ -163,6 +183,13 @@ const createApi = (overrides = {}) => {
     detect: async () => null,
     read: async () => recovered,
     discard: async () => ({ status: 'discarded' }),
+    prepareCanonicalAction: async () => ({
+      operation_id: 'operation',
+      intent: 'apply',
+      outcome: 'pending',
+      expires_at: '2026-08-06T00:00:00Z',
+    }),
+    getCanonicalActionOutcome: async () => successfulOutcome,
   };
 
   Object.keys(calls).forEach((operation) => {
@@ -224,7 +251,7 @@ const createRuntime = ({
   online = true,
   hidden = false,
   configuration = {},
-  identities = ['document-id', 'initialization-key'],
+  identities = ['document-id', 'initialization-key', 'successor-initialization-key'],
 } = {}) => {
   const clock = new FakeClock();
   const onlineSource = new FakeSource();
@@ -959,6 +986,401 @@ test('duplicate-tab simulation produces different server continuations', async (
 
   assert.notEqual(first.runtime.identity.continuationId, second.runtime.identity.continuationId);
   assert.notEqual(first.runtime.identity.generationId, second.runtime.identity.generationId);
+});
+
+test('canonical preparation initializes lazily, captures one exact snapshot and closes with a higher revision', async () => {
+  const api = createApi();
+  const adapter = createAdapter({ value: { title: 'Submitted' } });
+  const harness = createRuntime({ api, adapter });
+  harness.runtime.start();
+
+  const prepared = await harness.runtime.prepareCanonicalAction('apply');
+
+  assert.equal(adapter.captures, 1);
+  assert.equal(api.calls.initialize.length, 1);
+  assert.equal(api.calls.prepareCanonicalAction.length, 1);
+  assert.deepEqual(api.calls.prepareCanonicalAction[0].request, {
+    context: identity.context,
+    target_id: identity.target_id,
+    continuation_id: identity.continuation_id,
+    generation_id: identity.generation_id,
+    client_revision: 1,
+    payload_schema_version: 1,
+    payload: { title: 'Submitted' },
+    intent: 'apply',
+    expected_base_revision: identity.base_revision,
+  });
+  assert.deepEqual(prepared, {
+    operationId: 'operation',
+    intent: 'apply',
+    submittedChangeSequence: 0,
+  });
+  assert.equal(harness.runtime.state.status, 'canonical-submitting');
+});
+
+test('canonical preparation waits for an in-flight preserve and late scheduling remains paused', async () => {
+  const preservation = deferred();
+  const api = createApi({ preserve: () => preservation.promise });
+  const harness = createRuntime({ api });
+  harness.runtime.start();
+  harness.adapter.edit();
+  await harness.clock.tick(10);
+  const preparation = harness.runtime.prepareCanonicalAction('apply');
+  await settle();
+
+  assert.equal(api.calls.prepareCanonicalAction.length, 0);
+  preservation.resolve({ status: 'accepted' });
+  await preparation;
+
+  assert.equal(api.calls.prepareCanonicalAction.length, 1);
+  assert.equal(api.calls.preserve.length, 1);
+});
+
+test('uncertain canonical preparation retries the exact snapshot and revision idempotently', async () => {
+  let attempts = 0;
+  const api = createApi({
+    prepareCanonicalAction: async () => {
+      attempts += 1;
+
+      if (attempts === 1) {
+        throw apiFailure('network-failure', { retryable: true, outcomeUnknown: true });
+      }
+
+      return {
+        operation_id: 'operation',
+        intent: 'apply',
+        outcome: 'pending',
+        expires_at: '2026-08-06T00:00:00Z',
+      };
+    },
+  });
+  const harness = createRuntime({ api });
+  harness.runtime.start();
+  const preparation = harness.runtime.prepareCanonicalAction('apply');
+  await settle();
+  assert.equal(api.calls.prepareCanonicalAction.length, 1);
+  await harness.clock.tick(5);
+  await preparation;
+
+  assert.equal(api.calls.prepareCanonicalAction.length, 2);
+  assert.deepEqual(
+    api.calls.prepareCanonicalAction[0].request,
+    api.calls.prepareCanonicalAction[1].request,
+  );
+});
+
+test('offline and reconnect during canonical preparation preserve the canonical state and exact retry', async () => {
+  const firstAttempt = deferred();
+  let attempts = 0;
+  const api = createApi({
+    prepareCanonicalAction: async () => {
+      attempts += 1;
+
+      if (attempts === 1) {
+        return firstAttempt.promise;
+      }
+
+      return {
+        operation_id: 'operation',
+        intent: 'apply',
+        outcome: 'pending',
+        expires_at: '2026-08-06T00:00:00Z',
+      };
+    },
+  });
+  const harness = createRuntime({ api });
+  harness.runtime.start();
+  const preparation = harness.runtime.prepareCanonicalAction('apply');
+  await settle();
+
+  harness.setOnline(false);
+  assert.equal(harness.runtime.state.status, 'offline');
+  firstAttempt.reject(apiFailure('network-failure', {
+    retryable: true,
+    outcomeUnknown: true,
+  }));
+  await settle();
+  harness.setOnline(true);
+  assert.equal(harness.runtime.state.status, 'canonical-preparing');
+  await harness.clock.tick(5);
+  await preparation;
+
+  assert.equal(harness.runtime.state.status, 'canonical-submitting');
+  assert.equal(api.calls.prepareCanonicalAction.length, 2);
+  assert.deepEqual(
+    api.calls.prepareCanonicalAction[0].request,
+    api.calls.prepareCanonicalAction[1].request,
+  );
+});
+
+test('reconnect restores an in-flight canonical outcome state without starting ordinary preservation', async () => {
+  const pendingOutcome = deferred();
+  const api = createApi({
+    getCanonicalActionOutcome: () => pendingOutcome.promise,
+  });
+  const harness = createRuntime({ api });
+  harness.runtime.start();
+  const prepared = await harness.runtime.prepareCanonicalAction('apply');
+  const query = harness.runtime.queryCanonicalActionOutcome(prepared.operationId);
+  await settle();
+
+  harness.setOnline(false);
+  assert.equal(harness.runtime.state.status, 'offline');
+  harness.setOnline(true);
+  assert.equal(harness.runtime.state.status, 'canonical-outcome-pending');
+  assert.equal(api.calls.preserve.length, 0);
+
+  pendingOutcome.resolve(successfulOutcome);
+  const outcome = await query;
+  assert.equal(harness.runtime.reconcileCanonicalAction(outcome), true);
+  assert.equal(harness.runtime.state.status, 'clean');
+});
+
+test('unresolved recovery blocks canonical preparation and emits metadata-only focus request', async () => {
+  const api = createApi({ detect: async () => candidate });
+  const harness = createRuntime({ api, detectOnStart: true });
+  harness.runtime.start();
+  await settle();
+
+  await assert.rejects(
+    harness.runtime.prepareCanonicalAction('save-exit'),
+    (error) => error.code === 'recovery_resolution_required',
+  );
+  assert.equal(api.calls.prepareCanonicalAction.length, 0);
+  const focus = harness.eventTarget.events.at(-1);
+  assert.equal(focus.type, 'joomla:autosave-recoveryfocus');
+  assert.equal(JSON.stringify(focus).includes('Recovered'), false);
+});
+
+test('successful canonical reconciliation becomes clean when no later edits exist', async () => {
+  const harness = createRuntime();
+  harness.runtime.start();
+  const prepared = await harness.runtime.prepareCanonicalAction('apply');
+  const outcome = await harness.runtime.queryCanonicalActionOutcome(prepared.operationId);
+
+  assert.equal(harness.runtime.reconcileCanonicalAction(outcome), true);
+  assert.equal(harness.runtime.state.status, 'clean');
+  assert.equal(harness.runtime.state.dirty, false);
+  assert.equal(harness.runtime.state.baseRevision, 'base-2');
+  assert.equal(harness.runtime.state.canonicalAction, null);
+});
+
+test('canonical reconciliation is idempotent and rejects stale or malformed completions before mutation', async () => {
+  const harness = createRuntime();
+  harness.runtime.start();
+  const prepared = await harness.runtime.prepareCanonicalAction('apply');
+  const before = harness.runtime.state;
+
+  assert.equal(harness.runtime.reconcileCanonicalAction({
+    ...successfulOutcome,
+    operation_id: 'stale-operation',
+  }), false);
+  assert.equal(harness.runtime.reconcileCanonicalAction({
+    ...successfulOutcome,
+    outcome: 'invented',
+  }), false);
+  assert.equal(harness.runtime.reconcileCanonicalAction({
+    ...successfulOutcome,
+    final_base_revision: '',
+  }), false);
+  assert.deepEqual(harness.runtime.state.canonicalAction, before.canonicalAction);
+
+  assert.equal(harness.runtime.reconcileCanonicalAction(successfulOutcome), true);
+  assert.equal(harness.runtime.reconcileCanonicalAction(successfulOutcome), false);
+  assert.equal(harness.api.calls.initialize.length, 1);
+  assert.equal(harness.api.calls.preserve.length, 0);
+  assert.equal(prepared.operationId, 'operation');
+});
+
+test('edits made after Apply preparation create and preserve a successor generation after success', async () => {
+  let generation = 0;
+  const api = createApi({
+    initialize: async () => {
+      generation += 1;
+
+      return {
+        ...identity,
+        continuation_id: `continuation-${generation}`,
+        generation_id: `generation-${generation}`,
+        base_revision: generation === 1 ? 'base-1' : 'base-2',
+      };
+    },
+  });
+  const harness = createRuntime({ api });
+  harness.runtime.start();
+  const prepared = await harness.runtime.prepareCanonicalAction('apply');
+  harness.adapter.value = { title: 'Later edit' };
+  harness.adapter.edit();
+  const outcome = await harness.runtime.queryCanonicalActionOutcome(prepared.operationId);
+  harness.runtime.reconcileCanonicalAction(outcome);
+  await settle();
+
+  assert.equal(api.calls.initialize.length, 2);
+  assert.equal(api.calls.preserve.length, 1);
+  assert.equal(api.calls.prepareCanonicalAction[0].request.generation_id, 'generation-1');
+  assert.equal(api.calls.preserve[0].request.generation_id, 'generation-2');
+  assert.deepEqual(api.calls.preserve[0].request.payload, { title: 'Later edit' });
+  assert.equal(harness.runtime.state.baseRevision, 'base-2');
+  assert.equal(harness.runtime.state.status, 'preserved');
+});
+
+test('definitive canonical failure keeps work dirty and preserves it into a new generation', async () => {
+  let generation = 0;
+  const api = createApi({
+    initialize: async (request) => {
+      generation += 1;
+
+      return {
+        ...identity,
+        continuation_id: `continuation-${generation}`,
+        generation_id: `generation-${generation}`,
+        base_revision: 'base-1',
+      };
+    },
+    getCanonicalActionOutcome: async () => ({
+      ...successfulOutcome,
+      outcome: 'failed',
+      final_target_id: null,
+      final_base_revision: null,
+      failure_code: 'canonical_save_failed',
+      completed_at: '2026-08-05T00:00:01Z',
+    }),
+  });
+  const harness = createRuntime({ api });
+  harness.runtime.start();
+  const prepared = await harness.runtime.prepareCanonicalAction('apply');
+  const outcome = await harness.runtime.queryCanonicalActionOutcome(prepared.operationId);
+  harness.runtime.reconcileCanonicalAction(outcome);
+  await settle();
+
+  assert.equal(api.calls.initialize.length, 2);
+  assert.equal(api.calls.preserve.length, 1);
+  assert.equal(api.calls.prepareCanonicalAction[0].request.generation_id, 'generation-1');
+  assert.equal(api.calls.preserve[0].request.generation_id, 'generation-2');
+  assert.equal(harness.runtime.state.baseRevision, 'base-1');
+  assert.equal(harness.runtime.state.status, 'preserved');
+});
+
+test('unknown canonical outcome remains paused and never claims success', async () => {
+  const api = createApi({
+    getCanonicalActionOutcome: async () => ({
+      ...successfulOutcome,
+      outcome: 'unknown',
+      final_target_id: null,
+      final_base_revision: null,
+      completed_at: '2026-08-05T00:00:01Z',
+    }),
+  });
+  const harness = createRuntime({ api });
+  harness.runtime.start();
+  const prepared = await harness.runtime.prepareCanonicalAction('apply');
+  const outcome = await harness.runtime.queryCanonicalActionOutcome(prepared.operationId);
+
+  assert.equal(harness.runtime.reconcileCanonicalAction(outcome), false);
+  assert.equal(harness.runtime.state.status, 'canonical-outcome-unknown');
+  assert.equal(harness.runtime.state.canonicalAction.outcome, 'unknown');
+  assert.equal(api.calls.preserve.length, 0);
+});
+
+test('exhausted outcome confirmation becomes explicit uncertainty without claiming completion', async () => {
+  const harness = createRuntime();
+  harness.runtime.start();
+  const prepared = await harness.runtime.prepareCanonicalAction('apply');
+
+  assert.equal(
+    harness.runtime.markCanonicalActionOutcomeUnconfirmed(
+      prepared.operationId,
+      apiFailure('network_failure', { retryable: true }),
+    ),
+    true,
+  );
+  assert.equal(harness.runtime.state.status, 'canonical-outcome-unknown');
+  assert.equal(harness.runtime.state.canonicalAction.outcome, 'unknown');
+  assert.equal(harness.runtime.state.error.code, 'network_failure');
+  assert.equal(harness.runtime.reconcileCanonicalAction({
+    ...successfulOutcome,
+    operation_id: 'another-operation',
+  }), false);
+  await assert.rejects(
+    harness.runtime.prepareCanonicalAction('apply'),
+    (error) => error.code === 'canonical_action_unavailable',
+  );
+});
+
+test('Cancel retains a preserved draft for recovery on a later visit', async () => {
+  const harness = createRuntime();
+  harness.runtime.start();
+  harness.adapter.edit();
+  await harness.clock.tick(10);
+
+  assert.equal(await harness.runtime.prepareForCancel(), true);
+  assert.equal(harness.api.calls.discard.length, 0);
+  assert.equal(harness.runtime.state.dirty, false);
+  assert.equal(harness.runtime.state.status, 'preserved');
+});
+
+test('Cancel leaves a locally preserved draft detectable by the next runtime', async () => {
+  let persisted = false;
+  const api = createApi({
+    preserve: async () => {
+      persisted = true;
+
+      return { status: 'accepted' };
+    },
+    detect: async () => (persisted ? candidate : null),
+    discard: async () => {
+      persisted = false;
+
+      return { status: 'discarded' };
+    },
+  });
+  const first = createRuntime({ api });
+  first.runtime.start();
+  first.adapter.edit();
+  await first.clock.tick(10);
+
+  assert.equal(await first.runtime.prepareForCancel(), true);
+  assert.equal(api.calls.discard.length, 0);
+  first.runtime.destroy();
+
+  const second = createRuntime({ api, detectOnStart: true });
+  second.runtime.start();
+  await settle();
+
+  assert.equal(second.runtime.state.status, 'recovery-required');
+  assert.deepEqual(second.runtime.state.recoveryCandidate, {
+    context: candidate.context,
+    targetId: candidate.target_id,
+    classification: candidate.classification,
+    clientRevision: candidate.client_revision,
+    schemaVersion: candidate.payload_schema_version,
+    updatedAt: candidate.updated_at,
+    expiresAt: candidate.expires_at,
+    localEdits: false,
+  });
+  second.runtime.destroy();
+});
+
+test('Cancel leaves an unresolved detected draft durable for a later runtime', async () => {
+  const api = createApi({ detect: async () => candidate });
+  const first = createRuntime({ api, detectOnStart: true });
+  first.runtime.start();
+  await settle();
+
+  assert.equal(first.runtime.state.status, 'recovery-required');
+  const detectedCandidate = first.runtime.state.recoveryCandidate;
+  assert.equal(await first.runtime.prepareForCancel(), true);
+  assert.equal(api.calls.discard.length, 0);
+  assert.deepEqual(first.runtime.state.recoveryCandidate, detectedCandidate);
+  first.runtime.destroy();
+
+  const second = createRuntime({ api, detectOnStart: true });
+  second.runtime.start();
+  await settle();
+
+  assert.equal(second.runtime.state.status, 'recovery-required');
+  assert.deepEqual(second.runtime.state.recoveryCandidate, detectedCandidate);
+  assert.equal(api.calls.discard.length, 0);
 });
 
 test('state events contain metadata only and no source introduces forbidden coupling or HTML sinks', async () => {

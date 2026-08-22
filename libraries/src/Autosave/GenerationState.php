@@ -21,6 +21,8 @@ namespace Joomla\CMS\Autosave;
 enum GenerationState: string
 {
     case Active    = 'active';
+    case Closed    = 'closed';
+    case Retired   = 'retired';
     case Discarded = 'discarded';
     case Expired   = 'expired';
 
@@ -35,6 +37,10 @@ enum GenerationState: string
      */
     public function canTransitionTo(self $target): bool
     {
-        return $this === self::Active && $target !== self::Active;
+        return match ($this) {
+            self::Active => $target !== self::Active && $target !== self::Retired,
+            self::Closed => $target === self::Retired,
+            default      => false,
+        };
     }
 }

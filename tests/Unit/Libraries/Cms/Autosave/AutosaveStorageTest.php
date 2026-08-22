@@ -938,6 +938,63 @@ class AutosaveStorageTest extends UnitTestCase
     }
 
     /**
+     * @testdox  canonical success binds the generation identity through the real query contract
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalSuccessUsesBindableGenerationIdentity(): void
+    {
+        $operationId = str_repeat('a', 64);
+        $pending     = [
+            'operation_id'        => $operationId,
+            'generation_pk'       => '42',
+            'context'             => 'com_example.record',
+            'target_id'           => 'record-42',
+            'intent'              => 'apply',
+            'outcome'             => 'pending',
+            'final_target_id'     => null,
+            'final_base_revision' => null,
+        ];
+        $successful = array_replace(
+            $pending,
+            [
+                'outcome'             => 'successful',
+                'final_target_id'     => 'record-42',
+                'final_base_revision' => 'revision-2',
+            ]
+        );
+        $db = $this->createQueryDatabaseMock();
+        $db->expects($this->once())->method('transactionStart');
+        $db->expects($this->once())->method('transactionCommit');
+        $db->expects($this->never())->method('transactionRollback');
+        $db->method('loadAssoc')->willReturnOnConsecutiveCalls($pending, $successful);
+        $db->method('getAffectedRows')->willReturn(1);
+
+        $result = (new AutosaveStorage($db, $this->policy()))->finalizeCanonicalActionSuccess(
+            7,
+            $operationId,
+            'com_example.record',
+            'record-42',
+            'apply',
+            'record-42',
+            'revision-2',
+            new Date('2026-07-29 10:00:12', 'UTC')
+        );
+
+        $this->assertSame(
+            [
+                'operation_id'        => $operationId,
+                'outcome'             => 'successful',
+                'final_target_id'     => 'record-42',
+                'final_base_revision' => 'revision-2',
+            ],
+            $result
+        );
+    }
+
+    /**
      * Create a database mock that accepts Joomla query-builder calls.
      *
      * @return  DatabaseInterface
