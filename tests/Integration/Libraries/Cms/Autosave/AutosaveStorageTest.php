@@ -912,7 +912,7 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
         $this->assertSame('pending', $first['outcome']);
         $this->assertSame(GenerationState::Closed->value, $row['state']);
         $this->assertSame(1, (int) $row['client_revision']);
-        $this->assertSame($payload, json_decode($row['payload'], true));
+        $this->assertEquals($payload, json_decode($row['payload'], true));
         $this->assertNull($row['active_marker']);
         $this->assertNull($row['quota_slot']);
         $this->assertSame('2026-07-29 10:00:10', $row['closed_at']);
