@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Guidedtours\Administrator\Extension;
 
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Extension\BootableExtensionInterface;
 use Joomla\CMS\Extension\MVCComponent;
 use Joomla\CMS\HTML\HTMLRegistryAwareTrait;
@@ -24,9 +26,22 @@ use Psr\Container\ContainerInterface;
  *
  * @since 4.3.0
  */
-class GuidedtoursComponent extends MVCComponent implements BootableExtensionInterface
+class GuidedtoursComponent extends MVCComponent implements BootableExtensionInterface, AutosaveServiceInterface
 {
+    use AutosaveServiceTrait;
     use HTMLRegistryAwareTrait;
+
+    /**
+     * Returns valid exact contexts for Autosave.
+     *
+     * @return  array<string, mixed>
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getAutosaveContexts(): array
+    {
+        return ['com_guidedtours.tour' => true];
+    }
 
     /**
      * The step type
