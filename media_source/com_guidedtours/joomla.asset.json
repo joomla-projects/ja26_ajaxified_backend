@@ -16,6 +16,19 @@
         "type": "module",
         "defer": true
       }
+    },
+    {
+      "name": "com_guidedtours.tour-autosave",
+      "type": "script",
+      "uri": "com_guidedtours/tour-autosave.min.js",
+      "dependencies": [
+        "com_autosave.integration-controller",
+        "editor-api"
+      ],
+      "attributes": {
+        "type": "module",
+        "defer": true
+      }
     }
   ]
 }
