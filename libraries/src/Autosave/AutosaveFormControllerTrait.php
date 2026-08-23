@@ -60,16 +60,43 @@ trait AutosaveFormControllerTrait
      */
     public function save($key = null, $urlVar = null)
     {
+        return $this->executeAutosaveCanonicalSave(
+            fn () => parent::save($key, $urlVar),
+            $urlVar
+        );
+    }
+
+    /**
+     * Reconcile Autosave around one component-owned native save workflow.
+     *
+     * The callable must execute the complete authoritative native operation,
+     * including captureAutosaveCanonicalResult() after successful persistence.
+     * It is invoked at most once and its boolean result is returned unchanged.
+     *
+     * @param   callable(): boolean  $nativeSave  The authoritative native save workflow.
+     * @param   string|null          $urlVar      The native route identity variable.
+     *
+     * @return  boolean
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    protected function executeAutosaveCanonicalSave(callable $nativeSave, ?string $urlVar = null): bool
+    {
         $operationId = $this->input->post->getString('autosave_operation_id', '');
         $intent      = $this->input->post->getString('autosave_operation_intent', '');
 
         if ($operationId === '' && $intent === '') {
-            return parent::save($key, $urlVar);
+            return $nativeSave();
         }
 
         $task           = $this->input->getCmd('task', '');
         $taskAction     = str_contains($task, '.') ? substr($task, strrpos($task, '.') + 1) : $task;
         $expectedIntent = self::AUTOSAVE_TASK_INTENTS[$taskAction] ?? null;
+
+        if ($expectedIntent === null) {
+            return $nativeSave();
+        }
+
         // Match FormController's authoritative route identity. A Joomla form
         // is not required to render jform[id], and a posted form value must
         // never select the record bound to a prepared Autosave action.
@@ -134,7 +161,7 @@ trait AutosaveFormControllerTrait
         $this->autosaveCanonicalResultId = null;
 
         try {
-            $result = parent::save($key, $urlVar);
+            $result = $nativeSave();
         } catch (\Throwable $exception) {
             $this->autosaveCanonicalAction   = null;
             $this->autosaveCanonicalResultId = null;
@@ -170,7 +197,7 @@ trait AutosaveFormControllerTrait
 
         $this->finalizeAutosaveCanonicalSuccess();
 
-        return true;
+        return $result;
     }
 
     /**

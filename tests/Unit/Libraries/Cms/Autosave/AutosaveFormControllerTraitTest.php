@@ -12,6 +12,7 @@ namespace Joomla\Tests\Unit\Libraries\Cms\Autosave;
 use Joomla\CMS\Autosave\AutosaveCanonicalActionServiceInterface;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\User\User;
+use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\AutosaveFormControllerTraitCustomSaveHarness;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\AutosaveFormControllerTraitHarness;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\AutosaveTraitTestApplication;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\AutosaveTraitTestInput;
@@ -25,6 +26,24 @@ use Joomla\Tests\Unit\UnitTestCase;
 class AutosaveFormControllerTraitTest extends UnitTestCase
 {
     /**
+     * @testdox  The public save API remains compatible with FormController
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testPublicSaveSignatureRemainsCompatible(): void
+    {
+        $method     = new \ReflectionMethod(AutosaveFormControllerTraitHarness::class, 'save');
+        $parameters = $method->getParameters();
+
+        $this->assertTrue($method->isPublic());
+        $this->assertSame(['key', 'urlVar'], array_map(static fn ($parameter) => $parameter->getName(), $parameters));
+        $this->assertTrue($parameters[0]->isDefaultValueAvailable());
+        $this->assertNull($parameters[0]->getDefaultValue());
+        $this->assertTrue($parameters[1]->isDefaultValueAvailable());
+        $this->assertNull($parameters[1]->getDefaultValue());
+    }
+
+    /**
      * @testdox  Ordinary requests retain the parent controller save path
      *
      * @since   __DEPLOY_VERSION__
@@ -35,8 +54,9 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
         $controller = $this->controller($service);
 
         $service->expects($this->never())->method('verifyCanonicalAction');
-        $this->assertTrue($controller->save());
+        $this->assertTrue($controller->save('custom-key', 'custom-id'));
         $this->assertSame(1, $controller->parentSaveCalls);
+        $this->assertSame([['custom-key', 'custom-id']], $controller->parentSaveArguments);
     }
 
     /**
@@ -231,6 +251,206 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
     }
 
     /**
+     * @testdox  Unsupported canonical tasks retain the inherited native path
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testUnsupportedTaskDelegatesOnceWithoutAutosaveOutcome(): void
+    {
+        $service    = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $controller = $this->controller($service, 'item.cancel', $this->preparedPost('cancel'));
+
+        $service->expects($this->never())->method('verifyCanonicalAction');
+        $service->expects($this->never())->method('finalizeCanonicalActionSuccess');
+        $service->expects($this->never())->method('finalizeCanonicalActionFailure');
+
+        $this->assertTrue($controller->save('id', 'record'));
+        $this->assertSame(1, $controller->parentSaveCalls);
+        $this->assertSame([['id', 'record']], $controller->parentSaveArguments);
+    }
+
+    /**
+     * @testdox  A controller-owned save delegates its complete native workflow exactly once
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCustomSaveOwnsNativeWorkflowWithoutAutosave(): void
+    {
+        $service    = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $controller = $this->customController($service);
+
+        $service->expects($this->never())->method('verifyCanonicalAction');
+
+        $this->assertTrue($controller->save('custom-key', 'custom-id'));
+        $this->assertSame(1, $controller->nativeSaveCalls);
+        $this->assertSame([['custom-key', 'custom-id']], $controller->nativeSaveArguments);
+        $this->assertSame('native/redirect', $controller->nativeRedirect);
+        $this->assertSame(['native message'], $controller->nativeMessages);
+        $this->assertSame(['saved' => true], $controller->nativeSession);
+        $this->assertSame(1, $controller->componentSideEffects);
+    }
+
+    /**
+     * @testdox  Unsupported tasks remain native and do not manufacture canonical outcomes
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCustomSaveUnsupportedTaskUsesNativeFallbackOnce(): void
+    {
+        $service    = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $controller = $this->customController($service, 'item.custom', $this->preparedPost());
+
+        $service->expects($this->never())->method('verifyCanonicalAction');
+        $service->expects($this->never())->method('finalizeCanonicalActionSuccess');
+
+        $this->assertTrue($controller->save());
+        $this->assertSame(1, $controller->nativeSaveCalls);
+    }
+
+    /**
+     * @testdox  A prepared custom save finalizes after native authoritative identity capture
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCustomSaveFinalizesAfterNativeSuccessWithAuthoritativeIdentity(): void
+    {
+        $user                    = $this->createMock(User::class);
+        $service                 = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $controller              = $this->customController($service, 'item.apply', $this->preparedPost(), $user);
+        $controller->input->post = new class ($this->preparedPost()) {
+            public function __construct(private array $data)
+            {
+                $this->data['jform']['id'] = 999;
+            }
+
+            public function getString(string $key, string $default = ''): string
+            {
+                return isset($this->data[$key]) ? (string) $this->data[$key] : $default;
+            }
+        };
+        $model      = $this->createMock(BaseDatabaseModel::class);
+        $model->expects($this->once())->method('getState')->with('item.id')->willReturn(84);
+        $controller->savedModel = $model;
+
+        $service->expects($this->once())->method('verifyCanonicalAction')->willReturnCallback(
+            function () use ($controller): array {
+                $controller->operationOrder[] = 'verify';
+
+                return [];
+            }
+        );
+        $service->expects($this->once())->method('finalizeCanonicalActionSuccess')->with(
+            $user,
+            'operation-id',
+            'com_example.item',
+            '42',
+            'apply',
+            '84',
+            $this->anything()
+        )->willReturnCallback(function () use ($controller): array {
+            $controller->operationOrder[] = 'finalize';
+
+            return [];
+        });
+
+        $this->assertTrue($controller->save());
+        $this->assertSame(['verify', 'native', 'finalize'], $controller->operationOrder);
+        $this->assertSame(1, $controller->nativeSaveCalls);
+    }
+
+    /**
+     * @testdox  Custom native failure remains definitive and leaves the generation recoverable
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCustomSaveFailurePreservesNativeStateAndDoesNotRetire(): void
+    {
+        $service                      = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $controller                   = $this->customController($service, 'item.apply', $this->preparedPost());
+        $controller->nativeSaveResult = false;
+
+        $service->expects($this->once())->method('verifyCanonicalAction')->willReturn([]);
+        $service->expects($this->never())->method('finalizeCanonicalActionSuccess');
+        $service->expects($this->once())->method('finalizeCanonicalActionFailure')->willReturn([]);
+
+        $this->assertFalse($controller->save());
+        $this->assertSame(1, $controller->nativeSaveCalls);
+        $this->assertSame('native/redirect', $controller->nativeRedirect);
+        $this->assertSame(['native message'], $controller->nativeMessages);
+        $this->assertSame(['saved' => true], $controller->nativeSession);
+    }
+
+    /**
+     * @testdox  Custom native exceptions propagate without finalization or replay
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCustomSaveExceptionPropagatesWithoutFinalization(): void
+    {
+        $service                         = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $controller                      = $this->customController($service, 'item.apply', $this->preparedPost());
+        $failure                         = new \RuntimeException('native failure');
+        $controller->nativeSaveException = $failure;
+
+        $service->expects($this->once())->method('verifyCanonicalAction')->willReturn([]);
+        $service->expects($this->never())->method('finalizeCanonicalActionSuccess');
+        $service->expects($this->never())->method('finalizeCanonicalActionFailure');
+
+        try {
+            $controller->save();
+            $this->fail('The native exception was not propagated.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame($failure, $exception);
+        }
+
+        $this->assertSame(1, $controller->nativeSaveCalls);
+        $this->assertSame(1, $controller->componentSideEffects);
+    }
+
+    /**
+     * @testdox  Retirement failure is non-fatal and cannot replay a custom save
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCustomSaveRetirementFailureIsNonFatalAndNotReplayed(): void
+    {
+        $service    = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $controller = $this->customController($service, 'item.apply', $this->preparedPost());
+        $model      = $this->createMock(BaseDatabaseModel::class);
+        $model->method('getState')->willReturn(84);
+        $controller->savedModel = $model;
+
+        $service->expects($this->once())->method('verifyCanonicalAction')->willReturn([]);
+        $service->expects($this->once())->method('finalizeCanonicalActionSuccess')
+            ->willThrowException(new \RuntimeException('retirement unavailable'));
+
+        $this->assertTrue($controller->save());
+        $this->assertSame(1, $controller->nativeSaveCalls);
+        $this->assertSame(1, $controller->componentSideEffects);
+    }
+
+    /**
+     * @testdox  Sequential custom actions do not reuse stale prepared state
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCustomSaveSequentialActionsDoNotReusePreparedState(): void
+    {
+        $service    = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $controller = $this->customController($service, 'item.apply', $this->preparedPost());
+        $model      = $this->createMock(BaseDatabaseModel::class);
+        $model->method('getState')->willReturn(84);
+        $controller->savedModel = $model;
+
+        $service->expects($this->exactly(2))->method('verifyCanonicalAction')->willReturn([]);
+        $service->expects($this->exactly(2))->method('finalizeCanonicalActionSuccess')->willReturn([]);
+
+        $this->assertTrue($controller->save());
+        $this->assertTrue($controller->save());
+        $this->assertSame(2, $controller->nativeSaveCalls);
+    }
+
+    /**
      * Create the controller harness.
      *
      * @param   AutosaveCanonicalActionServiceInterface  $service  Autosave service.
@@ -250,6 +470,19 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
         int $recordId = 42
     ): AutosaveFormControllerTraitHarness {
         return new AutosaveFormControllerTraitHarness(
+            new AutosaveTraitTestInput($task, $post, $recordId),
+            new AutosaveTraitTestApplication($service, $user ?? $this->createMock(User::class))
+        );
+    }
+
+    private function customController(
+        AutosaveCanonicalActionServiceInterface $service,
+        string $task = 'item.save',
+        array $post = [],
+        ?User $user = null,
+        int $recordId = 42
+    ): AutosaveFormControllerTraitCustomSaveHarness {
+        return new AutosaveFormControllerTraitCustomSaveHarness(
             new AutosaveTraitTestInput($task, $post, $recordId),
             new AutosaveTraitTestApplication($service, $user ?? $this->createMock(User::class))
         );
