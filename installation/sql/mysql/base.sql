@@ -136,7 +136,8 @@ CREATE TABLE IF NOT EXISTS `#__autosave_continuations` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_autosave_continuation_public_id` (`public_id`),
   UNIQUE KEY `idx_autosave_continuation_initialization` (`user_id`,`initialization_key`),
-  KEY `idx_autosave_continuation_recovery` (`user_id`,`context`,`target_id`)
+  KEY `idx_autosave_continuation_recovery` (`user_id`,`context`,`target_id`),
+  KEY `idx_autosave_continuation_activity` (`last_activity_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -168,6 +169,7 @@ CREATE TABLE IF NOT EXISTS `#__autosave_generations` (
   UNIQUE KEY `idx_autosave_generation_quota` (`user_id`,`quota_slot`),
   KEY `idx_autosave_generation_continuation` (`continuation_id`),
   KEY `idx_autosave_generation_expiry` (`user_id`,`state`,`expires_at`),
+  KEY `idx_autosave_generation_global_expiry` (`state`,`expires_at`),
   KEY `idx_autosave_generation_retention` (`retain_until`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
@@ -196,6 +198,7 @@ CREATE TABLE IF NOT EXISTS `#__autosave_canonical_actions` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_autosave_canonical_public_id` (`public_id`),
   UNIQUE KEY `idx_autosave_canonical_generation` (`generation_id`),
+  KEY `idx_autosave_canonical_continuation` (`continuation_id`),
   KEY `idx_autosave_canonical_owner` (`user_id`,`context`,`target_id`),
   KEY `idx_autosave_canonical_expiry` (`outcome`,`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
@@ -463,6 +466,7 @@ INSERT INTO `#__extensions` (`package_id`, `name`, `type`, `element`, `folder`, 
 (0, 'plg_task_sessiongc', 'plugin', 'sessiongc', 'task', 0, 1, 1, 0, 1, '', '{}', '', 7, 0),
 (0, 'plg_task_sitestatus', 'plugin', 'sitestatus', 'task', 0, 1, 1, 0, 1, '', '{}', '', 8, 0),
 (0, 'plg_task_updatenotification', 'plugin', 'updatenotification', 'task', 0, 1, 1, 0, 1, '', '{}', '', 9, 0),
+(0, 'plg_task_autosave', 'plugin', 'autosave', 'task', 0, 1, 1, 0, 1, '', '{}', '', 10, 0),
 (0, 'plg_multifactorauth_totp', 'plugin', 'totp', 'multifactorauth', 0, 1, 1, 0, 1, '', '', '', 1, 0),
 (0, 'plg_multifactorauth_yubikey', 'plugin', 'yubikey', 'multifactorauth', 0, 1, 1, 0, 1, '', '', '', 2, 0),
 (0, 'plg_multifactorauth_webauthn', 'plugin', 'webauthn', 'multifactorauth', 0, 1, 1, 0, 1, '', '', '', 3, 0),

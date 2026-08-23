@@ -659,6 +659,84 @@ final class AutosaveStorage implements AutosaveStorageInterface
     }
 
     /**
+     * Expire dormant drafts and physically remove retained historical data.
+     *
+     * @return  array{
+     *     generations_expired: int,
+     *     closed_generations_released: int,
+     *     canonical_actions_deleted: int,
+     *     generations_deleted: int,
+     *     continuations_deleted: int
+     * }
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function purgeRetainedData(Date $now, int $limit = self::DEFAULT_PURGE_LIMIT): array
+    {
+        if ($limit < self::MIN_PURGE_LIMIT || $limit > self::MAX_PURGE_LIMIT) {
+            throw new \InvalidArgumentException('The Autosave cleanup limit is invalid.');
+        }
+
+        $transactionStarted = false;
+
+        try {
+            $this->db->transactionStart();
+            $transactionStarted = true;
+
+            $generationsExpired = $this->expireDormantGenerations($now, $limit);
+            $canonicalLimit     = max(1, intdiv($limit, 3));
+            $canonicalResult    = $this->purgeExpiredCanonicalActions($now, $canonicalLimit);
+            $released           = $canonicalResult['generations_released'];
+            $actionsDeleted     = $canonicalResult['actions_deleted'];
+            $remaining          = $limit - $actionsDeleted;
+            $generationLimit    = max(1, intdiv($remaining, 2));
+            $generationsDeleted = $remaining > 0
+                ? $this->deleteRetainedGenerations($now, $generationLimit)
+                : 0;
+            $remaining -= $generationsDeleted;
+            $continuationsDeleted = $remaining > 0
+                ? $this->deleteRetainedContinuations($now, $remaining)
+                : 0;
+            $remaining -= $continuationsDeleted;
+
+            if ($remaining > 0) {
+                $canonicalResult = $this->purgeExpiredCanonicalActions($now, $remaining);
+                $released += $canonicalResult['generations_released'];
+                $actionsDeleted += $canonicalResult['actions_deleted'];
+                $remaining -= $canonicalResult['actions_deleted'];
+            }
+
+            if ($remaining > 0) {
+                $deleted = $this->deleteRetainedGenerations($now, $remaining);
+                $generationsDeleted += $deleted;
+                $remaining -= $deleted;
+            }
+
+            if ($remaining > 0) {
+                $deleted = $this->deleteRetainedContinuations($now, $remaining);
+                $continuationsDeleted += $deleted;
+            }
+
+            $this->db->transactionCommit();
+            $transactionStarted = false;
+
+            return [
+                'generations_expired'         => $generationsExpired,
+                'closed_generations_released' => $released,
+                'canonical_actions_deleted'   => $actionsDeleted,
+                'generations_deleted'         => $generationsDeleted,
+                'continuations_deleted'       => $continuationsDeleted,
+            ];
+        } catch (\Throwable $exception) {
+            if ($transactionStarted) {
+                $this->db->transactionRollback();
+            }
+
+            throw $exception;
+        }
+    }
+
+    /**
      * Preserve the exact submitted snapshot and durably close its generation.
      */
     public function prepareCanonicalAction(
@@ -1774,6 +1852,297 @@ final class AutosaveStorage implements AutosaveStorageInterface
     private function canonicalActionNotFound(): AutosaveException
     {
         return $this->failure('canonical_action_not_found', 'The canonical action was not found.');
+    }
+
+    /**
+     * Expire a bounded set of active generations without requiring owner activity.
+     */
+    private function expireDormantGenerations(Date $now, int $limit): int
+    {
+        $activeState = GenerationState::Active->value;
+        $nowSql      = $now->toSql();
+        $query       = $this->db->createQuery()
+            ->select($this->db->quoteName('id'))
+            ->from($this->db->quoteName('#__autosave_generations'))
+            ->where($this->db->quoteName('state') . ' = :active_state')
+            ->where($this->db->quoteName('expires_at') . ' <= :expires_at')
+            ->order(
+                [
+                    $this->db->quoteName('expires_at') . ' ASC',
+                    $this->db->quoteName('id') . ' ASC',
+                ]
+            )
+            ->bind(':active_state', $activeState)
+            ->bind(':expires_at', $nowSql);
+        $ids = array_map('intval', $this->db->setQuery($query, 0, $limit)->loadColumn());
+
+        if ($ids === []) {
+            return 0;
+        }
+
+        $expiredState = GenerationState::Expired->value;
+        $retainUntil  = (clone $now)
+            ->add(new \DateInterval('PT' . $this->policy['tombstone_retention'] . 'S'))
+            ->toSql();
+        $update = $this->db->createQuery()
+            ->update($this->db->quoteName('#__autosave_generations'))
+            ->set(
+                [
+                    $this->db->quoteName('state') . ' = :expired_state',
+                    $this->db->quoteName('payload') . ' = NULL',
+                    $this->db->quoteName('payload_digest') . ' = NULL',
+                    $this->db->quoteName('updated_at') . ' = :updated_at',
+                    $this->db->quoteName('terminal_at') . ' = :terminal_at',
+                    $this->db->quoteName('retain_until') . ' = :retain_until',
+                    $this->db->quoteName('active_marker') . ' = NULL',
+                    $this->db->quoteName('quota_slot') . ' = NULL',
+                ]
+            )
+            ->whereIn($this->db->quoteName('id'), $ids, ParameterType::INTEGER)
+            ->where($this->db->quoteName('state') . ' = :active_state')
+            ->where($this->db->quoteName('expires_at') . ' <= :expires_at')
+            ->bind(':expired_state', $expiredState)
+            ->bind(':updated_at', $nowSql)
+            ->bind(':terminal_at', $nowSql)
+            ->bind(':retain_until', $retainUntil)
+            ->bind(':active_state', $activeState)
+            ->bind(':expires_at', $nowSql);
+        $this->db->setQuery($update)->execute();
+
+        return (int) $this->db->getAffectedRows();
+    }
+
+    /**
+     * Select a bounded set of canonical operations after their authoritative expiry.
+     *
+     * @return  array<int, array{id: int|string, generation_id: int|string}>
+     */
+    private function getExpiredCanonicalActions(Date $now, int $limit): array
+    {
+        $nowSql   = $now->toSql();
+        $outcomes = array_map(
+            static fn (CanonicalActionState $state): string => $state->value,
+            CanonicalActionState::cases()
+        );
+        $query = $this->db->createQuery()
+            ->select(
+                [
+                    $this->db->quoteName('id'),
+                    $this->db->quoteName('generation_id'),
+                ]
+            )
+            ->from($this->db->quoteName('#__autosave_canonical_actions'))
+            ->whereIn($this->db->quoteName('outcome'), $outcomes, ParameterType::STRING)
+            ->where($this->db->quoteName('expires_at') . ' <= :expires_at')
+            ->order(
+                [
+                    $this->db->quoteName('expires_at') . ' ASC',
+                    $this->db->quoteName('id') . ' ASC',
+                ]
+            )
+            ->bind(':expires_at', $nowSql);
+
+        return $this->db->setQuery($query, 0, $limit)->loadAssocList();
+    }
+
+    /**
+     * Release and delete one bounded set of expired canonical actions.
+     *
+     * @return  array{generations_released: int, actions_deleted: int}
+     */
+    private function purgeExpiredCanonicalActions(Date $now, int $limit): array
+    {
+        $canonicalActions = $this->getExpiredCanonicalActions($now, $limit);
+        $generationIds    = array_values(
+            array_unique(array_map('intval', array_column($canonicalActions, 'generation_id')))
+        );
+        $released         = $this->releaseClosedCanonicalGenerations($generationIds, $now);
+        $actionIds        = array_map('intval', array_column($canonicalActions, 'id'));
+
+        return [
+            'generations_released' => $released,
+            'actions_deleted'      => $this->deleteExpiredCanonicalActions($actionIds, $now),
+        ];
+    }
+
+    /**
+     * Clear closed draft payloads whose canonical protection window elapsed.
+     */
+    private function releaseClosedCanonicalGenerations(array $generationIds, Date $now): int
+    {
+        if ($generationIds === []) {
+            return 0;
+        }
+
+        $closed = GenerationState::Closed->value;
+        $nowSql = $now->toSql();
+        $query  = $this->db->createQuery()
+            ->update($this->db->quoteName('#__autosave_generations'))
+            ->set(
+                [
+                    $this->db->quoteName('payload') . ' = NULL',
+                    $this->db->quoteName('payload_digest') . ' = NULL',
+                    $this->db->quoteName('updated_at') . ' = :updated_at',
+                    $this->db->quoteName('terminal_at') . ' = :terminal_at',
+                    $this->db->quoteName('retain_until') . ' = :retain_until',
+                ]
+            )
+            ->whereIn($this->db->quoteName('id'), $generationIds, ParameterType::INTEGER)
+            ->where($this->db->quoteName('state') . ' = :closed_state')
+            ->where($this->db->quoteName('retain_until') . ' IS NULL')
+            ->bind(':updated_at', $nowSql)
+            ->bind(':terminal_at', $nowSql)
+            ->bind(':retain_until', $nowSql)
+            ->bind(':closed_state', $closed);
+        $this->db->setQuery($query)->execute();
+
+        return (int) $this->db->getAffectedRows();
+    }
+
+    /**
+     * Delete selected canonical actions that remain expired.
+     */
+    private function deleteExpiredCanonicalActions(array $ids, Date $now): int
+    {
+        if ($ids === []) {
+            return 0;
+        }
+
+        $nowSql = $now->toSql();
+        $query  = $this->db->createQuery()
+            ->delete($this->db->quoteName('#__autosave_canonical_actions'))
+            ->whereIn($this->db->quoteName('id'), $ids, ParameterType::INTEGER)
+            ->where($this->db->quoteName('expires_at') . ' <= :expires_at')
+            ->bind(':expires_at', $nowSql);
+        $this->db->setQuery($query)->execute();
+
+        return (int) $this->db->getAffectedRows();
+    }
+
+    /**
+     * Delete a bounded set of retained generations with no canonical reference.
+     */
+    private function deleteRetainedGenerations(Date $now, int $limit): int
+    {
+        $nowSql = $now->toSql();
+        $states = [
+            GenerationState::Closed->value,
+            GenerationState::Retired->value,
+            GenerationState::Discarded->value,
+            GenerationState::Expired->value,
+        ];
+        $reference = $this->db->createQuery()
+            ->select('1')
+            ->from($this->db->quoteName('#__autosave_canonical_actions', 'o'))
+            ->where(
+                $this->db->quoteName('o.generation_id')
+                . ' = ' . $this->db->quoteName('#__autosave_generations.id')
+            );
+        $query = $this->db->createQuery()
+            ->select($this->db->quoteName('id'))
+            ->from($this->db->quoteName('#__autosave_generations'))
+            ->whereIn($this->db->quoteName('state'), $states, ParameterType::STRING)
+            ->where($this->db->quoteName('retain_until') . ' IS NOT NULL')
+            ->where($this->db->quoteName('retain_until') . ' <= :retain_until')
+            ->where('NOT EXISTS (' . $reference . ')')
+            ->order(
+                [
+                    $this->db->quoteName('retain_until') . ' ASC',
+                    $this->db->quoteName('id') . ' ASC',
+                ]
+            )
+            ->bind(':retain_until', $nowSql);
+        $ids = array_map('intval', $this->db->setQuery($query, 0, $limit)->loadColumn());
+
+        if ($ids === []) {
+            return 0;
+        }
+
+        $reference = $this->db->createQuery()
+            ->select('1')
+            ->from($this->db->quoteName('#__autosave_canonical_actions', 'o'))
+            ->where(
+                $this->db->quoteName('o.generation_id')
+                . ' = ' . $this->db->quoteName('#__autosave_generations.id')
+            );
+        $delete = $this->db->createQuery()
+            ->delete($this->db->quoteName('#__autosave_generations'))
+            ->whereIn($this->db->quoteName('id'), $ids, ParameterType::INTEGER)
+            ->whereIn($this->db->quoteName('state'), $states, ParameterType::STRING)
+            ->where($this->db->quoteName('retain_until') . ' IS NOT NULL')
+            ->where($this->db->quoteName('retain_until') . ' <= :retain_until')
+            ->where('NOT EXISTS (' . $reference . ')')
+            ->bind(':retain_until', $nowSql);
+        $this->db->setQuery($delete)->execute();
+
+        return (int) $this->db->getAffectedRows();
+    }
+
+    /**
+     * Delete a bounded set of old continuations with no surviving references.
+     */
+    private function deleteRetainedContinuations(Date $now, int $limit): int
+    {
+        $cutoff = (clone $now)
+            ->sub(new \DateInterval('PT' . $this->policy['tombstone_retention'] . 'S'))
+            ->toSql();
+        $generationReference = $this->db->createQuery()
+            ->select('1')
+            ->from($this->db->quoteName('#__autosave_generations', 'g'))
+            ->where(
+                $this->db->quoteName('g.continuation_id')
+                . ' = ' . $this->db->quoteName('#__autosave_continuations.id')
+            );
+        $actionReference = $this->db->createQuery()
+            ->select('1')
+            ->from($this->db->quoteName('#__autosave_canonical_actions', 'o'))
+            ->where(
+                $this->db->quoteName('o.continuation_id')
+                . ' = ' . $this->db->quoteName('#__autosave_continuations.id')
+            );
+        $query = $this->db->createQuery()
+            ->select($this->db->quoteName('id'))
+            ->from($this->db->quoteName('#__autosave_continuations'))
+            ->where($this->db->quoteName('last_activity_at') . ' <= :last_activity_at')
+            ->where('NOT EXISTS (' . $generationReference . ')')
+            ->where('NOT EXISTS (' . $actionReference . ')')
+            ->order(
+                [
+                    $this->db->quoteName('last_activity_at') . ' ASC',
+                    $this->db->quoteName('id') . ' ASC',
+                ]
+            )
+            ->bind(':last_activity_at', $cutoff);
+        $ids = array_map('intval', $this->db->setQuery($query, 0, $limit)->loadColumn());
+
+        if ($ids === []) {
+            return 0;
+        }
+
+        $generationReference = $this->db->createQuery()
+            ->select('1')
+            ->from($this->db->quoteName('#__autosave_generations', 'g'))
+            ->where(
+                $this->db->quoteName('g.continuation_id')
+                . ' = ' . $this->db->quoteName('#__autosave_continuations.id')
+            );
+        $actionReference = $this->db->createQuery()
+            ->select('1')
+            ->from($this->db->quoteName('#__autosave_canonical_actions', 'o'))
+            ->where(
+                $this->db->quoteName('o.continuation_id')
+                . ' = ' . $this->db->quoteName('#__autosave_continuations.id')
+            );
+        $delete = $this->db->createQuery()
+            ->delete($this->db->quoteName('#__autosave_continuations'))
+            ->whereIn($this->db->quoteName('id'), $ids, ParameterType::INTEGER)
+            ->where($this->db->quoteName('last_activity_at') . ' <= :last_activity_at')
+            ->where('NOT EXISTS (' . $generationReference . ')')
+            ->where('NOT EXISTS (' . $actionReference . ')')
+            ->bind(':last_activity_at', $cutoff);
+        $this->db->setQuery($delete)->execute();
+
+        return (int) $this->db->getAffectedRows();
     }
 
     /**

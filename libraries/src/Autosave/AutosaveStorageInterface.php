@@ -23,6 +23,27 @@ use Joomla\CMS\Date\Date;
 interface AutosaveStorageInterface
 {
     /**
+     * Minimum cleanup limit that permits progress in every dependency layer.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public const MIN_PURGE_LIMIT = 3;
+
+    /**
+     * Default maximum number of physical rows removed by one cleanup invocation.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public const DEFAULT_PURGE_LIMIT = 100;
+
+    /**
+     * Hard maximum number of physical rows removed by one cleanup invocation.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public const MAX_PURGE_LIMIT = 1000;
+
+    /**
      * Create or idempotently return a continuation and its initial generation.
      *
      * @return  array{continuation_id: string, generation_id: string}
@@ -117,6 +138,24 @@ interface AutosaveStorageInterface
      * @since   __DEPLOY_VERSION__
      */
     public function discard(int $userId, string $continuationId, string $generationId, Date $now): string;
+
+    /**
+     * Expire dormant drafts and physically remove retained historical data.
+     *
+     * The physical deletion count across canonical actions, generations and
+     * continuations never exceeds the supplied limit.
+     *
+     * @return  array{
+     *     generations_expired: int,
+     *     closed_generations_released: int,
+     *     canonical_actions_deleted: int,
+     *     generations_deleted: int,
+     *     continuations_deleted: int
+     * }
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function purgeRetainedData(Date $now, int $limit = self::DEFAULT_PURGE_LIMIT): array;
 
     /**
      * Preserve the exact submitted snapshot, close its generation, and create
