@@ -12,6 +12,8 @@ namespace Joomla\Component\Menus\Administrator\Extension;
 
 use Joomla\CMS\Association\AssociationServiceInterface;
 use Joomla\CMS\Association\AssociationServiceTrait;
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Extension\BootableExtensionInterface;
 use Joomla\CMS\Extension\MVCComponent;
 use Joomla\CMS\HTML\HTMLRegistryAwareTrait;
@@ -29,10 +31,17 @@ use Psr\Container\ContainerInterface;
  */
 class MenusComponent extends MVCComponent implements
     BootableExtensionInterface,
-    AssociationServiceInterface
+    AssociationServiceInterface,
+    AutosaveServiceInterface
 {
     use AssociationServiceTrait;
+    use AutosaveServiceTrait;
     use HTMLRegistryAwareTrait;
+
+    public function getAutosaveContexts(): array
+    {
+        return ['com_menus.menu' => true];
+    }
 
     /**
      * Booting the extension. This is the function to set up the environment of the extension like

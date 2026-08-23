@@ -15,6 +15,7 @@ use Joomla\CMS\Dispatcher\ComponentDispatcherFactoryInterface;
 use Joomla\CMS\Extension\ComponentInterface;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Guidedtours\Administrator\Autosave\StepAutosaveProvider;
 use Joomla\Component\Guidedtours\Administrator\Autosave\TourAutosaveProvider;
 use Joomla\Component\Guidedtours\Administrator\Extension\GuidedtoursComponent;
 use Joomla\Database\DatabaseInterface;
@@ -40,11 +41,12 @@ class GuidedtoursComponentAutosaveTest extends UnitTestCase
 
         $this->assertInstanceOf(GuidedtoursComponent::class, $component);
         $this->assertInstanceOf(AutosaveServiceInterface::class, $component);
-        $this->assertSame(['com_guidedtours.tour' => true], $component->getAutosaveContexts());
+        $this->assertSame(['com_guidedtours.tour' => true, 'com_guidedtours.step' => true], $component->getAutosaveContexts());
         $this->assertInstanceOf(TourAutosaveProvider::class, $component->getAutosaveProvider('com_guidedtours.tour'));
+        $this->assertInstanceOf(StepAutosaveProvider::class, $component->getAutosaveProvider('com_guidedtours.step'));
 
         try {
-            $component->getAutosaveProvider('com_guidedtours.step');
+            $component->getAutosaveProvider('com_guidedtours.unknown');
             $this->fail('An unrelated Guided Tours context must not resolve a provider.');
         } catch (\OutOfBoundsException) {
             $this->addToAssertionCount(1);

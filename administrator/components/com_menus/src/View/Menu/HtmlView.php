@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Menus\Administrator\View\Menu;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -30,6 +31,8 @@ use Joomla\Component\Menus\Administrator\Model\MenuModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
+
     /**
      * The Form object
      *
@@ -86,8 +89,53 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form->addControlField('task');
 
+        $this->prepareAutosave();
         parent::display($tpl);
         $this->addToolbar();
+    }
+
+    private function prepareAutosave(): void
+    {
+        $application  = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($application, $this->getDocument(), $application->getIdentity());
+        $configurator->disable('com_menus.autosave.menu');
+
+        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+            return;
+        }
+
+        try {
+            $provider = $application->bootComponent('com_menus')->getAutosaveProvider('com_menus.menu');
+            $targetId = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+
+            if (!$provider->targetExists($targetId)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $fieldIds = [];
+
+        foreach (['title', 'description'] as $fieldName) {
+            $field = $this->form->getField($fieldName);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $fieldIds[$fieldName] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $targetId,
+            'com_menus.autosave.menu',
+            'item-form',
+            $fieldIds,
+            'com_menus.menu-autosave'
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**
