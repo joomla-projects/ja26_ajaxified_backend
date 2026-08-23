@@ -1,0 +1,21 @@
+{
+  "$schema": "https://developer.joomla.org/schemas/json-schema/web_assets.json",
+  "name": "com_redirect",
+  "version": "6.2.0",
+  "description": "Joomla CMS",
+  "license": "GNU General Public License version 2 or later; see LICENSE.txt",
+  "assets": [
+    {
+      "name": "com_redirect.link-autosave",
+      "type": "script",
+      "uri": "com_redirect/link-autosave.min.js",
+      "dependencies": [
+        "core",
+        "com_autosave.integration-controller"
+      ],
+      "attributes": {
+        "type": "module"
+      }
+    }
+  ]
+}

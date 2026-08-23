@@ -10,11 +10,11 @@
 
 namespace Joomla\Component\Content\Administrator\View\Article;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\FormView;
-use Joomla\CMS\Router\Route;
 use Joomla\CMS\Toolbar\ToolbarHelper;
 use Joomla\Component\Content\Site\Helper\RouteHelper;
 
@@ -139,7 +139,13 @@ class HtmlView extends FormView
     {
         $document              = $this->getDocument();
         $this->autosaveEnabled = false;
-        $document->addScriptOptions('com_content.autosave.article', ['enabled' => false], false);
+        $application           = Factory::getApplication();
+        $configurator          = new AutosaveViewConfigurator(
+            $application,
+            $document,
+            $this->getCurrentUser()
+        );
+        $configurator->disable('com_content.autosave.article');
 
         if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
             return;
@@ -170,54 +176,14 @@ class HtmlView extends FormView
             $fieldIds[$fieldName] = $field->id;
         }
 
-        $endpoints = [];
-
-        foreach (
-            [
-                'initialize',
-                'preserve',
-                'detect',
-                'read',
-                'discard',
-                'prepareCanonicalAction',
-                'getCanonicalActionOutcome',
-            ] as $operation
-        ) {
-            $endpoints[$operation] = Route::_('index.php?option=com_autosave&task=autosave.' . $operation . '&format=json', false);
-        }
-
-        $application = Factory::getApplication();
-        $language    = $application->getLanguage();
-        $language->load('com_autosave', JPATH_ADMINISTRATOR);
-        Text::script('COM_AUTOSAVE_CANCEL_DISCARD_FAILED');
-        Text::script('COM_AUTOSAVE_CANCEL_DISCARD_FAILED_TITLE');
-        $timeZone    = (string) $this->getCurrentUser()->getParam(
-            'timezone',
-            $application->get('offset', 'UTC')
-        );
-
-        $document->addScriptOptions(
-            'com_autosave.runtime',
-            ['endpoints' => $endpoints],
-            false
-        );
-        $document->addScriptOptions(
+        $configurator->configure(
+            $provider,
+            $targetId,
             'com_content.autosave.article',
-            [
-                'enabled'              => true,
-                'context'              => $provider->getContext(),
-                'targetId'             => $targetId,
-                'payloadSchemaVersion' => $provider->getPayloadSchemaVersion(),
-                'formId'               => 'item-form',
-                'fieldIds'             => $fieldIds,
-                'locale'               => $language->getTag(),
-                'timeZone'             => $timeZone,
-            ],
-            false
+            'item-form',
+            $fieldIds,
+            'com_content.article-autosave'
         );
-        $assets = $document->getWebAssetManager();
-        $assets->getRegistry()->addExtensionRegistryFile('com_autosave');
-        $assets->useScript('com_content.article-autosave');
         $this->autosaveEnabled = true;
     }
 
