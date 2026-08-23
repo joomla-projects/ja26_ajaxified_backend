@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Banners\Administrator\Extension;
 
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Categories\CategoryServiceInterface;
 use Joomla\CMS\Categories\CategoryServiceTrait;
 use Joomla\CMS\Component\Router\RouterServiceInterface;
@@ -35,14 +37,28 @@ use Psr\Container\ContainerInterface;
 class BannersComponent extends MVCComponent implements
     BootableExtensionInterface,
     CategoryServiceInterface,
+    AutosaveServiceInterface,
     RouterServiceInterface,
     TagServiceInterface
 {
+    use AutosaveServiceTrait;
     use HTMLRegistryAwareTrait;
     use RouterServiceTrait;
     use CategoryServiceTrait, TagServiceTrait {
         CategoryServiceTrait::getTableNameForSection insteadof TagServiceTrait;
         CategoryServiceTrait::getStateColumnForSection insteadof TagServiceTrait;
+    }
+
+    /**
+     * Returns valid exact contexts for Autosave.
+     *
+     * @return  array<string, mixed>
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getAutosaveContexts(): array
+    {
+        return ['com_banners.client' => true];
     }
 
     /**

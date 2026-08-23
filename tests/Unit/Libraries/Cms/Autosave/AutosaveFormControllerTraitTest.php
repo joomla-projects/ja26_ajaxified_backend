@@ -173,6 +173,64 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
     }
 
     /**
+     * @testdox  Canonical actions bind to the native route identity when the form omits jform[id]
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalActionUsesRouteIdentityWithoutPostedFormId(): void
+    {
+        $user       = $this->createMock(User::class);
+        $service    = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $post       = $this->preparedPost();
+        unset($post['jform']['id']);
+        $controller = $this->controller($service, 'item.apply', $post, $user, 84);
+
+        $service->expects($this->once())
+            ->method('verifyCanonicalAction')
+            ->with($user, 'operation-id', 'com_example.item', '84', 'apply', $this->anything())
+            ->willReturn([]);
+        $service->expects($this->once())
+            ->method('finalizeCanonicalActionSuccess')
+            ->with($user, 'operation-id', 'com_example.item', '84', 'apply', '84', $this->anything())
+            ->willReturn([]);
+
+        $model = $this->createMock(BaseDatabaseModel::class);
+        $model->expects($this->once())->method('getState')->with('item.id')->willReturn(84);
+        $controller->duringParentSave = static fn () => $controller->captureSavedModel($model);
+
+        $this->assertTrue($controller->save());
+    }
+
+    /**
+     * @testdox  Posted form identity cannot override the native route identity
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCanonicalActionDoesNotTrustPostedFormId(): void
+    {
+        $user                = $this->createMock(User::class);
+        $service             = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
+        $post                = $this->preparedPost();
+        $post['jform']['id'] = 999;
+        $controller          = $this->controller($service, 'item.apply', $post, $user, 42);
+
+        $service->expects($this->once())
+            ->method('verifyCanonicalAction')
+            ->with($user, 'operation-id', 'com_example.item', '42', 'apply', $this->anything())
+            ->willReturn([]);
+        $service->expects($this->once())
+            ->method('finalizeCanonicalActionSuccess')
+            ->with($user, 'operation-id', 'com_example.item', '42', 'apply', '42', $this->anything())
+            ->willReturn([]);
+
+        $model = $this->createMock(BaseDatabaseModel::class);
+        $model->expects($this->once())->method('getState')->with('item.id')->willReturn(42);
+        $controller->duringParentSave = static fn () => $controller->captureSavedModel($model);
+
+        $this->assertTrue($controller->save());
+    }
+
+    /**
      * Create the controller harness.
      *
      * @param   AutosaveCanonicalActionServiceInterface  $service  Autosave service.
@@ -188,10 +246,11 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
         AutosaveCanonicalActionServiceInterface $service,
         string $task = 'item.save',
         array $post = [],
-        ?User $user = null
+        ?User $user = null,
+        int $recordId = 42
     ): AutosaveFormControllerTraitHarness {
         return new AutosaveFormControllerTraitHarness(
-            new AutosaveTraitTestInput($task, $post),
+            new AutosaveTraitTestInput($task, $post, $recordId),
             new AutosaveTraitTestApplication($service, $user ?? $this->createMock(User::class))
         );
     }

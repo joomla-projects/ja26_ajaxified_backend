@@ -24,6 +24,7 @@
 		<folder>src</folder>
 	</files>
 	<media destination="com_banners" folder="media">
+		<filename>joomla.asset.json</filename>
 		<folder>js</folder>
 	</media>
 

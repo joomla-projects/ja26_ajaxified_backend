@@ -114,10 +114,11 @@ export default class ResponseSnapshot {
          * Locate the start processing instruction.
          */
         while ((node = walker.nextNode())) {
-            if (
-                node.target === 'start'
-                && node.data.includes(`name="${boundaryName}"`)
-            ) {
+            const match = node.target === 'start'
+                ? node.data.match(/(?:^|\s)name="([^"]+)"/)
+                : null;
+
+            if (match && match[1] === boundaryName) {
                 startNode = node;
 
                 break;
@@ -131,11 +132,19 @@ export default class ResponseSnapshot {
         /*
          * Continue walking until the matching end marker.
          */
-        while ((node = walker.nextNode())) {
-            if (node.target === 'end') {
-                endNode = node;
+        let depth = 1;
 
-                break;
+        while ((node = walker.nextNode())) {
+            if (node.target === 'start') {
+                depth += 1;
+            } else if (node.target === 'end') {
+                depth -= 1;
+
+                if (depth === 0) {
+                    endNode = node;
+
+                    break;
+                }
             }
         }
 

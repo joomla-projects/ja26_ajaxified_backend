@@ -6,6 +6,18 @@
   "license": "GPL-2.0-or-later",
   "assets": [
     {
+      "name": "com_banners.client-autosave",
+      "type": "script",
+      "uri": "com_banners/client-autosave.min.js",
+      "dependencies": [
+        "core",
+        "com_autosave.integration-controller"
+      ],
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
       "name": "com_banners.admin-banner-edit",
       "type": "script",
       "uri": "com_banners/admin-banner-edit.min.js",
