@@ -23,6 +23,7 @@ class AutosaveFormControllerTraitParent
     public ?\Throwable $parentSaveException = null;
     public mixed $duringParentSave          = null;
     public ?string $redirect                = null;
+    public array $parentSaveArguments       = [];
 
     public function __construct(public object $input, public object $app)
     {
@@ -31,6 +32,7 @@ class AutosaveFormControllerTraitParent
     public function save($key = null, $urlVar = null)
     {
         $this->parentSaveCalls++;
+        $this->parentSaveArguments[] = [$key, $urlVar];
 
         if ($this->duringParentSave) {
             ($this->duringParentSave)();
