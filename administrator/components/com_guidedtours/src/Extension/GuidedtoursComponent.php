@@ -40,7 +40,7 @@ class GuidedtoursComponent extends MVCComponent implements BootableExtensionInte
      */
     public function getAutosaveContexts(): array
     {
-        return ['com_guidedtours.tour' => true];
+        return ['com_guidedtours.tour' => true, 'com_guidedtours.step' => true];
     }
 
     /**

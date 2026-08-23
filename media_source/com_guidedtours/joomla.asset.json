@@ -6,6 +6,18 @@
   "license": "GPL-2.0-or-later",
   "assets": [
     {
+      "name": "com_guidedtours.step-autosave",
+      "type": "script",
+      "uri": "com_guidedtours/step-autosave.min.js",
+      "dependencies": [
+        "com_autosave.integration-controller",
+        "editors"
+      ],
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
       "name": "com_guidedtours.tour-edit",
       "type": "script",
       "uri": "com_guidedtours/tour-edit.min.js",
