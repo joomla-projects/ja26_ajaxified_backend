@@ -8,7 +8,7 @@
  * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
-defined('_JEXEC') or die;
+\defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\HTML\HTMLHelper;
@@ -25,12 +25,12 @@ $wa = $this->getDocument()->getWebAssetManager();
 $wa->useScript('keepalive')
     ->useScript('form.validate');
 
-$app = Factory::getApplication();
+$app   = Factory::getApplication();
 $input = $app->getInput();
 
 $assoc = Associations::isEnabled();
 // Are associations implemented for this extension?
-$extensionassoc = array_key_exists('item_associations', $this->form->getFieldsets());
+$extensionassoc = \array_key_exists('item_associations', $this->form->getFieldsets());
 
 // Fieldsets to not automatically render by /layouts/joomla/edit/params.php
 $this->ignore_fieldsets = ['jmetadata', 'item_associations'];
@@ -54,6 +54,12 @@ $tmpl    = $isModal || $input->get('tmpl', '', 'cmd') === 'component' ? '&tmpl=c
 ?>
 
 <form action="<?php echo Route::_('index.php?option=com_categories&extension=' . $input->getCmd('extension', 'com_content') . '&layout=' . $layout . $tmpl . '&id=' . (int) $this->item->id); ?>" method="post" name="adminForm" id="item-form" aria-label="<?php echo Text::_('COM_CATEGORIES_FORM_TITLE_' . ((int) $this->item->id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="form-validate">
+    <?php if ($this->autosaveEnabled) :
+        ?>
+        <?php echo LayoutHelper::render('joomla.autosave.status'); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.recovery'); ?>
+        <?php
+    endif; ?>
 
     <?php echo LayoutHelper::render('joomla.edit.title_alias', $this); ?>
 

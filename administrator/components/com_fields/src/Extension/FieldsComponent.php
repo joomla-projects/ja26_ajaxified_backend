@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Fields\Administrator\Extension;
 
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Categories\CategoryServiceInterface;
 use Joomla\CMS\Categories\CategoryServiceTrait;
 use Joomla\CMS\Extension\MVCComponent;
@@ -23,9 +25,15 @@ use Joomla\CMS\Extension\MVCComponent;
  *
  * @since  4.0.0
  */
-class FieldsComponent extends MVCComponent implements CategoryServiceInterface
+class FieldsComponent extends MVCComponent implements CategoryServiceInterface, AutosaveServiceInterface
 {
+    use AutosaveServiceTrait;
     use CategoryServiceTrait;
+
+    public function getAutosaveContexts(): array
+    {
+        return ['com_fields.group' => true];
+    }
 
     /**
      * Returns the table for the count items functions for the given section.

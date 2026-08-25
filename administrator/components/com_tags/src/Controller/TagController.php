@@ -10,7 +10,9 @@
 
 namespace Joomla\Component\Tags\Administrator\Controller;
 
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\MVC\Controller\FormController;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Versioning\VersionableControllerTrait;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -24,7 +26,26 @@ use Joomla\CMS\Versioning\VersionableControllerTrait;
  */
 class TagController extends FormController
 {
+    use AutosaveFormControllerTrait;
     use VersionableControllerTrait;
+
+    private const AUTOSAVE_CONTEXT      = 'com_tags.tag';
+    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'];
+
+    /**
+     * Capture the authoritative Tag identity after Joomla saves it.
+     *
+     * @param   BaseDatabaseModel  $model      The saved model.
+     * @param   array              $validData  The validated form data.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        $this->captureAutosaveCanonicalResult($model, 'tag.id');
+    }
 
     /**
      * Method to check if you can add a new record.

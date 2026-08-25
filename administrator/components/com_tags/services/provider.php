@@ -17,7 +17,9 @@ use Joomla\CMS\Extension\Service\Provider\ComponentDispatcherFactory;
 use Joomla\CMS\Extension\Service\Provider\MVCFactory;
 use Joomla\CMS\Extension\Service\Provider\RouterFactory;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Tags\Administrator\Autosave\TagAutosaveProvider;
 use Joomla\Component\Tags\Administrator\Extension\TagsComponent;
+use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
 
@@ -47,6 +49,8 @@ return new class () implements ServiceProviderInterface {
                 $component = new TagsComponent($container->get(ComponentDispatcherFactoryInterface::class));
                 $component->setMVCFactory($container->get(MVCFactoryInterface::class));
                 $component->setRouterFactory($container->get(RouterFactoryInterface::class));
+                $provider = new TagAutosaveProvider($container->get(DatabaseInterface::class));
+                $component->setAutosaveProvider($provider->getContext(), $provider);
 
                 return $component;
             }
