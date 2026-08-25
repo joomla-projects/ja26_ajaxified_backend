@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Tags\Administrator\View\Tag;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -30,6 +31,7 @@ use Joomla\Component\Tags\Administrator\Model\TagModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
     /**
      * The Form object
      *
@@ -96,10 +98,43 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form
             ->addControlField('task');
-
+        $this->prepareAutosave();
         $this->addToolbar();
 
         parent::display($tpl);
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_tags.autosave.tag');
+        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+            return;
+        }
+
+        try {
+            $provider = $app->bootComponent('com_tags')->getAutosaveProvider('com_tags.tag');
+            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+            if (!$provider->targetExists($target)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $ids = [];
+        foreach (['title', 'note', 'description', 'version_note', 'metadesc', 'metakey'] as $name) {
+            $field = $this->form->getField($name);
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $ids[$name] = $field->id;
+        }
+
+        $configurator->configure($provider, $target, 'com_tags.autosave.tag', 'item-form', $ids, 'com_tags.tag-autosave');
+        $this->autosaveEnabled = true;
     }
 
     /**

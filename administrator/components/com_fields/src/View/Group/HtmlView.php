@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Fields\Administrator\View\Group;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -32,6 +33,7 @@ use Joomla\Filesystem\Path;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
     /**
      * @var    \Joomla\CMS\Form\Form
      *
@@ -99,8 +101,41 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form
             ->addControlField('task');
-
+        $this->prepareAutosave();
         parent::display($tpl);
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_fields.autosave.group');
+        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+            return;
+        }
+
+        try {
+            $provider = $app->bootComponent('com_fields')->getAutosaveProvider('com_fields.group');
+            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+            if (!$provider->targetExists($target)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $ids = [];
+        foreach (['title', 'note', 'description'] as $name) {
+            $field = $this->form->getField($name);
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $ids[$name] = $field->id;
+        }
+
+        $configurator->configure($provider, $target, 'com_fields.autosave.group', 'item-form', $ids, 'com_fields.group-autosave');
+        $this->autosaveEnabled = true;
     }
 
     /**

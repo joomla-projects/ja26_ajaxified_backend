@@ -6,6 +6,17 @@
   "license": "GPL-2.0-or-later",
   "assets": [
     {
+      "name": "com_fields.group-autosave",
+      "type": "script",
+      "uri": "com_fields/group-autosave.min.js",
+      "dependencies": [
+        "com_autosave.integration-controller"
+      ],
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
       "name": "com_fields.admin-field-changecontext",
       "type": "script",
       "uri": "com_fields/admin-field-changecontext.min.js",
