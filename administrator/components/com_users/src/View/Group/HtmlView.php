@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Users\Administrator\View\Group;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -30,6 +31,7 @@ use Joomla\Component\Users\Administrator\Model\GroupModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
     /**
      * The Form object
      *
@@ -88,9 +90,38 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task');
 
         $this->addToolbar();
+        $this->prepareAutosave();
         parent::display($tpl);
     }
 
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $key          = 'com_users.autosave.group';
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable($key);
+        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+            return;
+        }
+        try {
+            $provider = $app->bootComponent('com_users')->getAutosaveProvider('com_users.group');
+            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+            if (!$provider->targetExists($target)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+        $ids = [];
+        foreach (['title'] as $fieldName) {
+            $field = $this->form->getField($fieldName);
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            } $ids[$fieldName] = $field->id;
+        }
+        $configurator->configure($provider, $target, $key, 'group-form', $ids, 'com_users.group-autosave');
+        $this->autosaveEnabled = true;
+    }
     /**
      * Add the page title and toolbar.
      *

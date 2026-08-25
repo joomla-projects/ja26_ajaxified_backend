@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Languages\Administrator\View\Language;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -29,6 +30,7 @@ use Joomla\Component\Languages\Administrator\Model\LanguageModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
     /**
      * The active item
      *
@@ -82,9 +84,37 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task');
 
         $this->addToolbar();
+        $this->prepareAutosave();
         parent::display($tpl);
     }
 
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_languages.autosave.language');
+        if ($this->getLayout() !== 'edit' || (int) $this->item->lang_id <= 0) {
+            return;
+        }
+        try {
+            $provider = $app->bootComponent('com_languages')->getAutosaveProvider('com_languages.language');
+            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->lang_id);
+            if (!$provider->targetExists($target)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+        $ids = [];
+        foreach (['title', 'title_native', 'description', 'metadesc', 'sitename'] as $name) {
+            $field = $this->form->getField($name);
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            } $ids[$name] = $field->id;
+        }
+        $configurator->configure($provider, $target, 'com_languages.autosave.language', 'language-form', $ids, 'com_languages.language-autosave');
+        $this->autosaveEnabled = true;
+    }
     /**
      * Add the page title and toolbar.
      *

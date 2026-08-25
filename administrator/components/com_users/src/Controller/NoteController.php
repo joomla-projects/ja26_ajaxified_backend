@@ -10,7 +10,9 @@
 
 namespace Joomla\Component\Users\Administrator\Controller;
 
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\MVC\Controller\FormController;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Versioning\VersionableControllerTrait;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -24,8 +26,16 @@ use Joomla\CMS\Versioning\VersionableControllerTrait;
  */
 class NoteController extends FormController
 {
+    use AutosaveFormControllerTrait;
     use VersionableControllerTrait;
 
+
+    private const AUTOSAVE_CONTEXT      = 'com_users.note';
+    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'];
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        $this->captureAutosaveCanonicalResult($model, 'note.id');
+    }
     /**
      * The prefix to use with controller messages.
      *
