@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Users\Administrator\View\Note;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -31,6 +32,7 @@ use Joomla\Component\Users\Administrator\Model\NoteModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
     /**
      * The edit form.
      *
@@ -75,7 +77,6 @@ class HtmlView extends BaseHtmlView
         $this->state = $model->getState();
         $this->item  = $model->getItem();
         $this->form  = $model->getForm();
-
         // Check for errors.
         if (\count($errors = $model->getErrors())) {
             throw new GenericDataException(implode("\n", $errors), 500);
@@ -85,10 +86,38 @@ class HtmlView extends BaseHtmlView
         $this->form
             ->addControlField('task');
 
+        $this->prepareAutosave();
         parent::display($tpl);
         $this->addToolbar();
     }
 
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_users.autosave.note');
+        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+            return;
+        }
+        try {
+            $provider = $app->bootComponent('com_users')->getAutosaveProvider('com_users.note');
+            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+            if (!$provider->targetExists($target)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+        $ids = [];
+        foreach (['subject', 'body'] as $name) {
+            $field = $this->form->getField($name);
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            } $ids[$name] = $field->id;
+        }
+        $configurator->configure($provider, $target, 'com_users.autosave.note', 'note-form', $ids, 'com_users.note-autosave');
+        $this->autosaveEnabled = true;
+    }
     /**
      * Display the toolbar.
      *

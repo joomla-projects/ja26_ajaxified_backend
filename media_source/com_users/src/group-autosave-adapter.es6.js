@@ -1,0 +1,15 @@
+const KEY = 'title'; const LIMIT = 100;
+const plain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype;
+export const normalizeCanonicalId = (v) => { const id = Number.isSafeInteger(v) ? String(v) : v; if (typeof id !== 'string' || !/^[1-9][0-9]{0,9}$/.test(id) || Number(id) > 4294967295) throw new TypeError('Invalid User Group target.'); return id; };
+export const validatePayload = (v) => { if (!plain(v) || Object.keys(v).length !== 1 || typeof v.title !== 'string' || Array.from(v.title).length > LIMIT) throw new TypeError('Invalid User Group payload.'); return { title: v.title }; };
+export default class GroupAutosaveAdapter {
+  constructor({ descriptor, form, fields, eventFactory = (t) => new Event(t, { bubbles: true }) }) { if (!plain(descriptor) || !form || !plain(fields) || !fields.title) throw new TypeError('Invalid Group adapter.'); this.descriptor = Object.freeze({ ...descriptor, targetId: normalizeCanonicalId(descriptor.targetId) }); this.form = form; this.fields = { ...fields }; this.eventFactory = eventFactory; this.baseline = null; this.callback = null; this.destroyed = false; this.suppressChanges = 0; this.listener = () => this.changed(); }
+  getDescriptor() { return this.descriptor; } initializeBaseline() { this.assertCurrent(); this.baseline = { title: this.fields.title.value }; return this; }
+  subscribe(cb) { if (typeof cb !== 'function' || this.callback || this.destroyed) throw new TypeError('Invalid Group subscription.'); if (!this.baseline) this.initializeBaseline(); this.callback = cb; ['input', 'change'].forEach((t) => this.fields.title.addEventListener(t, this.listener)); return () => this.unsubscribe(); }
+  capture() { this.assertCurrent(); this.baseline = { title: this.fields.title.value }; return { ...this.baseline }; }
+  apply(payload) { const next = validatePayload(payload); this.assertCurrent(); const previous = this.fields.title.value; this.suppressChanges += 1; try { this.fields.title.value = next.title; this.fields.title.dispatchEvent(this.eventFactory('input')); this.fields.title.dispatchEvent(this.eventFactory('change')); this.baseline = next; } catch (error) { this.fields.title.value = previous; this.baseline = { title: previous }; throw error; } finally { this.suppressChanges -= 1; } }
+  changed() { if (this.suppressChanges || !this.callback || !this.isCurrent() || this.baseline?.title === this.fields.title.value) return; this.baseline = { title: this.fields.title.value }; this.callback(); }
+  isCurrent() { return !this.destroyed && this.form?.isConnected && this.fields.title?.isConnected && this.form.contains(this.fields.title); } assertCurrent() { if (!this.isCurrent()) throw new Error('Group form is stale.'); }
+  unsubscribe() { if (!this.callback) return; ['input', 'change'].forEach((t) => this.fields.title.removeEventListener(t, this.listener)); this.callback = null; } destroy() { if (this.destroyed) return; this.unsubscribe(); this.destroyed = true; this.form = null; this.fields = null; }
+}
+export const PAYLOAD_KEYS = Object.freeze([KEY]); export const MAXIMUM_LENGTHS = Object.freeze({ title: LIMIT });

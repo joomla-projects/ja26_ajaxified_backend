@@ -11,7 +11,9 @@
 namespace Joomla\Component\Users\Administrator\Controller;
 
 use Joomla\CMS\Access\Access;
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\MVC\Controller\FormController;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -24,6 +26,15 @@ use Joomla\CMS\MVC\Controller\FormController;
  */
 class GroupController extends FormController
 {
+    use AutosaveFormControllerTrait;
+
+
+    private const AUTOSAVE_CONTEXT      = 'com_users.group';
+    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'];
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        $this->captureAutosaveCanonicalResult($model, 'group.id');
+    }
     /**
      * @var     string  The prefix to use with controller messages.
      * @since   1.6

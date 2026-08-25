@@ -8,10 +8,11 @@
  * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
-defined('_JEXEC') or die;
+\defined('_JEXEC') or die;
 
 use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\Layout\LayoutHelper;
 use Joomla\CMS\Router\Route;
 
 /** @var \Joomla\Component\Users\Administrator\View\Level\HtmlView $this */
@@ -23,6 +24,12 @@ $wa->useScript('keepalive')
 ?>
 
 <form action="<?php echo Route::_('index.php?option=com_users&id=' . (int) $this->item->id); ?>" method="post" name="adminForm" id="level-form" aria-label="<?php echo Text::_('COM_USERS_LEVEL_FORM_' . ((int) $this->item->id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="form-validate main-card">
+    <?php if ($this->autosaveEnabled) :
+        ?>
+        <?php echo LayoutHelper::render('joomla.autosave.status'); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.recovery'); ?>
+        <?php
+    endif; ?>
     <?php echo HTMLHelper::_('uitab.startTabSet', 'myTab', ['active' => 'groups', 'recall' => true, 'breakpoint' => 768]); ?>
         <?php echo HTMLHelper::_('uitab.addTab', 'myTab', 'groups', Text::_('COM_USERS_USERGROUP_DETAILS')); ?>
             <?php echo $this->form->renderField('title'); ?>

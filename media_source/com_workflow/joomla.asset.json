@@ -6,6 +6,20 @@
   "license": "GPL-2.0-or-later",
   "assets": [
     {
+      "name": "com_workflow.workflow-autosave",
+      "type": "script",
+      "uri": "com_workflow/workflow-autosave.min.js",
+      "dependencies": ["com_autosave.integration-controller"],
+      "attributes": {"type": "module"}
+    },
+    {
+      "name": "com_workflow.stage-autosave",
+      "type": "script",
+      "uri": "com_workflow/stage-autosave.min.js",
+      "dependencies": ["com_autosave.integration-controller"],
+      "attributes": {"type": "module"}
+    },
+    {
       "name": "com_workflow.admin-items-workflow-buttons",
       "type": "script",
       "uri": "com_workflow/admin-items-workflow-buttons.min.js",
