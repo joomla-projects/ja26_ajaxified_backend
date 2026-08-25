@@ -119,7 +119,7 @@ final class AutosaveLifecycle
             );
         }
 
-        $normalizedPayload = $provider->normalizePayload($payload, $schemaVersion);
+        $normalizedPayload = $this->normalizePayload($provider, $generation['target_id'], $payload, $schemaVersion);
         $status            = $this->storage->preserve(
             $userId,
             $continuationId,
@@ -294,11 +294,29 @@ final class AutosaveLifecycle
             $canonicalTarget,
             $currentBaseRevision,
             $clientRevision,
-            $provider->normalizePayload($payload, $schemaVersion),
+            $this->normalizePayload($provider, $canonicalTarget, $payload, $schemaVersion),
             $schemaVersion,
             $intent,
             $now
         );
+    }
+
+    /**
+     * Normalize a payload with canonical target data when the provider requires it.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    private function normalizePayload(
+        AutosaveProviderInterface $provider,
+        string $targetId,
+        mixed $payload,
+        int $schemaVersion
+    ): array {
+        if ($provider instanceof TargetAwareAutosaveProviderInterface) {
+            return $provider->normalizePayloadForTarget($targetId, $payload, $schemaVersion);
+        }
+
+        return $provider->normalizePayload($payload, $schemaVersion);
     }
 
     /**

@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Newsfeeds\Administrator\View\Newsfeed;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -31,6 +32,7 @@ use Joomla\Component\Newsfeeds\Administrator\Model\NewsfeedModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
     /**
      * The item object for the newsfeed
      *
@@ -118,7 +120,46 @@ class HtmlView extends BaseHtmlView
             $this->addModalToolbar();
         }
 
+        $this->prepareAutosave();
+
         parent::display($tpl);
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_newsfeeds.autosave.newsfeed');
+
+        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+            return;
+        }
+
+        try {
+            $provider = $app->bootComponent('com_newsfeeds')->getAutosaveProvider('com_newsfeeds.newsfeed');
+            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+
+            if (!$provider->targetExists($target)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $ids = [];
+
+        foreach (['name', 'description', 'link', 'version_note', 'numarticles', 'cache_time', 'metadesc', 'metakey'] as $name) {
+            $field = $this->form->getField($name);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $ids[$name] = $field->id;
+        }
+
+        $configurator->configure($provider, $target, 'com_newsfeeds.autosave.newsfeed', 'newsfeed-form', $ids, 'com_newsfeeds.newsfeed-autosave');
+        $this->autosaveEnabled = true;
     }
 
     /**

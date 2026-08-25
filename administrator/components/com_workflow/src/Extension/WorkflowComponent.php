@@ -24,6 +24,6 @@ final class WorkflowComponent extends MVCComponent implements AutosaveServiceInt
 
     public function getAutosaveContexts(): array
     {
-        return ['com_workflow.workflow' => true, 'com_workflow.stage' => true];
+        return ['com_workflow.workflow' => true, 'com_workflow.stage' => true, 'com_workflow.transition' => true];
     }
 }
