@@ -58,7 +58,7 @@ class BannersComponent extends MVCComponent implements
      */
     public function getAutosaveContexts(): array
     {
-        return ['com_banners.client' => true];
+        return ['com_banners.client' => true, 'com_banners.banner' => true];
     }
 
     /**
