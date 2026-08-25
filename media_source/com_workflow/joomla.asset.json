@@ -20,6 +20,13 @@
       "attributes": {"type": "module"}
     },
     {
+      "name": "com_workflow.transition-autosave",
+      "type": "script",
+      "uri": "com_workflow/transition-autosave.min.js",
+      "dependencies": ["com_autosave.integration-controller"],
+      "attributes": {"type": "module"}
+    },
+    {
       "name": "com_workflow.admin-items-workflow-buttons",
       "type": "script",
       "uri": "com_workflow/admin-items-workflow-buttons.min.js",

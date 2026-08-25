@@ -15,6 +15,7 @@ use Joomla\CMS\Autosave\AutosaveContextResolver;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveLifecycle;
 use Joomla\CMS\Autosave\AutosaveOperation;
+use Joomla\CMS\Autosave\AutosaveProviderInterface;
 use Joomla\CMS\Autosave\AutosaveStorage;
 use Joomla\CMS\Autosave\AutosaveStorageInterface;
 use Joomla\CMS\Date\Date;
@@ -23,6 +24,7 @@ use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\LifecycleTestProvider;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\LifecycleTestStorage;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\ResolverTestCapableComponent;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\ResolverTestProvider;
+use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\TargetAwareLifecycleTestProvider;
 use Joomla\Tests\Unit\UnitTestCase;
 
 /**
@@ -36,6 +38,38 @@ class AutosaveLifecycleTest extends UnitTestCase
 {
     private const CONTINUATION_ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     private const GENERATION_ID   = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+    public function testPreserveUsesOptionalTargetAwareNormalization(): void
+    {
+        $events                 = [];
+        $provider               = new TargetAwareLifecycleTestProvider();
+        $storage                = new LifecycleTestStorage($events);
+        $storage->inspectResult = [
+            'context'       => 'com_example.record',
+            'target_id'     => 'target-42',
+            'base_revision' => 'base-1',
+        ];
+        $lifecycle = $this->lifecycle($provider, $storage, $events);
+
+        $lifecycle->preserve($this->user(), self::CONTINUATION_ID, self::GENERATION_ID, 1, ['draft' => true], 1, $this->now());
+
+        $this->assertSame(['target-42', ['draft' => true], 1], $provider->arguments);
+        $this->assertSame(['target_aware' => true], $storage->calls['preserve'][0][7]);
+    }
+
+    public function testCanonicalPreparationUsesOptionalTargetAwareNormalization(): void
+    {
+        $events                   = [];
+        $provider                 = new TargetAwareLifecycleTestProvider();
+        $storage                  = new LifecycleTestStorage($events);
+        $storage->canonicalResult = ['operation_id' => 'operation'];
+        $lifecycle                = $this->lifecycle($provider, $storage, $events);
+
+        $lifecycle->prepareCanonicalAction($this->user(), 'com_example.record', 'target', self::CONTINUATION_ID, self::GENERATION_ID, 1, ['draft' => true], 1, 'apply', 'base-1', $this->now());
+
+        $this->assertSame(['target-42', ['draft' => true], 1], $provider->arguments);
+        $this->assertSame(['target_aware' => true], $storage->calls['prepareCanonicalAction'][0][7]);
+    }
 
     /**
      * @testdox  storage implements the narrow persistence contract used by lifecycle
@@ -1170,7 +1204,7 @@ class AutosaveLifecycleTest extends UnitTestCase
      * Create a lifecycle wired through the real exact-context resolver.
      */
     private function lifecycle(
-        LifecycleTestProvider $provider,
+        AutosaveProviderInterface $provider,
         LifecycleTestStorage $storage,
         array &$events,
         bool $failIfResolved = false

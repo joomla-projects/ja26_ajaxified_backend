@@ -1,0 +1,16 @@
+{
+  "$schema": "https://developer.joomla.org/schemas/json-schema/web_assets.json",
+  "name": "com_newsfeeds",
+  "version": "6.0.0",
+  "description": "Joomla CMS",
+  "license": "GPL-2.0-or-later",
+  "assets": [
+    {
+      "name": "com_newsfeeds.newsfeed-autosave",
+      "type": "script",
+      "uri": "com_newsfeeds/newsfeed-autosave.min.js",
+      "dependencies": ["com_autosave.integration-controller", "editor-api"],
+      "attributes": {"type": "module"}
+    }
+  ]
+}
