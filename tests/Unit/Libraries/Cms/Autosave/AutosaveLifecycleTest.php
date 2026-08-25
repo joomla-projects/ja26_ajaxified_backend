@@ -41,12 +41,12 @@ class AutosaveLifecycleTest extends UnitTestCase
 
     public function testPreserveUsesOptionalTargetAwareNormalization(): void
     {
-        $events     = [];
-        $provider   = new TargetAwareLifecycleTestProvider();
-        $storage    = new LifecycleTestStorage($events);
+        $events                 = [];
+        $provider               = new TargetAwareLifecycleTestProvider();
+        $storage                = new LifecycleTestStorage($events);
         $storage->inspectResult = [
-            'context' => 'com_example.record',
-            'target_id' => 'target-42',
+            'context'       => 'com_example.record',
+            'target_id'     => 'target-42',
             'base_revision' => 'base-1',
         ];
         $lifecycle = $this->lifecycle($provider, $storage, $events);
@@ -59,11 +59,11 @@ class AutosaveLifecycleTest extends UnitTestCase
 
     public function testCanonicalPreparationUsesOptionalTargetAwareNormalization(): void
     {
-        $events                  = [];
-        $provider                = new TargetAwareLifecycleTestProvider();
-        $storage                 = new LifecycleTestStorage($events);
+        $events                   = [];
+        $provider                 = new TargetAwareLifecycleTestProvider();
+        $storage                  = new LifecycleTestStorage($events);
         $storage->canonicalResult = ['operation_id' => 'operation'];
-        $lifecycle               = $this->lifecycle($provider, $storage, $events);
+        $lifecycle                = $this->lifecycle($provider, $storage, $events);
 
         $lifecycle->prepareCanonicalAction($this->user(), 'com_example.record', 'target', self::CONTINUATION_ID, self::GENERATION_ID, 1, ['draft' => true], 1, 'apply', 'base-1', $this->now());
 

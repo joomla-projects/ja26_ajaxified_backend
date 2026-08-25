@@ -32,7 +32,7 @@ class CanonicalRelationsIntegrationWiringTest extends UnitTestCase
     public static function contextProvider(): array
     {
         return [
-            'newsfeed' => ['com_newsfeeds', 'newsfeed', 'com_newsfeeds.newsfeed', 'newsfeed-form', ['name', 'description', 'link', 'version_note', 'numarticles', 'cache_time', 'metadesc', 'metakey']],
+            'newsfeed'   => ['com_newsfeeds', 'newsfeed', 'com_newsfeeds.newsfeed', 'newsfeed-form', ['name', 'description', 'link', 'version_note', 'numarticles', 'cache_time', 'metadesc', 'metakey']],
             'transition' => ['com_workflow', 'transition', 'com_workflow.transition', 'workflow-form', ['title', 'description', 'from_stage_id', 'to_stage_id']],
         ];
     }

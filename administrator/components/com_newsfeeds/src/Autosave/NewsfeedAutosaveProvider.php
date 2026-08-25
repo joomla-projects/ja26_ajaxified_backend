@@ -24,7 +24,7 @@ use Joomla\String\StringHelper;
 final class NewsfeedAutosaveProvider implements AutosaveProviderInterface
 {
     private const STRING_LIMITS = [
-        'name' => 100, 'description' => 65535, 'link' => 2048, 'version_note' => 255,
+        'name'     => 100, 'description' => 65535, 'link' => 2048, 'version_note' => 255,
         'metadesc' => 300, 'metakey' => 65535,
     ];
     private const KEYS = ['name', 'description', 'link', 'version_note', 'numarticles', 'cache_time', 'metadesc', 'metakey'];

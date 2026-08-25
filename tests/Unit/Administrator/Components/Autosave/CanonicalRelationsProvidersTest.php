@@ -14,9 +14,9 @@ class CanonicalRelationsProvidersTest extends UnitTestCase
 {
     public function testExactContextsIdentitiesAndPayloads(): void
     {
-        $newsfeed  = new NewsfeedAutosaveProvider($this->database());
-        $transition = new TransitionAutosaveProvider($this->database());
-        $newsPayload = ['metakey' => '', 'name' => '', 'description' => '', 'link' => '', 'version_note' => '', 'numarticles' => 5, 'cache_time' => 3600, 'metadesc' => ''];
+        $newsfeed          = new NewsfeedAutosaveProvider($this->database());
+        $transition        = new TransitionAutosaveProvider($this->database());
+        $newsPayload       = ['metakey' => '', 'name' => '', 'description' => '', 'link' => '', 'version_note' => '', 'numarticles' => 5, 'cache_time' => 3600, 'metadesc' => ''];
         $transitionPayload = ['to_stage_id' => 2, 'description' => '', 'title' => '', 'from_stage_id' => -1];
 
         $this->assertSame('com_newsfeeds.newsfeed', $newsfeed->getContext());
@@ -53,8 +53,8 @@ class CanonicalRelationsProvidersTest extends UnitTestCase
 
     public function testNewsfeedAuthorizationUsesCanonicalCategoryOwnerAndCheckout(): void
     {
-        $record = (object) ['id' => 42, 'catid' => 9, 'category_id' => 9, 'category_extension' => 'com_newsfeeds', 'created_by' => 7, 'checked_out' => 0];
-        $user   = $this->createMock(User::class);
+        $record   = (object) ['id' => 42, 'catid' => 9, 'category_id' => 9, 'category_extension' => 'com_newsfeeds', 'created_by' => 7, 'checked_out' => 0];
+        $user     = $this->createMock(User::class);
         $user->id = 7;
         $user->method('authorise')->willReturnCallback(static fn ($action, $asset) => $action === 'core.edit.own' && $asset === 'com_newsfeeds.category.9');
         $db = $this->database();
@@ -68,8 +68,8 @@ class CanonicalRelationsProvidersTest extends UnitTestCase
 
     public function testTransitionAuthorizationDerivesExtensionAndEnforcesCheckout(): void
     {
-        $record = (object) ['id' => 42, 'workflow_id' => 7, 'extension' => 'com_content.article', 'checked_out' => 0];
-        $user   = $this->createMock(User::class);
+        $record   = (object) ['id' => 42, 'workflow_id' => 7, 'extension' => 'com_content.article', 'checked_out' => 0];
+        $user     = $this->createMock(User::class);
         $user->id = 7;
         $user->method('authorise')->willReturnCallback(static fn ($action, $asset) => $action === 'core.edit' && $asset === 'com_content.transition.42');
         $db = $this->database();
@@ -93,7 +93,12 @@ class CanonicalRelationsProvidersTest extends UnitTestCase
 
     private function assertFailure(string $code, callable $callback): void
     {
-        try { $callback(); } catch (AutosaveException $exception) { $this->assertSame($code, $exception->getErrorCode()); return; }
+        try {
+            $callback();
+        } catch (AutosaveException $exception) {
+            $this->assertSame($code, $exception->getErrorCode());
+            return;
+        }
         $this->fail('Expected AutosaveException.');
     }
 }
