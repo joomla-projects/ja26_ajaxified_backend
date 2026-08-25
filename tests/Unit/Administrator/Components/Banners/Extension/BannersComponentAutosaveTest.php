@@ -17,6 +17,7 @@ use Joomla\CMS\Dispatcher\ComponentDispatcherFactoryInterface;
 use Joomla\CMS\Extension\ComponentInterface;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Banners\Administrator\Autosave\BannerAutosaveProvider;
 use Joomla\Component\Banners\Administrator\Autosave\ClientAutosaveProvider;
 use Joomla\Component\Banners\Administrator\Extension\BannersComponent;
 use Joomla\Database\DatabaseInterface;
@@ -32,10 +33,17 @@ class BannersComponentAutosaveTest extends UnitTestCase
 
         $this->assertInstanceOf(BannersComponent::class, $component);
         $this->assertInstanceOf(AutosaveServiceInterface::class, $component);
-        $this->assertSame(['com_banners.client' => true], $component->getAutosaveContexts());
+        $this->assertSame(
+            ['com_banners.client' => true, 'com_banners.banner' => true],
+            $component->getAutosaveContexts()
+        );
         $this->assertInstanceOf(
             ClientAutosaveProvider::class,
             $component->getAutosaveProvider('com_banners.client')
+        );
+        $this->assertInstanceOf(
+            BannerAutosaveProvider::class,
+            $component->getAutosaveProvider('com_banners.banner')
         );
     }
 

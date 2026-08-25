@@ -20,6 +20,7 @@ use Joomla\CMS\Extension\Service\Provider\MVCFactory;
 use Joomla\CMS\Extension\Service\Provider\RouterFactory;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Banners\Administrator\Autosave\BannerAutosaveProvider;
 use Joomla\Component\Banners\Administrator\Autosave\ClientAutosaveProvider;
 use Joomla\Component\Banners\Administrator\Extension\BannersComponent;
 use Joomla\Database\DatabaseInterface;
@@ -57,8 +58,10 @@ return new class () implements ServiceProviderInterface {
                 $component->setMVCFactory($container->get(MVCFactoryInterface::class));
                 $component->setCategoryFactory($container->get(CategoryFactoryInterface::class));
                 $component->setRouterFactory($container->get(RouterFactoryInterface::class));
-                $autosaveProvider = new ClientAutosaveProvider($container->get(DatabaseInterface::class));
-                $component->setAutosaveProvider($autosaveProvider->getContext(), $autosaveProvider);
+                $clientProvider = new ClientAutosaveProvider($container->get(DatabaseInterface::class));
+                $bannerProvider = new BannerAutosaveProvider($container->get(DatabaseInterface::class));
+                $component->setAutosaveProvider($clientProvider->getContext(), $clientProvider);
+                $component->setAutosaveProvider($bannerProvider->getContext(), $bannerProvider);
 
                 return $component;
             }
