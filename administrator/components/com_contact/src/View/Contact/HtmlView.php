@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Contact\Administrator\View\Contact;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -27,6 +28,8 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
  */
 class HtmlView extends FormView
 {
+    public bool $autosaveEnabled = false;
+
     /**
      * Set to true, if saving to menu should be supported
      *
@@ -96,6 +99,57 @@ class HtmlView extends FormView
         $this->form
             ->addControlField('task')
             ->addControlField('forcedLanguage', $forcedLanguage);
+
+        $this->prepareAutosave();
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_contact.autosave.contact');
+
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true) || (int) $this->item->id <= 0) {
+            return;
+        }
+
+        try {
+            $provider = $app->bootComponent('com_contact')->getAutosaveProvider('com_contact.contact');
+            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+
+            if (!$provider->targetExists($target)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $names = [
+            'name', 'alias', 'version_note', 'misc', 'image', 'con_position', 'email_to', 'address',
+            'suburb', 'state', 'postcode', 'country', 'telephone', 'mobile', 'fax', 'webpage',
+            'sortname1', 'sortname2', 'sortname3', 'publish_up', 'publish_down', 'metakey', 'metadesc',
+        ];
+        $ids = [];
+
+        foreach ($names as $name) {
+            $field = $this->form->getField($name);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $ids[$name] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $target,
+            'com_contact.autosave.contact',
+            'contact-form',
+            $ids,
+            'com_contact.contact-autosave'
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**
