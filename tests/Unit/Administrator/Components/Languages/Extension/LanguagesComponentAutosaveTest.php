@@ -8,6 +8,7 @@ use Joomla\CMS\Extension\ComponentInterface;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\Component\Languages\Administrator\Autosave\LanguageAutosaveProvider;
+use Joomla\Component\Languages\Administrator\Autosave\OverrideAutosaveProvider;
 use Joomla\Component\Languages\Administrator\Extension\LanguagesComponent;
 use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
@@ -28,5 +29,6 @@ class LanguagesComponentAutosaveTest extends UnitTestCase
         $this->assertInstanceOf(LanguagesComponent::class, $component);
         $this->assertInstanceOf(AutosaveServiceInterface::class, $component);
         $this->assertInstanceOf(LanguageAutosaveProvider::class, $component->getAutosaveProvider('com_languages.language'));
+        $this->assertInstanceOf(OverrideAutosaveProvider::class, $component->getAutosaveProvider('com_languages.override'));
     }
 }

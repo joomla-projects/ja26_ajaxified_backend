@@ -35,7 +35,7 @@ class LanguagesComponent extends MVCComponent implements BootableExtensionInterf
 
     public function getAutosaveContexts(): array
     {
-        return ['com_languages.language' => true];
+        return ['com_languages.language' => true, 'com_languages.override' => true];
     }
     /**
      * Booting the extension. This is the function to set up the environment of the extension like

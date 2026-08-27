@@ -31,7 +31,7 @@ trait AutosaveFormControllerTrait
     /**
      * Verified action awaiting the authoritative post-save model.
      *
-     * @var array{service: AutosaveCanonicalActionServiceInterface, operationId: string, targetId: int, intent: string}|null
+     * @var array{service: AutosaveCanonicalActionServiceInterface, operationId: string, targetId: string, intent: string}|null
      *
      * @since  __DEPLOY_VERSION__
      */
@@ -44,7 +44,7 @@ trait AutosaveFormControllerTrait
      *
      * @since  __DEPLOY_VERSION__
      */
-    private ?int $autosaveCanonicalResultId = null;
+    private int|string|null $autosaveCanonicalResultId = null;
 
     /**
      * Reconcile a prepared Autosave generation around Joomla's canonical save.
@@ -100,7 +100,7 @@ trait AutosaveFormControllerTrait
         // Match FormController's authoritative route identity. A Joomla form
         // is not required to render jform[id], and a posted form value must
         // never select the record bound to a prepared Autosave action.
-        $targetId       = $this->input->getInt($urlVar ?: 'id');
+        $targetId       = $this->resolveAutosaveCanonicalTarget($urlVar);
         $service        = $this->app->bootComponent('com_autosave');
         $now            = new Date('now', 'UTC');
         $this->app->getLanguage()->load('com_autosave', JPATH_ADMINISTRATOR);
@@ -110,13 +110,13 @@ trait AutosaveFormControllerTrait
             || $intent === ''
             || $expectedIntent === null
             || $intent !== $expectedIntent
-            || $targetId <= 0
+            || $targetId === ''
             || !$service instanceof AutosaveCanonicalActionServiceInterface
         ) {
             $this->setMessage(Text::_('COM_AUTOSAVE_CANONICAL_ACTION_INVALID'), 'error');
 
-            if ($targetId > 0) {
-                $this->setRedirect($this->getRedirectUrlToItem($targetId));
+            if ($targetId !== '') {
+                $this->setAutosaveCanonicalFailureRedirect($targetId);
             }
 
             return false;
@@ -127,7 +127,7 @@ trait AutosaveFormControllerTrait
                 $this->app->getIdentity(),
                 $operationId,
                 self::AUTOSAVE_CONTEXT,
-                (string) $targetId,
+                $targetId,
                 $intent,
                 $now
             );
@@ -137,7 +137,7 @@ trait AutosaveFormControllerTrait
                     $this->app->getIdentity(),
                     $operationId,
                     self::AUTOSAVE_CONTEXT,
-                    (string) $targetId,
+                    $targetId,
                     $intent,
                     'canonical_verification_failed',
                     new Date('now', 'UTC')
@@ -147,7 +147,7 @@ trait AutosaveFormControllerTrait
             }
 
             $this->setMessage(Text::_('COM_AUTOSAVE_CANONICAL_ACTION_UNVERIFIED'), 'error');
-            $this->setRedirect($this->getRedirectUrlToItem($targetId));
+            $this->setAutosaveCanonicalFailureRedirect($targetId);
 
             return false;
         }
@@ -180,7 +180,7 @@ trait AutosaveFormControllerTrait
                     $this->app->getIdentity(),
                     $operationId,
                     self::AUTOSAVE_CONTEXT,
-                    (string) $targetId,
+                    $targetId,
                     $intent,
                     'canonical_save_failed',
                     new Date('now', 'UTC')
@@ -216,7 +216,30 @@ trait AutosaveFormControllerTrait
             return;
         }
 
-        $this->autosaveCanonicalResultId = (int) $model->getState($stateKey);
+        $id                              = (int) $model->getState($stateKey);
+        $this->autosaveCanonicalResultId = $id > 0 ? $id : null;
+    }
+
+    /** Resolve the existing native route target. */
+    protected function resolveAutosaveCanonicalTarget(?string $urlVar): string
+    {
+        $id = $this->input->getInt($urlVar ?: 'id');
+
+        return $id > 0 ? (string) $id : '';
+    }
+
+    /** Capture a component-authoritative canonical target after persistence. */
+    protected function captureAutosaveCanonicalTarget(string $targetId): void
+    {
+        if ($this->autosaveCanonicalAction !== null) {
+            $this->autosaveCanonicalResultId = $targetId;
+        }
+    }
+
+    /** Preserve the native edit redirect when canonical metadata is rejected. */
+    protected function setAutosaveCanonicalFailureRedirect(string $targetId): void
+    {
+        $this->setRedirect($this->getRedirectUrlToItem((int) $targetId));
     }
 
     /**
@@ -238,7 +261,7 @@ trait AutosaveFormControllerTrait
         $this->autosaveCanonicalResultId = null;
 
         try {
-            if ($resultingId === null || $resultingId <= 0) {
+            if ($resultingId === null || $resultingId === '' || $resultingId === 0) {
                 throw new \RuntimeException('The canonical item identity is unavailable.');
             }
 
@@ -246,7 +269,7 @@ trait AutosaveFormControllerTrait
                 $this->app->getIdentity(),
                 $action['operationId'],
                 self::AUTOSAVE_CONTEXT,
-                (string) $action['targetId'],
+                $action['targetId'],
                 $action['intent'],
                 (string) $resultingId,
                 new Date('now', 'UTC')
