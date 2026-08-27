@@ -11,6 +11,7 @@
 namespace Joomla\Component\Finder\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSWebApplicationInterface;
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\Router\Route;
@@ -27,6 +28,16 @@ use Joomla\Utilities\ArrayHelper;
  */
 class FilterController extends FormController
 {
+    use AutosaveFormControllerTrait;
+
+    private const AUTOSAVE_CONTEXT      = 'com_finder.filter';
+    private const AUTOSAVE_TASK_INTENTS = [
+        'apply'     => 'apply',
+        'save'      => 'save-exit',
+        'save2new'  => 'save-new',
+        'save2copy' => 'save-copy',
+    ];
+
     /**
      * Method to save a record.
      *
@@ -38,6 +49,22 @@ class FilterController extends FormController
      * @since   2.5
      */
     public function save($key = null, $urlVar = null)
+    {
+        return $this->executeAutosaveCanonicalSave(
+            fn () => $this->saveNative($key, $urlVar),
+            $urlVar ?: 'filter_id'
+        );
+    }
+
+    /**
+     * Execute Finder's authoritative native Filter save workflow.
+     *
+     * @param   string  $key     Primary key name.
+     * @param   string  $urlVar  Route identity variable.
+     *
+     * @return  boolean
+     */
+    private function saveNative($key = null, $urlVar = null)
     {
         // Check for request forgeries.
         $this->checkToken();
@@ -224,6 +251,7 @@ class FilterController extends FormController
 
         // Invoke the postSave method to allow for the child class to access the model.
         $this->postSaveHook($model, $validData);
+        $this->captureAutosaveCanonicalResult($model, 'filter.id');
 
         return true;
     }
