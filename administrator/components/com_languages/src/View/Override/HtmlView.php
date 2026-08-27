@@ -10,12 +10,14 @@
 
 namespace Joomla\Component\Languages\Administrator\View\Override;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\CMS\Toolbar\ToolbarHelper;
+use Joomla\Component\Languages\Administrator\Autosave\OverrideAutosaveProvider;
 use Joomla\Component\Languages\Administrator\Model\OverrideModel;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -29,6 +31,7 @@ use Joomla\Component\Languages\Administrator\Model\OverrideModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
     /**
      * The form to use for the view.
      *
@@ -102,9 +105,39 @@ class HtmlView extends BaseHtmlView
             ->addControlField('id', $this->item->key);
 
         $this->addToolbar();
+        $this->prepareAutosave();
         parent::display($tpl);
     }
 
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_languages.autosave.override');
+        if ($this->getLayout() !== 'edit' || empty($this->item->key)) {
+            return;
+        }
+
+        $client   = (string) $this->state->get('filter.client', 'site');
+        $language = (string) $this->state->get('filter.language', 'en-GB');
+        try {
+            $provider = $app->bootComponent('com_languages')->getAutosaveProvider('com_languages.override');
+            $target   = $provider->canonicalizeTargetId(OverrideAutosaveProvider::target($client, $language, (string) $this->item->key));
+            if (!$provider->targetExists($target)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $fields = ['key' => $this->form->getField('key'), 'override' => $this->form->getField('override'), 'both' => $this->form->getField('both')];
+        if (array_filter($fields, static fn ($field) => !$field || !\is_string($field->id) || $field->id === '')) {
+            return;
+        }
+
+        $configurator->configure($provider, $target, 'com_languages.autosave.override', 'override-form', array_map(static fn ($field) => $field->id, $fields), 'com_languages.override-autosave');
+        $this->autosaveEnabled = true;
+    }
     /**
      * Adds the page title and toolbar.
      *
