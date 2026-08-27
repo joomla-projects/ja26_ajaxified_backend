@@ -22,6 +22,17 @@
       }
     },
     {
+      "name": "com_finder.filter-autosave",
+      "type": "script",
+      "uri": "com_finder/filter-autosave.min.js",
+      "dependencies": [
+        "com_autosave.integration-controller"
+      ],
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
       "name": "com_finder.filters",
       "type": "script",
       "uri": "com_finder/filters.min.js",

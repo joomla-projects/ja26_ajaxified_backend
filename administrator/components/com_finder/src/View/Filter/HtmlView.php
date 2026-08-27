@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Finder\Administrator\View\Filter;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -30,6 +31,8 @@ use Joomla\Component\Finder\Administrator\Model\FilterModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
+
     /**
      * The filter object
      *
@@ -117,8 +120,65 @@ class HtmlView extends BaseHtmlView
 
         // Configure the toolbar.
         $this->addToolbar();
+        $this->prepareAutosave();
 
         parent::display($tpl);
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_finder.autosave.filter');
+
+        if ($this->getLayout() !== 'edit' || (int) $this->item->filter_id <= 0) {
+            return;
+        }
+
+        try {
+            $provider = $app->bootComponent('com_finder')->getAutosaveProvider('com_finder.filter');
+            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->filter_id);
+
+            if (!$provider->targetExists($target)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $fields = [
+            'title'            => $this->form->getField('title'),
+            'alias'            => $this->form->getField('alias'),
+            'created'          => $this->form->getField('created'),
+            'created_by'       => $this->form->getField('created_by'),
+            'created_by_alias' => $this->form->getField('created_by_alias'),
+            'state'            => $this->form->getField('state'),
+            'w1'               => $this->form->getField('w1', 'params'),
+            'd1'               => $this->form->getField('d1', 'params'),
+            'w2'               => $this->form->getField('w2', 'params'),
+            'd2'               => $this->form->getField('d2', 'params'),
+        ];
+        $ids = [];
+
+        foreach ($fields as $name => $field) {
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            // The User field's submitted canonical ID is held by its hidden
+            // input; the base ID belongs to the visible read-only user name.
+            $ids[$name] = $name === 'created_by' ? $field->id . '_id' : $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $target,
+            'com_finder.autosave.filter',
+            'adminForm',
+            $ids,
+            'com_finder.filter-autosave'
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**
