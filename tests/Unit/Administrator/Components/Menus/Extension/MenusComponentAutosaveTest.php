@@ -8,6 +8,7 @@ use Joomla\CMS\Dispatcher\ComponentDispatcherFactoryInterface;
 use Joomla\CMS\Extension\ComponentInterface;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Menus\Administrator\Autosave\ItemAutosaveProvider;
 use Joomla\Component\Menus\Administrator\Autosave\MenuAutosaveProvider;
 use Joomla\Component\Menus\Administrator\Extension\MenusComponent;
 use Joomla\Database\DatabaseInterface;
@@ -29,7 +30,8 @@ class MenusComponentAutosaveTest extends UnitTestCase
         $component = $container->get(ComponentInterface::class);
         $this->assertInstanceOf(MenusComponent::class, $component);
         $this->assertInstanceOf(AutosaveServiceInterface::class, $component);
-        $this->assertSame(['com_menus.menu' => true], $component->getAutosaveContexts());
+        $this->assertSame(['com_menus.menu' => true, 'com_menus.item' => true], $component->getAutosaveContexts());
         $this->assertInstanceOf(MenuAutosaveProvider::class, $component->getAutosaveProvider('com_menus.menu'));
+        $this->assertInstanceOf(ItemAutosaveProvider::class, $component->getAutosaveProvider('com_menus.item'));
     }
 }

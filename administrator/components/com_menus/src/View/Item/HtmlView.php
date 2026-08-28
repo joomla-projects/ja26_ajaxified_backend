@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Menus\Administrator\View\Item;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -18,6 +19,7 @@ use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\CMS\Toolbar\ToolbarHelper;
+use Joomla\Component\Menus\Administrator\Autosave\ItemAutosaveProvider;
 use Joomla\Component\Menus\Administrator\Model\ItemModel;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -31,6 +33,8 @@ use Joomla\Component\Menus\Administrator\Model\ItemModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
+
     /**
      * The Form object
      *
@@ -136,6 +140,8 @@ class HtmlView extends BaseHtmlView
             ->addControlField('menutype', $input->get('menutype', ''))
             ->addControlField('fieldtype', '', ['id' => 'fieldtype']);
 
+        $this->prepareAutosave();
+
         if ($this->getLayout() !== 'modal') {
             $this->addToolbar();
         } else {
@@ -143,6 +149,53 @@ class HtmlView extends BaseHtmlView
         }
 
         parent::display($tpl);
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_menus.autosave.item');
+
+        if (!\in_array($this->getLayout(), ['edit', 'default'], true) || (int) $this->item->id <= 0) {
+            return;
+        }
+
+        try {
+            $provider = $app->bootComponent('com_menus')->getAutosaveProvider('com_menus.item');
+
+            if (!$provider instanceof ItemAutosaveProvider) {
+                return;
+            }
+
+            $target = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+            $schema = $provider->getDynamicSchemaForForm($target, $this->form);
+        } catch (\Throwable) {
+            return;
+        }
+
+        $ids = [];
+
+        foreach (['title', 'alias', 'note', 'browserNav'] as $name) {
+            $field = $this->form->getField($name);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $ids[$name] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $target,
+            'com_menus.autosave.item',
+            'item-form',
+            $ids,
+            'com_menus.item-autosave',
+            ['fields' => $schema->fields(), 'fingerprint' => $schema->fingerprint()]
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**

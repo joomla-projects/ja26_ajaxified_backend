@@ -6,6 +6,13 @@
   "license": "GPL-2.0-or-later",
   "assets": [
     {
+      "name": "com_menus.item-autosave",
+      "type": "script",
+      "uri": "com_menus/item-autosave.min.js",
+      "attributes": { "type": "module" },
+      "dependencies": ["com_autosave.runtime", "com_autosave.integration-controller"]
+    },
+    {
       "name": "com_menus.menu-autosave",
       "type": "script",
       "uri": "com_menus/menu-autosave.min.js",
