@@ -11,6 +11,7 @@
 namespace Joomla\Component\Menus\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSWebApplicationInterface;
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Filter\InputFilter;
 use Joomla\CMS\Language\Text;
@@ -29,6 +30,16 @@ use Joomla\CMS\Uri\Uri;
  */
 class ItemController extends FormController
 {
+    use AutosaveFormControllerTrait;
+
+    private const AUTOSAVE_CONTEXT      = 'com_menus.item';
+    private const AUTOSAVE_TASK_INTENTS = [
+        'apply'     => 'apply',
+        'save'      => 'save-exit',
+        'save2new'  => 'save-new',
+        'save2copy' => 'save-copy',
+    ];
+
     /**
      * Method to check if you can add a new record.
      *
@@ -257,6 +268,12 @@ class ItemController extends FormController
      */
     public function save($key = null, $urlVar = null)
     {
+        return $this->executeAutosaveCanonicalSave(fn () => $this->executeItemSave($key, $urlVar), $urlVar);
+    }
+
+    /** Execute the complete authoritative native Menu Item save workflow. */
+    private function executeItemSave($key = null, $urlVar = null)
+    {
         // Check for request forgeries.
         $this->checkToken();
 
@@ -423,6 +440,8 @@ class ItemController extends FormController
 
             return false;
         }
+
+        $this->captureAutosaveCanonicalResult($model, $this->context . '.id');
 
         // Save succeeded, check-in the row.
         if ($model->checkin($data['id']) === false) {

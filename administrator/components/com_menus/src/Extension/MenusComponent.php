@@ -40,7 +40,7 @@ class MenusComponent extends MVCComponent implements
 
     public function getAutosaveContexts(): array
     {
-        return ['com_menus.menu' => true];
+        return ['com_menus.menu' => true, 'com_menus.item' => true];
     }
 
     /**
