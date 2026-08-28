@@ -10,12 +10,14 @@
 
 namespace Joomla\Component\Fields\Administrator\View\Field;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\CMS\Toolbar\ToolbarHelper;
+use Joomla\Component\Fields\Administrator\Autosave\FieldAutosaveProvider;
 use Joomla\Component\Fields\Administrator\Model\FieldModel;
 use Joomla\Filesystem\Path;
 
@@ -30,6 +32,8 @@ use Joomla\Filesystem\Path;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
+
     /**
      * @var     \Joomla\CMS\Form\Form
      *
@@ -82,7 +86,54 @@ class HtmlView extends BaseHtmlView
         $this->form
             ->addControlField('task');
 
+        $this->prepareAutosave();
+
         parent::display($tpl);
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_fields.autosave.field');
+
+        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+            return;
+        }
+
+        try {
+            $provider = $app->bootComponent('com_fields')->getAutosaveProvider('com_fields.field');
+            if (!$provider instanceof FieldAutosaveProvider) {
+                return;
+            }
+            $target = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+            if (!$provider->targetExists($target)) {
+                return;
+            }
+            $schema = $provider->getDynamicSchemaForForm($target, $this->form);
+        } catch (\Throwable) {
+            return;
+        }
+
+        $ids = [];
+        foreach (['title', 'name', 'label', 'description', 'required', 'only_use_in_subform', 'default_value', 'note'] as $name) {
+            $field = $this->form->getField($name);
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+            $ids[$name] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $target,
+            'com_fields.autosave.field',
+            'item-form',
+            $ids,
+            'com_fields.field-autosave',
+            ['fields' => $schema->fields(), 'fingerprint' => $schema->fingerprint()]
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**

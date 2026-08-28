@@ -32,7 +32,7 @@ class FieldsComponent extends MVCComponent implements CategoryServiceInterface, 
 
     public function getAutosaveContexts(): array
     {
-        return ['com_fields.group' => true];
+        return ['com_fields.group' => true, 'com_fields.field' => true];
     }
 
     /**

@@ -163,8 +163,8 @@ class OverrideController extends FormController
         }
 
         $this->autosaveNativeSaveSucceeded = true;
-        $client   = $app->getUserState('com_languages.overrides.filter.client', 0) ? 'administrator' : 'site';
-        $language = (string) $app->getUserState('com_languages.overrides.filter.language', 'en-GB');
+        $client                            = $app->getUserState('com_languages.overrides.filter.client', 0) ? 'administrator' : 'site';
+        $language                          = (string) $app->getUserState('com_languages.overrides.filter.language', 'en-GB');
         try {
             $this->captureAutosaveCanonicalTarget(OverrideAutosaveProvider::target($client, $language, $validData['key']));
         } catch (\InvalidArgumentException) {

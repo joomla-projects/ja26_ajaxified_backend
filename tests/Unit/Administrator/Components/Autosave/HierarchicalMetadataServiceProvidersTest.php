@@ -19,7 +19,7 @@ class HierarchicalMetadataServiceProvidersTest extends UnitTestCase
     /**
      * @dataProvider componentProvider
      */
-    public function testActualServiceProviderRegistersExactContext(string $componentName, string $context, string $providerClass): void
+    public function testActualServiceProviderRegistersExactContext(string $componentName, array $contexts, string $context, string $providerClass): void
     {
         $container       = new Container();
         $serviceProvider = require JPATH_ADMINISTRATOR . '/components/' . $componentName . '/services/provider.php';
@@ -36,16 +36,17 @@ class HierarchicalMetadataServiceProvidersTest extends UnitTestCase
         $component = $container->get(ComponentInterface::class);
 
         $this->assertInstanceOf(AutosaveServiceInterface::class, $component);
-        $this->assertSame([$context => true], $component->getAutosaveContexts());
+        $this->assertSame($contexts, $component->getAutosaveContexts());
         $this->assertInstanceOf($providerClass, $component->getAutosaveProvider($context));
     }
 
     public static function componentProvider(): array
     {
         return [
-            'category' => ['com_categories', 'com_categories.category', 'Joomla\Component\Categories\Administrator\Autosave\CategoryAutosaveProvider'],
-            'tag'      => ['com_tags', 'com_tags.tag', 'Joomla\Component\Tags\Administrator\Autosave\TagAutosaveProvider'],
-            'group'    => ['com_fields', 'com_fields.group', 'Joomla\Component\Fields\Administrator\Autosave\GroupAutosaveProvider'],
+            'category' => ['com_categories', ['com_categories.category' => true], 'com_categories.category', 'Joomla\Component\Categories\Administrator\Autosave\CategoryAutosaveProvider'],
+            'tag'      => ['com_tags', ['com_tags.tag' => true], 'com_tags.tag', 'Joomla\Component\Tags\Administrator\Autosave\TagAutosaveProvider'],
+            'group'    => ['com_fields', ['com_fields.group' => true, 'com_fields.field' => true], 'com_fields.group', 'Joomla\Component\Fields\Administrator\Autosave\GroupAutosaveProvider'],
+            'field'    => ['com_fields', ['com_fields.group' => true, 'com_fields.field' => true], 'com_fields.field', 'Joomla\Component\Fields\Administrator\Autosave\FieldAutosaveProvider'],
         ];
     }
 }

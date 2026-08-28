@@ -78,6 +78,7 @@ final class AutosaveViewConfigurator
      * @param   string                     $formId      Explicit owned form ID.
      * @param   array<string, string>       $fieldIds   Explicit payload field IDs.
      * @param   string                     $asset       Component integration asset.
+     * @param   array<string, mixed>|null  $dynamicSchema Bounded server-owned dynamic field schema.
      *
      * @return  void
      *
@@ -89,7 +90,8 @@ final class AutosaveViewConfigurator
         string $optionsKey,
         string $formId,
         array $fieldIds,
-        string $asset
+        string $asset,
+        ?array $dynamicSchema = null
     ): void {
         if (
             $optionsKey === ''
@@ -99,6 +101,20 @@ final class AutosaveViewConfigurator
             || array_filter($fieldIds, static fn ($id) => !\is_string($id) || $id === '') !== []
         ) {
             throw new \InvalidArgumentException('The Autosave view configuration is invalid.');
+        }
+
+        if (
+            $dynamicSchema !== null
+            && (
+                array_diff_key($dynamicSchema, ['fields' => true, 'fingerprint' => true])
+                || array_diff_key(['fields' => true, 'fingerprint' => true], $dynamicSchema)
+                || !\is_array($dynamicSchema['fields'])
+                || \count($dynamicSchema['fields']) > AutosaveDynamicSchema::MAXIMUM_FIELDS
+                || !\is_string($dynamicSchema['fingerprint'])
+                || preg_match('/^[a-f0-9]{64}$/D', $dynamicSchema['fingerprint']) !== 1
+            )
+        ) {
+            throw new \InvalidArgumentException('The Autosave dynamic schema configuration is invalid.');
         }
 
         $endpoints = [];
@@ -124,18 +140,24 @@ final class AutosaveViewConfigurator
             ['endpoints' => $endpoints],
             false
         );
+        $configuration = [
+            'enabled'              => true,
+            'context'              => $provider->getContext(),
+            'targetId'             => $targetId,
+            'payloadSchemaVersion' => $provider->getPayloadSchemaVersion(),
+            'formId'               => $formId,
+            'fieldIds'             => $fieldIds,
+            'locale'               => $language->getTag(),
+            'timeZone'             => $timeZone,
+        ];
+
+        if ($dynamicSchema !== null) {
+            $configuration['dynamicSchema'] = $dynamicSchema;
+        }
+
         $this->document->addScriptOptions(
             $optionsKey,
-            [
-                'enabled'              => true,
-                'context'              => $provider->getContext(),
-                'targetId'             => $targetId,
-                'payloadSchemaVersion' => $provider->getPayloadSchemaVersion(),
-                'formId'               => $formId,
-                'fieldIds'             => $fieldIds,
-                'locale'               => $language->getTag(),
-                'timeZone'             => $timeZone,
-            ],
+            $configuration,
             false
         );
 
