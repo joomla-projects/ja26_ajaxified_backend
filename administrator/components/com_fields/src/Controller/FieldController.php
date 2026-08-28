@@ -11,6 +11,7 @@
 namespace Joomla\Component\Fields\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
@@ -29,6 +30,11 @@ use Joomla\Registry\Registry;
  */
 class FieldController extends FormController
 {
+    use AutosaveFormControllerTrait;
+
+    private const AUTOSAVE_CONTEXT      = 'com_fields.field';
+    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'];
+
     /**
      * @var    string
      */
@@ -192,5 +198,12 @@ class FieldController extends FormController
             $registry->loadArray($item->params);
             $item->params = (string) $registry;
         }
+
+        $this->captureAutosaveCanonicalResult($model, 'field.id');
+    }
+
+    public function save($key = null, $urlVar = null)
+    {
+        return $this->executeAutosaveCanonicalSave(fn () => parent::save($key, $urlVar), $urlVar);
     }
 }

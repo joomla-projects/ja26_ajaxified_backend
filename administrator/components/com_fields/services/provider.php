@@ -17,6 +17,7 @@ use Joomla\CMS\Extension\Service\Provider\CategoryFactory;
 use Joomla\CMS\Extension\Service\Provider\ComponentDispatcherFactory;
 use Joomla\CMS\Extension\Service\Provider\MVCFactory;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Fields\Administrator\Autosave\FieldAutosaveProvider;
 use Joomla\Component\Fields\Administrator\Autosave\GroupAutosaveProvider;
 use Joomla\Component\Fields\Administrator\Extension\FieldsComponent;
 use Joomla\Database\DatabaseInterface;
@@ -52,6 +53,8 @@ return new class () implements ServiceProviderInterface {
                 $component->setMVCFactory($container->get(MVCFactoryInterface::class));
                 $component->setCategoryFactory($container->get(CategoryFactoryInterface::class));
                 $provider = new GroupAutosaveProvider($container->get(DatabaseInterface::class));
+                $component->setAutosaveProvider($provider->getContext(), $provider);
+                $provider = new FieldAutosaveProvider($container->get(DatabaseInterface::class));
                 $component->setAutosaveProvider($provider->getContext(), $provider);
 
                 return $component;
