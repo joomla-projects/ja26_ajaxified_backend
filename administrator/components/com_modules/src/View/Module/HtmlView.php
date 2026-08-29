@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Modules\Administrator\View\Module;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -18,6 +19,7 @@ use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\CMS\Toolbar\ToolbarHelper;
+use Joomla\Component\Modules\Administrator\Autosave\ModuleAutosaveProvider;
 use Joomla\Component\Modules\Administrator\Model\ModuleModel;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -31,6 +33,8 @@ use Joomla\Component\Modules\Administrator\Model\ModuleModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
+
     /**
      * The Form object
      *
@@ -120,6 +124,8 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task')
             ->addControlField('return', Factory::getApplication()->getInput()->getBase64('return', ''));
 
+        $this->prepareAutosave();
+
         if ($this->getLayout() !== 'modal') {
             $this->addToolbar();
         } else {
@@ -127,6 +133,53 @@ class HtmlView extends BaseHtmlView
         }
 
         parent::display($tpl);
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_modules.autosave.module');
+
+        if (!\in_array($this->getLayout(), ['edit', 'default'], true) || (int) $this->item->id <= 0) {
+            return;
+        }
+
+        try {
+            $provider = $app->bootComponent('com_modules')->getAutosaveProvider('com_modules.module');
+
+            if (!$provider instanceof ModuleAutosaveProvider) {
+                return;
+            }
+
+            $target = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+            $schema = $provider->getDynamicSchemaForForm($target, $this->form);
+        } catch (\Throwable) {
+            return;
+        }
+
+        $ids = [];
+
+        foreach (['title', 'note', 'version_note', 'showtitle', 'position', 'content'] as $name) {
+            $field = $this->form->getField($name);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $ids[$name] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $target,
+            'com_modules.autosave.module',
+            'module-form',
+            $ids,
+            'com_modules.module-autosave',
+            ['fields' => $schema->fields(), 'fingerprint' => $schema->fingerprint()]
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**

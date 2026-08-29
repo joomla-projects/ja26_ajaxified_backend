@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Modules\Administrator\Controller;
 
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
@@ -31,7 +32,11 @@ use Joomla\CMS\Versioning\VersionableControllerTrait;
  */
 class ModuleController extends FormController
 {
+    use AutosaveFormControllerTrait;
     use VersionableControllerTrait;
+
+    private const AUTOSAVE_CONTEXT      = 'com_modules.module';
+    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'];
 
     /**
      * Override parent add method.
@@ -217,6 +222,7 @@ class ModuleController extends FormController
         }
 
         $this->app->setUserState('com_modules.add.module.params', null);
+        $this->captureAutosaveCanonicalResult($model, 'module.id');
     }
 
     /**
@@ -228,6 +234,11 @@ class ModuleController extends FormController
      * @return  boolean  True if successful, false otherwise.
      */
     public function save($key = null, $urlVar = null)
+    {
+        return $this->executeAutosaveCanonicalSave(fn () => $this->executeModuleSave($key, $urlVar), $urlVar);
+    }
+
+    private function executeModuleSave($key = null, $urlVar = null)
     {
         $this->checkToken();
 
