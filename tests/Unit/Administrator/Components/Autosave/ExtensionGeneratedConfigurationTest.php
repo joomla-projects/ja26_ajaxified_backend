@@ -68,6 +68,98 @@ class ExtensionGeneratedConfigurationTest extends UnitTestCase
         $this->assertSame($module->fingerprint(), $style->fingerprint());
     }
 
+    /**
+     * @dataProvider schemaFactoryCases
+     */
+    public function testFactoriesOmitInvalidExtensionFieldsAndRetainSafeSiblings(string $factoryClass): void
+    {
+        $tooManyOptions = '';
+
+        for ($i = 0; $i <= AutosaveDynamicSchema::MAXIMUM_ENUM_VALUES; $i++) {
+            $tooManyOptions .= '<option value="value' . $i . '">Value</option>';
+        }
+
+        $form = new Form('extension', ['control' => 'jform']);
+        $form->load(
+            '<form><fields name="params"><fieldset name="basic">'
+            . '<field name="safe_text" type="text" maxlength="20"/>'
+            . '<field name="safe_boolean" type="checkbox"/>'
+            . '<field name="safe_collection" type="list" multiple="true"><option value="a">A</option><option value="b">B</option></field>'
+            . '<field name="vendor_widget" type="VendorCustom"/>'
+            . '<field name="private_key" type="text"/>'
+            . '<field name="upload_reference" type="text"/>'
+            . '<field name="too_many" type="list">' . $tooManyOptions . '</field>'
+            . '<field name="too_long" type="list"><option value="' . str_repeat('x', 129) . '">Long</option></field>'
+            . '<field name="safe_enum" type="list"><option value="one">One</option><option value="two">Two</option></field>'
+            . '</fieldset></fields></form>'
+        );
+
+        $schema = (new $factoryClass())->fromForm($form);
+
+        $this->assertSame(
+            ['safe_boolean', 'safe_collection', 'safe_enum', 'safe_text'],
+            array_column(array_column($schema->fields(), 'path'), 1)
+        );
+        $this->assertSame(['boolean', 'strings', 'enum', 'string'], array_column($schema->fields(), 'kind'));
+    }
+
+    /**
+     * @dataProvider schemaFactoryCases
+     */
+    public function testFactoriesDoNotSelectAnOrderDependentSubsetWhenFieldLimitIsExceeded(string $factoryClass): void
+    {
+        $fields = '';
+
+        for ($i = 0; $i <= AutosaveDynamicSchema::MAXIMUM_FIELDS; $i++) {
+            $fields .= '<field name="safe' . $i . '" type="text"/>';
+        }
+
+        $form = new Form('extension', ['control' => 'jform']);
+        $form->load('<form><fields name="params"><fieldset name="basic">' . $fields . '</fieldset></fields></form>');
+
+        $this->assertSame([], (new $factoryClass())->fromForm($form)->fields());
+    }
+
+    public static function schemaFactoryCases(): array
+    {
+        return [
+            'Module'         => [ModuleAutosaveSchemaFactory::class],
+            'Template Style' => [StyleAutosaveSchemaFactory::class],
+        ];
+    }
+
+    public function testProvidersResolveSchemasFromAuthoritativeStoredExtensionIdentity(): void
+    {
+        $schema       = new AutosaveDynamicSchema([]);
+        $moduleRecord = (object) ['id' => 7, 'module' => 'mod_vendor', 'checked_out' => 0];
+        $styleRecord  = (object) ['id' => 9, 'template' => 'vendor_template', 'client_id' => 1];
+        $moduleSeen   = null;
+        $styleSeen    = null;
+
+        $module = new ModuleAutosaveProvider(
+            $this->databaseReturning($moduleRecord),
+            static function (object $record) use (&$moduleSeen, $schema): AutosaveDynamicSchema {
+                $moduleSeen = $record;
+
+                return $schema;
+            }
+        );
+        $style = new StyleAutosaveProvider(
+            $this->databaseReturning($styleRecord),
+            static function (object $record) use (&$styleSeen, $schema): AutosaveDynamicSchema {
+                $styleSeen = $record;
+
+                return $schema;
+            }
+        );
+
+        $module->getDynamicSchema('7');
+        $style->getDynamicSchema('9');
+
+        $this->assertSame($moduleRecord, $moduleSeen);
+        $this->assertSame($styleRecord, $styleSeen);
+    }
+
     public function testProvidersRejectCrossExtensionFingerprintsAndUnknownParams(): void
     {
         $schemaA = new AutosaveDynamicSchema([['path' => ['params', 'colour'], 'id' => 'jform_params_colour', 'kind' => 'string', 'maxLength' => 20]]);
