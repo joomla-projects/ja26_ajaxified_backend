@@ -15,10 +15,14 @@ use Joomla\CMS\Dispatcher\ComponentDispatcherFactoryInterface;
 use Joomla\CMS\Extension\ComponentInterface;
 use Joomla\CMS\Extension\Service\Provider\ComponentDispatcherFactory;
 use Joomla\CMS\Extension\Service\Provider\MVCFactory;
+use Joomla\CMS\Form\Form;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Modules\Administrator\Autosave\ModuleAutosaveProvider;
+use Joomla\Component\Modules\Administrator\Autosave\ModuleAutosaveSchemaFactory;
 use Joomla\Component\Modules\Administrator\Extension\ModulesComponent;
 use Joomla\Component\Modules\Administrator\Helper\AssociationsHelper;
+use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
 
@@ -52,6 +56,18 @@ return new class () implements ServiceProviderInterface {
                 $component->setRegistry($container->get(Registry::class));
                 $component->setMVCFactory($container->get(MVCFactoryInterface::class));
                 $component->setAssociationExtension($container->get(AssociationExtensionInterface::class));
+                $provider = new ModuleAutosaveProvider(
+                    $container->get(DatabaseInterface::class),
+                    function (object $record) use ($container) {
+                        Form::addFormPath(JPATH_ADMINISTRATOR . '/components/com_modules/forms');
+                        $model = $container->get(MVCFactoryInterface::class)
+                            ->createModel('Module', 'Administrator', ['ignore_request' => true]);
+                        $form = $model->getForm((array) $record, false);
+
+                        return (new ModuleAutosaveSchemaFactory())->fromForm($form);
+                    }
+                );
+                $component->setAutosaveProvider($provider->getContext(), $provider);
 
                 return $component;
             }
