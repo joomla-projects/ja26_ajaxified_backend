@@ -29,8 +29,20 @@ final class ItemAutosaveSchemaFactory
         foreach ($form->getXml()->xpath('//fields[@name="params"]//field') ?: [] as $field) {
             $descriptor = $this->descriptor($field);
 
-            if ($descriptor !== null) {
-                $descriptors[] = $descriptor;
+            if ($descriptor === null) {
+                continue;
+            }
+
+            try {
+                new AutosaveDynamicSchema([$descriptor]);
+            } catch (\InvalidArgumentException) {
+                continue;
+            }
+
+            $descriptors[] = $descriptor;
+
+            if (\count($descriptors) > AutosaveDynamicSchema::MAXIMUM_FIELDS) {
+                return new AutosaveDynamicSchema([]);
             }
         }
 
@@ -44,7 +56,11 @@ final class ItemAutosaveSchemaFactory
         $id   = (string) ($field['id'] ?: 'jform_params_' . $name);
         $base = ['path' => ['params', $name], 'id' => $id];
 
-        if (\in_array($type, ['hidden', 'spacer', 'file', 'password', 'rules', 'subform', 'sql', 'plugins'], true)) {
+        if (
+            $name === ''
+            || preg_match('/(?:password|passwd|secret|token|credential|api[_-]?key|private[_-]?key|(?:^|[_-])(?:file|upload)(?:$|[_-]))/i', $name)
+            || \in_array($type, ['hidden', 'spacer', 'file', 'password', 'rules', 'subform', 'sql', 'plugins'], true)
+        ) {
             return null;
         }
 
@@ -56,10 +72,6 @@ final class ItemAutosaveSchemaFactory
             }
 
             $values = array_values(array_unique($values));
-
-            if ($values === [] || \count($values) > AutosaveDynamicSchema::MAXIMUM_ENUM_VALUES) {
-                return null;
-            }
 
             return $base + ['kind' => ((string) $field['multiple'] === 'true') ? 'strings' : 'enum', 'values' => $values, 'maxItems' => 32];
         }

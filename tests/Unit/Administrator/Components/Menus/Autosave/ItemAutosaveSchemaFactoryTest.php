@@ -3,6 +3,7 @@
 namespace Joomla\Tests\Unit\Administrator\Components\Menus\Autosave;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Autosave\AutosaveDynamicSchema;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\User\User;
@@ -45,6 +46,47 @@ class ItemAutosaveSchemaFactoryTest extends UnitTestCase
         } finally {
             Factory::$application = $previous;
         }
+    }
+
+    public function testInvalidRoutedFieldsAreOmittedWithoutRemovingSafeSiblings(): void
+    {
+        $tooManyOptions = '';
+
+        for ($i = 0; $i <= AutosaveDynamicSchema::MAXIMUM_ENUM_VALUES; $i++) {
+            $tooManyOptions .= '<option value="value' . $i . '">Value</option>';
+        }
+
+        $form = new Form('com_menus.item', ['control' => 'jform']);
+        $form->load(
+            '<form><fields name="params"><fieldset name="basic">'
+            . '<field name="safe_text" type="text" maxlength="20"/>'
+            . '<field name="vendor_widget" type="VendorCustom"/>'
+            . '<field name="private_key" type="text"/>'
+            . '<field name="upload_reference" type="text"/>'
+            . '<field name="nested" type="subform"/>'
+            . '<field name="too_many" type="list">' . $tooManyOptions . '</field>'
+            . '<field name="too_long" type="list"><option value="' . str_repeat('x', 129) . '">Long</option></field>'
+            . '<field name="safe_enum" type="list"><option value="one">One</option><option value="two">Two</option></field>'
+            . '</fieldset></fields></form>'
+        );
+
+        $schema = (new ItemAutosaveSchemaFactory())->fromForm($form);
+
+        $this->assertSame(['safe_enum', 'safe_text'], array_column(array_column($schema->fields(), 'path'), 1));
+    }
+
+    public function testFieldLimitDoesNotProduceAnOrderDependentRoutedSubset(): void
+    {
+        $fields = '';
+
+        for ($i = 0; $i <= AutosaveDynamicSchema::MAXIMUM_FIELDS; $i++) {
+            $fields .= '<field name="safe' . $i . '" type="text"/>';
+        }
+
+        $form = new Form('com_menus.item', ['control' => 'jform']);
+        $form->load('<form><fields name="params"><fieldset name="basic">' . $fields . '</fieldset></fields></form>');
+
+        $this->assertSame([], (new ItemAutosaveSchemaFactory())->fromForm($form)->fields());
     }
 
     private function form(string $file): Form
