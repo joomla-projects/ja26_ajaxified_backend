@@ -33,6 +33,25 @@ class ItemAutosaveProviderTest extends UnitTestCase
         }
     }
 
+    public function testSchemaResolverReceivesTheAuthoritativeStoredRoute(): void
+    {
+        $record   = $this->record();
+        $seen     = null;
+        $schema   = new AutosaveDynamicSchema([]);
+        $provider = new ItemAutosaveProvider(
+            $this->databaseReturning($record),
+            static function (object $resolved) use (&$seen, $schema): AutosaveDynamicSchema {
+                $seen = $resolved;
+
+                return $schema;
+            }
+        );
+
+        $provider->getDynamicSchema('42');
+
+        $this->assertSame($record, $seen);
+    }
+
     private function record(): object
     {
         return (object) ['id' => 42, 'menu_type_id' => 3, 'menutype' => 'mainmenu', 'title' => 'Item', 'alias' => 'item', 'note' => '', 'link' => 'index.php?option=com_content&view=article&id=1', 'type' => 'component', 'component_id' => 22, 'browserNav' => 0, 'params' => '{}', 'checked_out' => 0, 'published' => 1, 'parent_id' => 1, 'access' => 1, 'language' => '*', 'home' => 0, 'client_id' => 0];

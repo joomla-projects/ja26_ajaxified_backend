@@ -22,6 +22,7 @@ class CanonicalRelationsServiceProvidersTest extends UnitTestCase
     {
         $container = $this->container();
         (require JPATH_ADMINISTRATOR . '/components/com_newsfeeds/services/provider.php')->register($container);
+        $this->registerComponentDependencies($container);
         $container->set(CategoryFactoryInterface::class, $this->createMock(CategoryFactoryInterface::class));
         $container->set(RouterFactoryInterface::class, $this->createMock(RouterFactoryInterface::class));
         $container->set(AssociationExtensionInterface::class, $this->createMock(AssociationExtensionInterface::class));
@@ -36,6 +37,7 @@ class CanonicalRelationsServiceProvidersTest extends UnitTestCase
     {
         $container = $this->container();
         (require JPATH_ADMINISTRATOR . '/components/com_workflow/services/provider.php')->register($container);
+        $this->registerComponentDependencies($container);
         $component = $container->get(ComponentInterface::class);
 
         $this->assertSame(['com_workflow.workflow' => true, 'com_workflow.stage' => true, 'com_workflow.transition' => true], $component->getAutosaveContexts());
@@ -47,10 +49,14 @@ class CanonicalRelationsServiceProvidersTest extends UnitTestCase
     private function container(): Container
     {
         $container = new Container();
-        $container->set(ComponentDispatcherFactoryInterface::class, $this->createMock(ComponentDispatcherFactoryInterface::class));
-        $container->set(MVCFactoryInterface::class, $this->createMock(MVCFactoryInterface::class));
         $container->set(DatabaseInterface::class, $this->createMock(DatabaseInterface::class));
 
         return $container;
+    }
+
+    private function registerComponentDependencies(Container $container): void
+    {
+        $container->set(ComponentDispatcherFactoryInterface::class, $this->createMock(ComponentDispatcherFactoryInterface::class));
+        $container->set(MVCFactoryInterface::class, $this->createMock(MVCFactoryInterface::class));
     }
 }
