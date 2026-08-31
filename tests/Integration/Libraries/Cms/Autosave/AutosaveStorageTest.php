@@ -1029,6 +1029,52 @@ class AutosaveStorageTest extends IntegrationTestCase implements DBTestInterface
         $this->assertNull($storage->detect(7, 'com_example.record', 'record-42', new Date('2026-07-29 10:00:14', 'UTC')));
     }
 
+    public function testProvisionalCanonicalVerificationLoadsTrustedOriginAndSubmittedPayload(): void
+    {
+        $storage    = $this->storage();
+        $target     = 'p1:' . str_repeat('a', 64);
+        $revision   = 'autosave:create:v1:' . str_repeat('b', 64);
+        $payload    = ['title' => 'New record'];
+        $identities = $this->initialize(['targetId' => $target, 'baseRevision' => $revision]);
+        $prepared   = $storage->prepareCanonicalAction(
+            7,
+            $identities['continuation_id'],
+            $identities['generation_id'],
+            'com_example.record',
+            $target,
+            $revision,
+            1,
+            $payload,
+            1,
+            'apply',
+            new Date('2026-07-29 10:00:10', 'UTC')
+        );
+
+        $verified = $storage->verifyCreateCanonicalAction(
+            7,
+            $prepared['operation_id'],
+            'com_example.record',
+            'apply',
+            $revision,
+            new Date('2026-07-29 10:00:11', 'UTC')
+        );
+
+        $this->assertSame($target, $verified['target_id']);
+        $this->assertSame($payload, $verified['payload']);
+        $this->assertSame('pending', $verified['outcome']);
+        $this->assertAutosaveFailure(
+            'canonical_action_not_found',
+            fn () => $storage->verifyCreateCanonicalAction(
+                8,
+                $prepared['operation_id'],
+                'com_example.record',
+                'apply',
+                $revision,
+                new Date('2026-07-29 10:00:11', 'UTC')
+            )
+        );
+    }
+
     /**
      * @testdox  definitive failure retains the immutable closed snapshot
      *

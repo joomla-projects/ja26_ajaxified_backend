@@ -26,7 +26,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  *
  * @since  __DEPLOY_VERSION__
  */
-final class AutosaveStorage implements AutosaveStorageInterface
+final class AutosaveStorage implements AutosaveCreateStorageInterface
 {
     private const MAX_INSERT_ATTEMPTS         = 3;
     private const MAX_ID_ATTEMPTS             = 3;
@@ -1026,6 +1026,70 @@ final class AutosaveStorage implements AutosaveStorageInterface
         ];
     }
 
+    public function verifyCreateCanonicalAction(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $intent,
+        string $currentBaseRevision,
+        Date $now
+    ): array {
+        $this->validateCanonicalIntent($intent);
+        $this->validateOpaqueString($operationId, 64, 'canonical operation identity');
+
+        if ($userId <= 0 || AutosaveContext::getComponentName($context) === null || $now->getOffset() !== 0) {
+            throw new \InvalidArgumentException('The Autosave canonical action identity is invalid.');
+        }
+
+        $operation = $this->loadCanonicalAction($operationId, $userId);
+
+        if ($operation === null || $operation['context'] !== $context) {
+            throw $this->canonicalActionNotFound();
+        }
+
+        try {
+            AutosaveTargetIdentity::requireProvisional($operation['target_id']);
+        } catch (\InvalidArgumentException) {
+            throw $this->canonicalActionNotFound();
+        }
+
+        $operation = $this->inspectCanonicalActionRecord(
+            $userId,
+            $operationId,
+            $context,
+            $operation['target_id'],
+            $now
+        );
+
+        if ($operation['intent'] !== $intent) {
+            throw $this->failure('canonical_intent_conflict', 'The canonical action intent does not match.');
+        }
+
+        if ($operation['generation_state'] !== GenerationState::Closed->value) {
+            throw $this->failure('canonical_generation_not_closed', 'The canonical action generation is not durably closed.');
+        }
+
+        if ($operation['outcome'] !== CanonicalActionState::Pending->value) {
+            throw $this->failure('canonical_action_consumed', 'The canonical action is no longer pending.');
+        }
+
+        if (!hash_equals($operation['expected_base_revision'], $currentBaseRevision)) {
+            throw $this->failure('base_revision_conflict', 'The create contract changed before submission.');
+        }
+
+        return [
+            'operation_id'           => $operation['operation_id'],
+            'intent'                 => $operation['intent'],
+            'outcome'                => $operation['outcome'],
+            'expected_base_revision' => $operation['expected_base_revision'],
+            'target_id'              => $operation['target_id'],
+            'payload'                => $this->loadCanonicalActionPayload(
+                (int) $operation['generation_pk'],
+                $userId
+            ),
+        ];
+    }
+
     /**
      * Atomically record canonical success and retire the submitted generation.
      */
@@ -1739,6 +1803,25 @@ final class AutosaveStorage implements AutosaveStorageInterface
             ->bind(':user_id', $userId, ParameterType::INTEGER);
 
         return $this->db->setQuery($query)->loadAssoc() ?: null;
+    }
+
+    /** Load the immutable submitted payload only for trusted create verification. */
+    private function loadCanonicalActionPayload(int $generationId, int $userId): array
+    {
+        $query = $this->db->createQuery()
+            ->select($this->db->quoteName('payload'))
+            ->from($this->db->quoteName('#__autosave_generations'))
+            ->where($this->db->quoteName('id') . ' = :generation_id')
+            ->where($this->db->quoteName('user_id') . ' = :user_id')
+            ->bind(':generation_id', $generationId, ParameterType::INTEGER)
+            ->bind(':user_id', $userId, ParameterType::INTEGER);
+        $payload = $this->db->setQuery($query)->loadResult();
+
+        if (!\is_string($payload)) {
+            throw $this->canonicalActionNotFound();
+        }
+
+        return $this->decodePayload($payload);
     }
 
     /**

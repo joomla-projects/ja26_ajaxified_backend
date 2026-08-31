@@ -47,6 +47,7 @@ final class AutosaveController
     {
         return match ($operation) {
             'initialize'                => $this->initialize($request, $user, $now),
+            'initializeCreate'          => $this->initializeCreate($request, $user, $now),
             'preserve'                  => $this->preserve($request, $user, $now),
             'detect'                    => $this->detect($request, $user, $now),
             'read'                      => $this->read($request, $user, $now),
@@ -55,6 +56,19 @@ final class AutosaveController
             'getCanonicalActionOutcome' => $this->getCanonicalActionOutcome($request, $user, $now),
             default                     => throw new \InvalidArgumentException('The Autosave operation is unsupported.'),
         };
+    }
+
+    private function initializeCreate(array $request, User $user, Date $now): array
+    {
+        $this->requireExactKeys($request, ['context', 'initialization_key']);
+        $this->requireStrings($request, ['context', 'initialization_key']);
+
+        return $this->lifecycle->initializeCreate(
+            $user,
+            $request['context'],
+            $request['initialization_key'],
+            $now
+        );
     }
 
     private function initialize(array $request, User $user, Date $now): array

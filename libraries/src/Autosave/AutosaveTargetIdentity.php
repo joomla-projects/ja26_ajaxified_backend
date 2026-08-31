@@ -24,7 +24,8 @@ namespace Joomla\CMS\Autosave;
  */
 final class AutosaveTargetIdentity
 {
-    public const MAXIMUM_LENGTH = 191;
+    public const MAXIMUM_LENGTH      = 191;
+    private const PROVISIONAL_PREFIX = 'p1:';
 
     public static function numeric(string $value, int $maximum = PHP_INT_MAX): string
     {
@@ -40,6 +41,53 @@ final class AutosaveTargetIdentity
         }
 
         return $value;
+    }
+
+    public static function provisional(int $userId, string $context, string $initializationKey, string $secret): string
+    {
+        if ($userId <= 0 || $secret === '' || AutosaveContext::getComponentName($context) === null) {
+            throw new \InvalidArgumentException('The provisional Autosave target inputs are invalid.');
+        }
+
+        self::validateInitializationKey($initializationKey);
+        $input = pack('N', $userId)
+            . pack('N', \strlen($context)) . $context
+            . pack('N', \strlen($initializationKey)) . $initializationKey;
+        $key = hash_hmac('sha256', 'joomla.autosave.provisional-target-key.v1', $secret, true);
+
+        return self::PROVISIONAL_PREFIX
+            . hash_hmac('sha256', "joomla.autosave.provisional-target.v1\0" . $input, $key);
+    }
+
+    public static function isProvisional(string $identity): bool
+    {
+        return preg_match('/^p1:[0-9a-f]{64}$/D', $identity) === 1;
+    }
+
+    public static function isProvisionalNamespace(string $identity): bool
+    {
+        return str_starts_with($identity, self::PROVISIONAL_PREFIX);
+    }
+
+    public static function requireProvisional(string $identity): string
+    {
+        if (!self::isProvisional($identity)) {
+            throw new \InvalidArgumentException('The provisional Autosave target is invalid.');
+        }
+
+        return $identity;
+    }
+
+    public static function validateInitializationKey(string $initializationKey): void
+    {
+        if (
+            $initializationKey === ''
+            || \strlen($initializationKey) > self::MAXIMUM_LENGTH
+            || preg_match('//u', $initializationKey) !== 1
+            || preg_match('/[\x00-\x1F\x7F]/', $initializationKey) === 1
+        ) {
+            throw new \InvalidArgumentException('The Autosave initialization key is invalid.');
+        }
     }
 
     /**

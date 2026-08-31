@@ -19,6 +19,24 @@ class AutosaveTargetIdentityTest extends UnitTestCase
         $this->assertNotSame($target, AutosaveTargetIdentity::composite('languages.override', ['administrator', 'en-GB', 'COM_EXAMPLE_VALUE']));
     }
 
+    public function testProvisionalIdentityIsRetryStableAndBoundToOwnerContextAndKey(): void
+    {
+        $target = AutosaveTargetIdentity::provisional(7, 'com_example.record', 'request-1', 'site-secret');
+
+        $this->assertMatchesRegularExpression('/^p1:[0-9a-f]{64}$/D', $target);
+        $this->assertTrue(AutosaveTargetIdentity::isProvisional($target));
+        $this->assertSame($target, AutosaveTargetIdentity::provisional(7, 'com_example.record', 'request-1', 'site-secret'));
+        $this->assertNotSame($target, AutosaveTargetIdentity::provisional(8, 'com_example.record', 'request-1', 'site-secret'));
+        $this->assertNotSame($target, AutosaveTargetIdentity::provisional(7, 'com_example.other', 'request-1', 'site-secret'));
+        $this->assertNotSame($target, AutosaveTargetIdentity::provisional(7, 'com_example.record', 'request-2', 'site-secret'));
+    }
+
+    public function testMalformedProvisionalIdentityIsRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        AutosaveTargetIdentity::requireProvisional('p1:' . str_repeat('A', 64));
+    }
+
     public function testLengthPrefixesPreventDelimiterCollisions(): void
     {
         $this->assertNotSame(AutosaveTargetIdentity::composite('test', ['a|1:b', 'c']), AutosaveTargetIdentity::composite('test', ['a', '1:b|1:c']));

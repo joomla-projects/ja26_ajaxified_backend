@@ -33,6 +33,7 @@ final class Dispatcher extends BaseDispatcher
     private const MAX_REQUEST_BYTES = 5242880;
     private const TASKS             = [
         'autosave.initialize'                => 'initialize',
+        'autosave.initializeCreate'          => 'initializeCreate',
         'autosave.preserve'                  => 'preserve',
         'autosave.detect'                    => 'detect',
         'autosave.read'                      => 'read',
@@ -44,8 +45,12 @@ final class Dispatcher extends BaseDispatcher
         'malformed_context'               => 400,
         'unsupported_context'             => 422,
         'invalid_target'                  => 422,
+        'invalid_initialization_key'      => 422,
         'invalid_payload'                 => 422,
         'unsupported_schema_version'      => 422,
+        'create_unsupported'              => 422,
+        'invalid_create_contract'         => 422,
+        'create_contract_conflict'        => 409,
         'target_not_found'                => 404,
         'draft_not_found'                 => 404,
         'forbidden'                       => 403,

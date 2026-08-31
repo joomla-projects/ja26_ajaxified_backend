@@ -18,7 +18,7 @@ class AutosaveTraitTestInput
 {
     public object $post;
 
-    public function __construct(private readonly string $task, array $post, private readonly int $recordId = 42)
+    public function __construct(private readonly string $task, array $post, private readonly mixed $recordId = 42)
     {
         $this->post = new class ($post) {
             public function __construct(private readonly array $data)
@@ -43,6 +43,11 @@ class AutosaveTraitTestInput
     }
 
     public function getInt(string $key, int $default = 0): int
+    {
+        return $key === 'id' && is_numeric($this->recordId) ? (int) $this->recordId : $default;
+    }
+
+    public function get(string $key, mixed $default = null, string $filter = 'cmd'): mixed
     {
         return $key === 'id' ? $this->recordId : $default;
     }
