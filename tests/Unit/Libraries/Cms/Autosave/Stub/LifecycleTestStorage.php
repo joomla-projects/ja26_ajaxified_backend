@@ -2,13 +2,13 @@
 
 namespace Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub;
 
-use Joomla\CMS\Autosave\AutosaveStorageInterface;
+use Joomla\CMS\Autosave\AutosaveCreateStorageInterface;
 use Joomla\CMS\Date\Date;
 
 /**
  * Configurable database-free persistence fake used by lifecycle tests.
  */
-final class LifecycleTestStorage implements AutosaveStorageInterface
+final class LifecycleTestStorage implements AutosaveCreateStorageInterface
 {
     public array $calls            = [];
     public array $initializeResult = [
@@ -172,6 +172,24 @@ final class LifecycleTestStorage implements AutosaveStorageInterface
     ): array {
         $this->events[]                         = 'storage.verifyCanonicalAction';
         $this->calls['verifyCanonicalAction'][] = \func_get_args();
+        if ($this->canonicalFailure !== null) {
+            throw $this->canonicalFailure;
+        }
+
+        return $this->canonicalResult;
+    }
+
+    public function verifyCreateCanonicalAction(
+        int $userId,
+        string $operationId,
+        string $context,
+        string $intent,
+        string $currentBaseRevision,
+        Date $now
+    ): array {
+        $this->events[]                               = 'storage.verifyCreateCanonicalAction';
+        $this->calls['verifyCreateCanonicalAction'][] = \func_get_args();
+
         if ($this->canonicalFailure !== null) {
             throw $this->canonicalFailure;
         }

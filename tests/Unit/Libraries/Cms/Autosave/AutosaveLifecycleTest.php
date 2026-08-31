@@ -12,14 +12,17 @@ namespace Joomla\Tests\Unit\Libraries\Cms\Autosave;
 
 use Joomla\CMS\Application\CMSApplicationInterface;
 use Joomla\CMS\Autosave\AutosaveContextResolver;
+use Joomla\CMS\Autosave\AutosaveCreateStorageInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveLifecycle;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
 use Joomla\CMS\Autosave\AutosaveStorage;
 use Joomla\CMS\Autosave\AutosaveStorageInterface;
+use Joomla\CMS\Autosave\AutosaveTargetIdentity;
 use Joomla\CMS\Date\Date;
 use Joomla\CMS\User\User;
+use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\CreateLifecycleTestProvider;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\LifecycleTestProvider;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\LifecycleTestStorage;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\ResolverTestCapableComponent;
@@ -38,6 +41,203 @@ class AutosaveLifecycleTest extends UnitTestCase
 {
     private const CONTINUATION_ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     private const GENERATION_ID   = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+    public function testCreateInitializationUsesStaticCapabilityWithoutCanonicalTargetCalls(): void
+    {
+        $events                    = [];
+        $provider                  = new CreateLifecycleTestProvider($events);
+        $storage                   = new LifecycleTestStorage($events);
+        $storage->initializeResult = ['continuation_id' => self::CONTINUATION_ID, 'generation_id' => self::GENERATION_ID];
+        $lifecycle                 = $this->lifecycle($provider, $storage, $events, false, 'site-secret');
+
+        $first  = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now());
+        $second = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now());
+
+        $this->assertSame($first['target_id'], $second['target_id']);
+        $this->assertMatchesRegularExpression('/^p1:[0-9a-f]{64}$/D', $first['target_id']);
+        $this->assertStringStartsWith('autosave:create:v1:', $first['base_revision']);
+        $this->assertNotContains('canonicalizeTargetId', $events);
+        $this->assertNotContains('targetExists', $events);
+        $this->assertSame($first['target_id'], $storage->calls['initialize'][0][2]);
+    }
+
+    public function testLegacyProviderDoesNotSupportCreateInitialization(): void
+    {
+        $events    = [];
+        $provider  = new LifecycleTestProvider($events);
+        $storage   = new LifecycleTestStorage($events);
+        $lifecycle = $this->lifecycle($provider, $storage, $events, false, 'site-secret');
+
+        $this->assertAutosaveFailure(
+            'create_unsupported',
+            fn () => $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now())
+        );
+        $this->assertArrayNotHasKey('initialize', $storage->calls);
+    }
+
+    public function testCreateRevisionChangesWithStaticContractOrPayloadSchemaVersion(): void
+    {
+        $events                    = [];
+        $provider                  = new CreateLifecycleTestProvider($events);
+        $storage                   = new LifecycleTestStorage($events);
+        $lifecycle                 = $this->lifecycle($provider, $storage, $events, false, 'site-secret');
+        $first                     = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now());
+        $provider->contractVersion = 'static-v2';
+        $second                    = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-2', $this->now());
+        $provider->schemaVersion   = 2;
+        $third                     = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-3', $this->now());
+
+        $this->assertNotSame($first['base_revision'], $second['base_revision']);
+        $this->assertNotSame($second['base_revision'], $third['base_revision']);
+    }
+
+    public function testCreateInitializationRejectsInvalidInitializationKeyBeforeStorage(): void
+    {
+        $events    = [];
+        $provider  = new CreateLifecycleTestProvider($events);
+        $storage   = new LifecycleTestStorage($events);
+        $lifecycle = $this->lifecycle($provider, $storage, $events, false, 'site-secret');
+
+        $this->assertAutosaveFailure(
+            'invalid_initialization_key',
+            fn () => $lifecycle->initializeCreate($this->user(), 'com_example.record', "bad\nkey", $this->now())
+        );
+        $this->assertArrayNotHasKey('initialize', $storage->calls);
+    }
+
+    public function testProvisionalPreserveNormalizesBeforeCreateAuthorization(): void
+    {
+        $events                  = [];
+        $provider                = new CreateLifecycleTestProvider($events);
+        $storage                 = new LifecycleTestStorage($events);
+        $target                  = AutosaveTargetIdentity::provisional(7, 'com_example.record', 'request-1', 'site-secret');
+        $initialized             = $this->lifecycle($provider, $storage, $events, false, 'site-secret')
+            ->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now());
+        $storage->inspectResult              = $this->inspectedGeneration($initialized['base_revision']);
+        $storage->inspectResult['target_id'] = $target;
+        $events                              = [];
+        $lifecycle                           = $this->lifecycle($provider, $storage, $events, false, 'site-secret');
+
+        $lifecycle->preserve($this->user(), self::CONTINUATION_ID, self::GENERATION_ID, 1, ['draft' => true], 1, $this->now());
+
+        $this->assertLessThan(
+            array_search('authorizeCreate:preserve', $events, true),
+            array_search('normalizePayload', $events, true)
+        );
+        $this->assertSame($provider->normalized, $provider->createArguments[array_key_last($provider->createArguments)][2]);
+    }
+
+    public function testProvisionalReadAndDetectReauthorizeWithoutCanonicalRecordCalls(): void
+    {
+        $events                              = [];
+        $provider                            = new CreateLifecycleTestProvider($events);
+        $storage                             = new LifecycleTestStorage($events);
+        $lifecycle                           = $this->lifecycle($provider, $storage, $events, false, 'site-secret');
+        $initialized                         = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now());
+        $storage->inspectResult              = $this->inspectedGeneration($initialized['base_revision']);
+        $storage->inspectResult['target_id'] = $initialized['target_id'];
+        $storage->detectResult               = $this->detectedGeneration($initialized['base_revision']);
+
+        $detected = $lifecycle->detect($this->user(), 'com_example.record', $initialized['target_id'], $this->now());
+        $read     = $lifecycle->read($this->user(), self::CONTINUATION_ID, self::GENERATION_ID, $this->now());
+
+        $this->assertSame('current', $detected['classification']);
+        $this->assertSame('current', $read['classification']);
+        $this->assertContains('authorizeCreate:detect', $events);
+        $this->assertContains('authorizeCreate:read', $events);
+        $this->assertNotContains('targetExists', $events);
+        $this->assertNotContains('getBaseRevision', $events);
+    }
+
+    public function testCreateAuthorizationFailureCannotOverwriteLastValidGeneration(): void
+    {
+        $events                              = [];
+        $provider                            = new CreateLifecycleTestProvider($events);
+        $storage                             = new LifecycleTestStorage($events);
+        $lifecycle                           = $this->lifecycle($provider, $storage, $events, false, 'site-secret');
+        $initialized                         = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now());
+        $storage->inspectResult              = $this->inspectedGeneration($initialized['base_revision']);
+        $storage->inspectResult['target_id'] = $initialized['target_id'];
+        $provider->createFailure             = new AutosaveException('forbidden', 'Create permission was revoked.');
+
+        $this->assertAutosaveFailure(
+            'forbidden',
+            fn () => $lifecycle->preserve($this->user(), self::CONTINUATION_ID, self::GENERATION_ID, 4, ['title' => 'Denied'], 1, $this->now())
+        );
+        $this->assertArrayNotHasKey('preserve', $storage->calls);
+        $this->assertSame(['title' => 'Draft'], $storage->inspectResult['payload']);
+    }
+
+    public function testProvisionalPreparationNormalizesAndAuthorizesBeforeClosingGeneration(): void
+    {
+        $events                    = [];
+        $provider                  = new CreateLifecycleTestProvider($events);
+        $storage                   = new LifecycleTestStorage($events);
+        $storage->canonicalResult  = ['operation_id' => 'operation'];
+        $lifecycle                 = $this->lifecycle($provider, $storage, $events, false, 'site-secret');
+        $initialized               = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now());
+        $events                    = [];
+
+        $lifecycle->prepareCanonicalAction(
+            $this->user(),
+            'com_example.record',
+            $initialized['target_id'],
+            self::CONTINUATION_ID,
+            self::GENERATION_ID,
+            1,
+            ['title' => 'Submitted'],
+            1,
+            'apply',
+            $initialized['base_revision'],
+            $this->now()
+        );
+
+        $this->assertLessThan(
+            array_search('authorizeCreate:prepare-canonical-action', $events, true),
+            array_search('normalizePayload', $events, true)
+        );
+        $this->assertLessThan(
+            array_search('storage.prepareCanonicalAction', $events, true),
+            array_search('authorizeCreate:prepare-canonical-action', $events, true)
+        );
+    }
+
+    public function testOrdinaryInitializationRejectsProvisionalTargetBeforeProvider(): void
+    {
+        $events    = [];
+        $provider  = new LifecycleTestProvider($events);
+        $storage   = new LifecycleTestStorage($events);
+        $lifecycle = $this->lifecycle($provider, $storage, $events);
+
+        $this->assertAutosaveFailure(
+            'invalid_target',
+            fn () => $lifecycle->initialize($this->user(), 'com_example.record', 'p1:' . str_repeat('a', 64), 'key', $this->now())
+        );
+        $this->assertSame(['resolve'], $events);
+    }
+
+    public function testCreateCanonicalVerificationUsesStoredProvisionalOrigin(): void
+    {
+        $events                    = [];
+        $provider                  = new CreateLifecycleTestProvider($events);
+        $storage                   = new LifecycleTestStorage($events);
+        $storage->canonicalResult  = [
+            'operation_id'           => 'operation',
+            'intent'                 => 'apply',
+            'outcome'                => 'pending',
+            'expected_base_revision' => 'revision',
+            'target_id'              => 'p1:' . str_repeat('a', 64),
+            'payload'                => ['normalized' => true],
+        ];
+        $lifecycle = $this->lifecycle($provider, $storage, $events, false, 'site-secret');
+
+        $this->assertSame(
+            array_diff_key($storage->canonicalResult, ['payload' => true]),
+            $lifecycle->verifyCreateCanonicalAction($this->user(), 'operation', 'com_example.record', 'apply', $this->now())
+        );
+        $this->assertArrayHasKey('verifyCreateCanonicalAction', $storage->calls);
+        $this->assertNotContains('canonicalizeTargetId', $events);
+    }
 
     public function testPreserveUsesOptionalTargetAwareNormalization(): void
     {
@@ -81,12 +281,49 @@ class AutosaveLifecycleTest extends UnitTestCase
     public function testStorageImplementsLifecycleContract(): void
     {
         $this->assertContains(AutosaveStorageInterface::class, class_implements(AutosaveStorage::class));
+        $this->assertContains(AutosaveCreateStorageInterface::class, class_implements(AutosaveStorage::class));
 
         $constructor = new \ReflectionMethod(AutosaveLifecycle::class, '__construct');
         $parameters  = $constructor->getParameters();
 
         $this->assertSame(AutosaveContextResolver::class, $parameters[0]->getType()->getName());
         $this->assertSame(AutosaveStorageInterface::class, $parameters[1]->getType()->getName());
+    }
+
+    public function testExistingRecordLifecycleAcceptsStorageWithoutCreateCapability(): void
+    {
+        $events   = [];
+        $provider = new LifecycleTestProvider($events);
+        $storage  = $this->createMock(AutosaveStorageInterface::class);
+        $storage->expects($this->once())->method('initialize')->willReturn([
+            'continuation_id' => self::CONTINUATION_ID,
+            'generation_id'   => self::GENERATION_ID,
+        ]);
+        $lifecycle = $this->lifecycle($provider, $storage, $events);
+
+        $this->assertSame(
+            self::CONTINUATION_ID,
+            $lifecycle->initialize($this->user(), 'com_example.record', '42', 'key', $this->now())['continuation_id']
+        );
+    }
+
+    public function testCreateVerificationFailsClosedWithoutCreateStorageCapability(): void
+    {
+        $events    = [];
+        $provider  = new CreateLifecycleTestProvider($events);
+        $storage   = $this->createMock(AutosaveStorageInterface::class);
+        $lifecycle = $this->lifecycle($provider, $storage, $events, false, 'site-secret');
+
+        $this->assertAutosaveFailure(
+            'create_not_supported',
+            fn () => $lifecycle->verifyCreateCanonicalAction(
+                $this->user(),
+                'operation',
+                'com_example.record',
+                'apply',
+                $this->now()
+            )
+        );
     }
 
     /**
@@ -1119,8 +1356,9 @@ class AutosaveLifecycleTest extends UnitTestCase
 
         $exception = $this->captureFailure(
             static fn () => match ($operation) {
-                'initialize' => $lifecycle->initialize($user, 'com_example.record', 'target', 'key', $now),
-                'preserve'   => $lifecycle->preserve(
+                'initialize'        => $lifecycle->initialize($user, 'com_example.record', 'target', 'key', $now),
+                'initialize-create' => $lifecycle->initializeCreate($user, 'com_example.record', 'key', $now),
+                'preserve'          => $lifecycle->preserve(
                     $user,
                     self::CONTINUATION_ID,
                     self::GENERATION_ID,
@@ -1160,6 +1398,7 @@ class AutosaveLifecycleTest extends UnitTestCase
         foreach (
             [
                 'initialize',
+                'initialize-create',
                 'preserve',
                 'detect',
                 'read',
@@ -1190,6 +1429,7 @@ class AutosaveLifecycleTest extends UnitTestCase
         $this->assertSame(
             [
                 'initialize',
+                'initialize-create',
                 'preserve',
                 'detect',
                 'read',
@@ -1205,9 +1445,10 @@ class AutosaveLifecycleTest extends UnitTestCase
      */
     private function lifecycle(
         AutosaveProviderInterface $provider,
-        LifecycleTestStorage $storage,
+        AutosaveStorageInterface $storage,
         array &$events,
-        bool $failIfResolved = false
+        bool $failIfResolved = false,
+        string $siteSecret = ''
     ): AutosaveLifecycle {
         $component = new ResolverTestCapableComponent(['com_example.record' => true]);
         $component->setAutosaveProvider('com_example.record', $provider);
@@ -1232,7 +1473,7 @@ class AutosaveLifecycleTest extends UnitTestCase
             static fn (string $componentName): bool => $componentName === 'com_example'
         );
 
-        return new AutosaveLifecycle($resolver, $storage);
+        return new AutosaveLifecycle($resolver, $storage, $siteSecret);
     }
 
     /**

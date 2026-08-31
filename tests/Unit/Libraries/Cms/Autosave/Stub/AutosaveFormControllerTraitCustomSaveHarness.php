@@ -43,7 +43,8 @@ class AutosaveFormControllerTraitCustomSaveHarness extends AutosaveFormControlle
     {
         return $this->executeAutosaveCanonicalSave(
             fn () => $this->executeNativeSave($key, $urlVar),
-            $urlVar
+            $urlVar,
+            $key ?: 'id'
         );
     }
 

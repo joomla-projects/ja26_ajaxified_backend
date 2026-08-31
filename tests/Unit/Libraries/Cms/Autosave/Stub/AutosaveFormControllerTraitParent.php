@@ -59,6 +59,21 @@ class AutosaveFormControllerTraitParent
         return new NullLogger();
     }
 
+    public function getModel(): object
+    {
+        return new class () {
+            public function getTable(): object
+            {
+                return new class () {
+                    public function getKeyName(): string
+                    {
+                        return 'id';
+                    }
+                };
+            }
+        };
+    }
+
     protected function getRedirectUrlToItem(int $recordId): string
     {
         return 'item/' . $recordId;

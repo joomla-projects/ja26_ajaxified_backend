@@ -30,8 +30,52 @@ final class AutosaveLifecycle
      */
     public function __construct(
         private readonly AutosaveContextResolver $resolver,
-        private readonly AutosaveStorageInterface $storage
+        private readonly AutosaveStorageInterface $storage,
+        private readonly string $siteSecret = ''
     ) {
+    }
+
+    public function initializeCreate(
+        User $user,
+        string $context,
+        string $initializationKey,
+        Date $now
+    ): array {
+        $userId   = $this->validateInvocation($user, $now);
+        $provider = $this->resolveCreateProvider($context);
+
+        try {
+            AutosaveTargetIdentity::validateInitializationKey($initializationKey);
+        } catch (\InvalidArgumentException) {
+            throw new AutosaveException('invalid_initialization_key', 'The Autosave initialization key is invalid.');
+        }
+        $this->validateCreateContractVersion($provider->getCreateContractVersion());
+        $provider->authorizeCreate($user, AutosaveOperation::InitializeCreate, null);
+
+        if ($this->siteSecret === '') {
+            throw new \RuntimeException('The Autosave provisional target secret is unavailable.');
+        }
+
+        $targetId      = AutosaveTargetIdentity::provisional($userId, $context, $initializationKey, $this->siteSecret);
+        $baseRevision  = $this->getCreateBaseRevision($context, $provider);
+        $schemaVersion = $provider->getPayloadSchemaVersion();
+        $identities    = $this->storage->initialize(
+            $userId,
+            $context,
+            $targetId,
+            $baseRevision,
+            $initializationKey,
+            $now
+        );
+
+        return [
+            'continuation_id'        => $identities['continuation_id'],
+            'generation_id'          => $identities['generation_id'],
+            'context'                => $context,
+            'target_id'              => $targetId,
+            'base_revision'          => $baseRevision,
+            'payload_schema_version' => $schemaVersion,
+        ];
     }
 
     /**
@@ -59,6 +103,11 @@ final class AutosaveLifecycle
     ): array {
         $userId          = $this->validateInvocation($user, $now);
         $provider        = $this->resolver->resolve($context);
+
+        if (AutosaveTargetIdentity::isProvisionalNamespace($targetId)) {
+            throw new AutosaveException('invalid_target', 'The Autosave target is invalid.');
+        }
+
         $canonicalTarget = $provider->canonicalizeTargetId($targetId);
 
         if (!$provider->targetExists($canonicalTarget)) {
@@ -110,16 +159,27 @@ final class AutosaveLifecycle
         $generation = $this->storage->inspect($userId, $continuationId, $generationId, $now);
         $provider   = $this->resolver->resolve($generation['context']);
 
-        $provider->authorize($user, $generation['target_id'], AutosaveOperation::Preserve);
+        if (AutosaveTargetIdentity::isProvisional($generation['target_id'])) {
+            $createProvider    = $this->requireCreateGeneration($provider, $generation);
 
-        if ($provider->getPayloadSchemaVersion() !== $schemaVersion) {
-            throw new AutosaveException(
-                'unsupported_schema_version',
-                'The Autosave payload schema version is not supported.'
-            );
+            if ($provider->getPayloadSchemaVersion() !== $schemaVersion) {
+                throw new AutosaveException('unsupported_schema_version', 'The Autosave payload schema version is not supported.');
+            }
+
+            $normalizedPayload = $provider->normalizePayload($payload, $schemaVersion);
+            $createProvider->authorizeCreate($user, AutosaveOperation::Preserve, $normalizedPayload);
+        } else {
+            $provider->authorize($user, $generation['target_id'], AutosaveOperation::Preserve);
+
+            if ($provider->getPayloadSchemaVersion() !== $schemaVersion) {
+                throw new AutosaveException(
+                    'unsupported_schema_version',
+                    'The Autosave payload schema version is not supported.'
+                );
+            }
+
+            $normalizedPayload = $this->normalizePayload($provider, $generation['target_id'], $payload, $schemaVersion);
         }
-
-        $normalizedPayload = $this->normalizePayload($provider, $generation['target_id'], $payload, $schemaVersion);
         $status            = $this->storage->preserve(
             $userId,
             $continuationId,
@@ -161,13 +221,22 @@ final class AutosaveLifecycle
     {
         $userId          = $this->validateInvocation($user, $now);
         $provider        = $this->resolver->resolve($context);
-        $canonicalTarget = $provider->canonicalizeTargetId($targetId);
+        $canonicalTarget = $targetId;
 
-        if (!$provider->targetExists($canonicalTarget)) {
-            throw new AutosaveException('target_not_found', 'The Autosave target was not found.');
+        if (AutosaveTargetIdentity::isProvisional($targetId)) {
+            $createProvider = $this->requireCreateProvider($provider);
+            $createProvider->authorizeCreate($user, AutosaveOperation::Detect, null);
+        } elseif (AutosaveTargetIdentity::isProvisionalNamespace($targetId)) {
+            throw new AutosaveException('invalid_target', 'The Autosave target is invalid.');
+        } else {
+            $canonicalTarget = $provider->canonicalizeTargetId($targetId);
+
+            if (!$provider->targetExists($canonicalTarget)) {
+                throw new AutosaveException('target_not_found', 'The Autosave target was not found.');
+            }
+
+            $provider->authorize($user, $canonicalTarget, AutosaveOperation::Detect);
         }
-
-        $provider->authorize($user, $canonicalTarget, AutosaveOperation::Detect);
 
         $generation = $this->storage->detect($userId, $context, $canonicalTarget, $now);
 
@@ -175,7 +244,9 @@ final class AutosaveLifecycle
             return null;
         }
 
-        $currentRevision = $provider->getBaseRevision($canonicalTarget);
+        $currentRevision = isset($createProvider)
+            ? $this->getCreateBaseRevision($context, $createProvider)
+            : $provider->getBaseRevision($canonicalTarget);
 
         return [
             'continuation_id'        => $generation['continuation_id'],
@@ -221,9 +292,14 @@ final class AutosaveLifecycle
         $generation = $this->storage->inspect($userId, $continuationId, $generationId, $now);
         $provider   = $this->resolver->resolve($generation['context']);
 
-        $provider->authorize($user, $generation['target_id'], AutosaveOperation::Read);
-
-        $currentRevision = $provider->getBaseRevision($generation['target_id']);
+        if (AutosaveTargetIdentity::isProvisional($generation['target_id'])) {
+            $createProvider = $this->requireCreateGeneration($provider, $generation);
+            $createProvider->authorizeCreate($user, AutosaveOperation::Read, $generation['payload']);
+            $currentRevision = $this->getCreateBaseRevision($generation['context'], $createProvider);
+        } else {
+            $provider->authorize($user, $generation['target_id'], AutosaveOperation::Read);
+            $currentRevision = $provider->getBaseRevision($generation['target_id']);
+        }
 
         return [
             'continuation_id'        => $generation['continuation_id'],
@@ -263,6 +339,40 @@ final class AutosaveLifecycle
     ): array {
         $userId          = $this->validateInvocation($user, $now);
         $provider        = $this->resolver->resolve($context);
+        $canonicalTarget = $targetId;
+
+        if (AutosaveTargetIdentity::isProvisional($targetId)) {
+            $createProvider      = $this->requireCreateProvider($provider);
+            $currentBaseRevision = $this->getCreateBaseRevision($context, $createProvider);
+
+            if (!hash_equals($currentBaseRevision, $expectedBaseRevision)) {
+                throw new AutosaveException('base_revision_conflict', 'The create contract changed before preparation.');
+            }
+
+            if ($provider->getPayloadSchemaVersion() !== $schemaVersion) {
+                throw new AutosaveException('unsupported_schema_version', 'The Autosave payload schema version is not supported.');
+            }
+
+            $normalizedPayload = $provider->normalizePayload($payload, $schemaVersion);
+            $createProvider->authorizeCreate($user, AutosaveOperation::PrepareCanonicalAction, $normalizedPayload);
+
+            return $this->storage->prepareCanonicalAction(
+                $userId,
+                $continuationId,
+                $generationId,
+                $context,
+                $canonicalTarget,
+                $currentBaseRevision,
+                $clientRevision,
+                $normalizedPayload,
+                $schemaVersion,
+                $intent,
+                $now
+            );
+        } elseif (AutosaveTargetIdentity::isProvisionalNamespace($targetId)) {
+            throw new AutosaveException('invalid_target', 'The Autosave target is invalid.');
+        }
+
         $canonicalTarget = $provider->canonicalizeTargetId($targetId);
 
         if (!$provider->targetExists($canonicalTarget)) {
@@ -333,9 +443,17 @@ final class AutosaveLifecycle
     ): array {
         $userId          = $this->validateInvocation($user, $now);
         $provider        = $this->resolver->resolve($context);
-        $canonicalTarget = $provider->canonicalizeTargetId($targetId);
+        $canonicalTarget = $targetId;
 
-        $provider->authorize($user, $canonicalTarget, AutosaveOperation::QueryCanonicalAction);
+        if (AutosaveTargetIdentity::isProvisional($targetId)) {
+            $createProvider = $this->requireCreateProvider($provider);
+            $createProvider->authorizeCreate($user, AutosaveOperation::QueryCanonicalAction, null);
+        } elseif (AutosaveTargetIdentity::isProvisionalNamespace($targetId)) {
+            throw new AutosaveException('invalid_target', 'The Autosave target is invalid.');
+        } else {
+            $canonicalTarget = $provider->canonicalizeTargetId($targetId);
+            $provider->authorize($user, $canonicalTarget, AutosaveOperation::QueryCanonicalAction);
+        }
 
         return $this->storage->inspectCanonicalAction(
             $userId,
@@ -361,6 +479,11 @@ final class AutosaveLifecycle
     ): array {
         $userId          = $this->validateInvocation($user, $now);
         $provider        = $this->resolver->resolve($context);
+
+        if (AutosaveTargetIdentity::isProvisionalNamespace($targetId)) {
+            throw new AutosaveException('invalid_target', 'The Autosave target is invalid.');
+        }
+
         $canonicalTarget = $provider->canonicalizeTargetId($targetId);
 
         $provider->authorize($user, $canonicalTarget, AutosaveOperation::PrepareCanonicalAction);
@@ -374,6 +497,34 @@ final class AutosaveLifecycle
             $provider->getBaseRevision($canonicalTarget),
             $now
         );
+    }
+
+    public function verifyCreateCanonicalAction(
+        User $user,
+        string $operationId,
+        string $context,
+        string $intent,
+        Date $now
+    ): array {
+        $userId   = $this->validateInvocation($user, $now);
+        $provider = $this->resolveCreateProvider($context);
+
+        if (!$this->storage instanceof AutosaveCreateStorageInterface) {
+            throw new AutosaveException('create_not_supported', 'New-record Autosave is unavailable.');
+        }
+
+        $verified = $this->storage->verifyCreateCanonicalAction(
+            $userId,
+            $operationId,
+            $context,
+            $intent,
+            $this->getCreateBaseRevision($context, $provider),
+            $now
+        );
+        $provider->authorizeCreate($user, AutosaveOperation::PrepareCanonicalAction, $verified['payload']);
+        unset($verified['payload']);
+
+        return $verified;
     }
 
     /**
@@ -392,7 +543,9 @@ final class AutosaveLifecycle
     ): array {
         $userId          = $this->validateInvocation($user, $now);
         $provider        = $this->resolver->resolve($context);
-        $canonicalTarget = $provider->canonicalizeTargetId($targetId);
+        $canonicalTarget = AutosaveTargetIdentity::isProvisional($targetId)
+            ? AutosaveTargetIdentity::requireProvisional($targetId)
+            : $provider->canonicalizeTargetId($targetId);
         $canonicalFinal  = $provider->canonicalizeTargetId($finalTargetId);
 
         return $this->storage->finalizeCanonicalActionSuccess(
@@ -423,7 +576,9 @@ final class AutosaveLifecycle
     ): array {
         $this->validateInvocation($user, $now);
         $provider        = $this->resolver->resolve($context);
-        $canonicalTarget = $provider->canonicalizeTargetId($targetId);
+        $canonicalTarget = AutosaveTargetIdentity::isProvisional($targetId)
+            ? AutosaveTargetIdentity::requireProvisional($targetId)
+            : $provider->canonicalizeTargetId($targetId);
 
         return $this->storage->finalizeCanonicalActionFailure(
             (int) $user->id,
@@ -466,5 +621,55 @@ final class AutosaveLifecycle
         }
 
         return $userId;
+    }
+
+    private function resolveCreateProvider(string $context): AutosaveCreateProviderInterface&AutosaveProviderInterface
+    {
+        return $this->requireCreateProvider($this->resolver->resolve($context));
+    }
+
+    private function requireCreateProvider(
+        AutosaveProviderInterface $provider
+    ): AutosaveCreateProviderInterface&AutosaveProviderInterface {
+        if (!$provider instanceof AutosaveCreateProviderInterface) {
+            throw new AutosaveException('create_unsupported', 'New-record Autosave is not supported for this context.');
+        }
+
+        $this->validateCreateContractVersion($provider->getCreateContractVersion());
+
+        return $provider;
+    }
+
+    private function requireCreateGeneration(
+        AutosaveProviderInterface $provider,
+        array $generation
+    ): AutosaveCreateProviderInterface&AutosaveProviderInterface {
+        AutosaveTargetIdentity::requireProvisional($generation['target_id']);
+        $createProvider = $this->requireCreateProvider($provider);
+
+        if (!hash_equals($generation['base_revision'], $this->getCreateBaseRevision($generation['context'], $createProvider))) {
+            throw new AutosaveException('create_contract_conflict', 'The new-record Autosave contract changed.');
+        }
+
+        return $createProvider;
+    }
+
+    private function validateCreateContractVersion(string $version): void
+    {
+        if ($version === '' || \strlen($version) > 64 || preg_match('/^[A-Za-z0-9._-]+$/D', $version) !== 1) {
+            throw new AutosaveException('invalid_create_contract', 'The new-record Autosave contract is invalid.');
+        }
+    }
+
+    private function getCreateBaseRevision(
+        string $context,
+        AutosaveCreateProviderInterface&AutosaveProviderInterface $provider
+    ): string {
+        $contract = json_encode(
+            ['context' => $context, 'schema' => $provider->getPayloadSchemaVersion(), 'create' => $provider->getCreateContractVersion()],
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES
+        );
+
+        return 'autosave:create:v1:' . hash('sha256', "joomla.autosave.create-revision.v1\0" . $contract);
     }
 }

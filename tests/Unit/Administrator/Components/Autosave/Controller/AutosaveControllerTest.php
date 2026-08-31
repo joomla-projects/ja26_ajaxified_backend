@@ -17,6 +17,7 @@ use Joomla\CMS\Date\Date;
 use Joomla\CMS\User\User;
 use Joomla\Component\Autosave\Administrator\Controller\AutosaveController;
 use Joomla\Component\Autosave\Administrator\Extension\AutosaveComponent;
+use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\CreateLifecycleTestProvider;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\LifecycleTestProvider;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\LifecycleTestStorage;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\ResolverTestCapableComponent;
@@ -60,6 +61,20 @@ class AutosaveControllerTest extends UnitTestCase
 
         $this->assertSame('com_example.record', $result['context']);
         $this->assertSame('target-42', $result['target_id']);
+        $this->assertSame('request-1', $storage->calls['initialize'][0][4]);
+    }
+
+    public function testInitializeCreateAcceptsOnlyContextAndInitializationKey(): void
+    {
+        [$controller, $storage] = $this->controller(true);
+        $result                 = $controller->execute(
+            'initializeCreate',
+            ['context' => 'com_example.record', 'initialization_key' => 'request-1'],
+            $this->user(),
+            $this->now()
+        );
+
+        $this->assertMatchesRegularExpression('/^p1:[0-9a-f]{64}$/D', $result['target_id']);
         $this->assertSame('request-1', $storage->calls['initialize'][0][4]);
     }
 
@@ -170,6 +185,10 @@ class AutosaveControllerTest extends UnitTestCase
                 'initialize',
                 ['context' => 'com_example.record', 'target_id' => '42', 'initialization_key' => 'k', 'user_id' => 7],
             ],
+            'initialize create supplied target' => [
+                'initializeCreate',
+                ['context' => 'com_example.record', 'initialization_key' => 'k', 'target_id' => 'p1:' . str_repeat('a', 64)],
+            ],
             'preserve client context' => [
                 'preserve',
                 [
@@ -220,10 +239,10 @@ class AutosaveControllerTest extends UnitTestCase
         ];
     }
 
-    private function controller(): array
+    private function controller(bool $create = false): array
     {
         $events    = [];
-        $provider  = new LifecycleTestProvider($events);
+        $provider  = $create ? new CreateLifecycleTestProvider($events) : new LifecycleTestProvider($events);
         $storage   = new LifecycleTestStorage($events);
         $component = new ResolverTestCapableComponent(['com_example.record' => true]);
         $component->setAutosaveProvider('com_example.record', $provider);
@@ -234,7 +253,7 @@ class AutosaveControllerTest extends UnitTestCase
             static fn (string $name): bool => $name === 'com_example'
         );
 
-        return [new AutosaveController(new AutosaveLifecycle($resolver, $storage)), $storage, $provider];
+        return [new AutosaveController(new AutosaveLifecycle($resolver, $storage, 'site-secret')), $storage, $provider];
     }
 
     private function generation(): array

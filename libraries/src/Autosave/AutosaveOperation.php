@@ -21,6 +21,7 @@ namespace Joomla\CMS\Autosave;
 enum AutosaveOperation: string
 {
     case Initialize             = 'initialize';
+    case InitializeCreate       = 'initialize-create';
     case Preserve               = 'preserve';
     case Detect                 = 'detect';
     case Read                   = 'read';

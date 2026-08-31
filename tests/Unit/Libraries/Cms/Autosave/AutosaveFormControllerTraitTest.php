@@ -10,6 +10,7 @@
 namespace Joomla\Tests\Unit\Libraries\Cms\Autosave;
 
 use Joomla\CMS\Autosave\AutosaveCanonicalActionServiceInterface;
+use Joomla\CMS\Autosave\AutosaveCreateCanonicalActionServiceInterface;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\User\User;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\AutosaveFormControllerTraitCustomSaveHarness;
@@ -57,6 +58,84 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
         $this->assertTrue($controller->save('custom-key', 'custom-id'));
         $this->assertSame(1, $controller->parentSaveCalls);
         $this->assertSame([['custom-key', 'custom-id']], $controller->parentSaveArguments);
+    }
+
+    public function testRouteZeroCreateUsesStoredProvisionalOriginAndAuthoritativeSavedId(): void
+    {
+        $user                = $this->createMock(User::class);
+        $service             = $this->createMock(AutosaveCreateCanonicalActionServiceInterface::class);
+        $post                = $this->preparedPost();
+        $post['jform']['id'] = 0;
+        $controller          = $this->controller($service, 'item.apply', $post, $user, 0);
+        $target              = 'p1:' . str_repeat('a', 64);
+        $model               = $this->createMock(BaseDatabaseModel::class);
+        $model->method('getState')->with('item.id')->willReturn(73);
+        $controller->duringParentSave = static fn () => $controller->captureSavedModel($model);
+
+        $service->expects($this->once())
+            ->method('verifyCreateCanonicalAction')
+            ->with($user, 'operation-id', 'com_example.item', 'apply', $this->isInstanceOf(\Joomla\CMS\Date\Date::class))
+            ->willReturn(['target_id' => $target]);
+        $service->expects($this->never())->method('verifyCanonicalAction');
+        $service->expects($this->once())
+            ->method('finalizeCanonicalActionSuccess')
+            ->with($user, 'operation-id', 'com_example.item', $target, 'apply', '73', $this->isInstanceOf(\Joomla\CMS\Date\Date::class));
+
+        $this->assertTrue($controller->save());
+        $this->assertSame(1, $controller->parentSaveCalls);
+    }
+
+    public function testRouteZeroCreateAcceptsMissingSubmittedPrimaryKey(): void
+    {
+        $user    = $this->createMock(User::class);
+        $service = $this->createMock(AutosaveCreateCanonicalActionServiceInterface::class);
+        $post    = $this->preparedPost();
+        unset($post['jform']['id']);
+        $controller = $this->controller($service, 'item.apply', $post, $user, 0);
+        $target     = 'p1:' . str_repeat('a', 64);
+        $model      = $this->createMock(BaseDatabaseModel::class);
+        $model->method('getState')->with('item.id')->willReturn(73);
+        $controller->duringParentSave = static fn () => $controller->captureSavedModel($model);
+
+        $service->expects($this->once())->method('verifyCreateCanonicalAction')->willReturn(['target_id' => $target]);
+        $service->expects($this->once())->method('finalizeCanonicalActionSuccess');
+
+        $this->assertTrue($controller->save());
+        $this->assertSame(1, $controller->parentSaveCalls);
+    }
+
+    /**
+     * @dataProvider invalidCanonicalIdentityProvider
+     */
+    public function testInconsistentCanonicalIdentityCannotReachNativePersistence(mixed $routeId, mixed $submittedId): void
+    {
+        $service = $this->createMock(AutosaveCreateCanonicalActionServiceInterface::class);
+        $post    = $this->preparedPost();
+
+        if ($submittedId === self::MISSING_IDENTITY) {
+            unset($post['jform']['id']);
+        } else {
+            $post['jform']['id'] = $submittedId;
+        }
+
+        $controller = $this->controller($service, 'item.apply', $post, null, $routeId);
+
+        $service->expects($this->never())->method('verifyCreateCanonicalAction');
+        $service->expects($this->never())->method('verifyCanonicalAction');
+        $this->assertFalse($controller->save());
+        $this->assertSame(0, $controller->parentSaveCalls);
+    }
+
+    public function invalidCanonicalIdentityProvider(): array
+    {
+        return [
+            'create cannot submit an existing identity'        => [0, 42],
+            'missing route is not explicit create'             => [null, self::MISSING_IDENTITY],
+            'malformed route is not explicit create'           => ['not-an-id', self::MISSING_IDENTITY],
+            'existing route cannot submit zero'                => [42, 0],
+            'existing route cannot submit another identity'    => [42, 84],
+            'posted identity cannot switch create to existing' => [0, 84],
+        ];
     }
 
     /**
@@ -226,7 +305,7 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
      *
      * @since   __DEPLOY_VERSION__
      */
-    public function testCanonicalActionDoesNotTrustPostedFormId(): void
+    public function testConflictingPostedFormIdCannotReachExistingRecordSave(): void
     {
         $user                = $this->createMock(User::class);
         $service             = $this->createMock(AutosaveCanonicalActionServiceInterface::class);
@@ -234,20 +313,11 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
         $post['jform']['id'] = 999;
         $controller          = $this->controller($service, 'item.apply', $post, $user, 42);
 
-        $service->expects($this->once())
-            ->method('verifyCanonicalAction')
-            ->with($user, 'operation-id', 'com_example.item', '42', 'apply', $this->anything())
-            ->willReturn([]);
-        $service->expects($this->once())
-            ->method('finalizeCanonicalActionSuccess')
-            ->with($user, 'operation-id', 'com_example.item', '42', 'apply', '42', $this->anything())
-            ->willReturn([]);
+        $service->expects($this->never())->method('verifyCanonicalAction');
+        $service->expects($this->never())->method('finalizeCanonicalActionSuccess');
 
-        $model = $this->createMock(BaseDatabaseModel::class);
-        $model->expects($this->once())->method('getState')->with('item.id')->willReturn(42);
-        $controller->duringParentSave = static fn () => $controller->captureSavedModel($model);
-
-        $this->assertTrue($controller->save());
+        $this->assertFalse($controller->save());
+        $this->assertSame(0, $controller->parentSaveCalls);
     }
 
     /**
@@ -320,12 +390,16 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
         $controller->input->post = new class ($this->preparedPost()) {
             public function __construct(private array $data)
             {
-                $this->data['jform']['id'] = 999;
             }
 
             public function getString(string $key, string $default = ''): string
             {
                 return isset($this->data[$key]) ? (string) $this->data[$key] : $default;
+            }
+
+            public function get(string $key, mixed $default = null, string $filter = 'cmd'): mixed
+            {
+                return $this->data[$key] ?? $default;
             }
         };
         $model      = $this->createMock(BaseDatabaseModel::class);
@@ -467,7 +541,7 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
         string $task = 'item.save',
         array $post = [],
         ?User $user = null,
-        int $recordId = 42
+        mixed $recordId = 42
     ): AutosaveFormControllerTraitHarness {
         return new AutosaveFormControllerTraitHarness(
             new AutosaveTraitTestInput($task, $post, $recordId),
@@ -480,7 +554,7 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
         string $task = 'item.save',
         array $post = [],
         ?User $user = null,
-        int $recordId = 42
+        mixed $recordId = 42
     ): AutosaveFormControllerTraitCustomSaveHarness {
         return new AutosaveFormControllerTraitCustomSaveHarness(
             new AutosaveTraitTestInput($task, $post, $recordId),
@@ -505,4 +579,6 @@ class AutosaveFormControllerTraitTest extends UnitTestCase
             'jform'                     => ['id' => 42],
         ];
     }
+
+    private const MISSING_IDENTITY = '__missing_identity__';
 }

@@ -11,7 +11,7 @@
 namespace Joomla\Component\Autosave\Administrator\Extension;
 
 use Joomla\CMS\Application\CMSApplicationInterface;
-use Joomla\CMS\Autosave\AutosaveCanonicalActionServiceInterface;
+use Joomla\CMS\Autosave\AutosaveCreateCanonicalActionServiceInterface;
 use Joomla\CMS\Autosave\AutosaveLifecycle;
 use Joomla\CMS\Date\Date;
 use Joomla\CMS\Dispatcher\DispatcherInterface;
@@ -28,7 +28,7 @@ use Joomla\Component\Autosave\Administrator\Dispatcher\Dispatcher;
  *
  * @since  __DEPLOY_VERSION__
  */
-final class AutosaveComponent implements ComponentInterface, AutosaveCanonicalActionServiceInterface
+final class AutosaveComponent implements ComponentInterface, AutosaveCreateCanonicalActionServiceInterface
 {
     /**
      * Deployment policy for component-neutral draft persistence.
@@ -87,6 +87,16 @@ final class AutosaveComponent implements ComponentInterface, AutosaveCanonicalAc
             $intent,
             $now
         );
+    }
+
+    public function verifyCreateCanonicalAction(
+        User $user,
+        string $operationId,
+        string $context,
+        string $intent,
+        Date $now
+    ): array {
+        return $this->lifecycle->verifyCreateCanonicalAction($user, $operationId, $context, $intent, $now);
     }
 
     /**

@@ -49,7 +49,8 @@ return new class () implements ServiceProviderInterface {
             AutosaveLifecycle::class,
             static fn (Container $container): AutosaveLifecycle => new AutosaveLifecycle(
                 new AutosaveContextResolver($container->get(AdministratorApplication::class)),
-                $container->get(AutosaveStorageInterface::class)
+                $container->get(AutosaveStorageInterface::class),
+                (string) $container->get(AdministratorApplication::class)->get('secret')
             )
         );
         $container->share(

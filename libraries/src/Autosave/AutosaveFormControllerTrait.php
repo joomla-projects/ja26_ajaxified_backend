@@ -62,7 +62,8 @@ trait AutosaveFormControllerTrait
     {
         return $this->executeAutosaveCanonicalSave(
             fn () => parent::save($key, $urlVar),
-            $urlVar
+            $urlVar,
+            $key
         );
     }
 
@@ -75,13 +76,17 @@ trait AutosaveFormControllerTrait
      *
      * @param   callable(): boolean  $nativeSave  The authoritative native save workflow.
      * @param   string|null          $urlVar      The native route identity variable.
+     * @param   string|null          $key         The native table primary-key field.
      *
      * @return  boolean
      *
      * @since   __DEPLOY_VERSION__
      */
-    protected function executeAutosaveCanonicalSave(callable $nativeSave, ?string $urlVar = null): bool
-    {
+    protected function executeAutosaveCanonicalSave(
+        callable $nativeSave,
+        ?string $urlVar = null,
+        ?string $key = null
+    ): bool {
         $operationId = $this->input->post->getString('autosave_operation_id', '');
         $intent      = $this->input->post->getString('autosave_operation_intent', '');
 
@@ -97,10 +102,20 @@ trait AutosaveFormControllerTrait
             return $nativeSave();
         }
 
-        // Match FormController's authoritative route identity. A Joomla form
-        // is not required to render jform[id], and a posted form value must
-        // never select the record bound to a prepared Autosave action.
-        $targetId       = $this->resolveAutosaveCanonicalTarget($urlVar);
+        // Match FormController's route and table identities without allowing
+        // its integer default/filtering to collapse missing or malformed input
+        // into a genuine create request.
+        $routeIdentity  = $this->classifyAutosaveNumericIdentity($this->input->get($urlVar ?: 'id', null, 'raw'));
+        $routeId        = $routeIdentity['id'];
+        $targetId       = $routeIdentity['state'] === 'positive' ? (string) $routeId : '';
+        $submitted      = $this->input->post->get('jform', [], 'array');
+        $primaryKey     = $this->resolveAutosavePrimaryKey($key);
+        $submittedValue = \is_array($submitted) && $primaryKey !== null && \array_key_exists($primaryKey, $submitted)
+            ? $submitted[$primaryKey]
+            : null;
+        $submittedIdentity = $this->classifyAutosaveNumericIdentity($submittedValue);
+        $identityMatches   = $primaryKey !== null
+            && $this->autosaveCanonicalIdentitiesMatch($routeIdentity, $submittedIdentity);
         $service        = $this->app->bootComponent('com_autosave');
         $now            = new Date('now', 'UTC');
         $this->app->getLanguage()->load('com_autosave', JPATH_ADMINISTRATOR);
@@ -110,8 +125,9 @@ trait AutosaveFormControllerTrait
             || $intent === ''
             || $expectedIntent === null
             || $intent !== $expectedIntent
-            || $targetId === ''
+            || !$identityMatches
             || !$service instanceof AutosaveCanonicalActionServiceInterface
+            || ($routeIdentity['state'] === 'zero' && !$service instanceof AutosaveCreateCanonicalActionServiceInterface)
         ) {
             $this->setMessage(Text::_('COM_AUTOSAVE_CANONICAL_ACTION_INVALID'), 'error');
 
@@ -123,14 +139,25 @@ trait AutosaveFormControllerTrait
         }
 
         try {
-            $service->verifyCanonicalAction(
-                $this->app->getIdentity(),
-                $operationId,
-                self::AUTOSAVE_CONTEXT,
-                $targetId,
-                $intent,
-                $now
-            );
+            if ($routeIdentity['state'] === 'zero') {
+                $verified = $service->verifyCreateCanonicalAction(
+                    $this->app->getIdentity(),
+                    $operationId,
+                    self::AUTOSAVE_CONTEXT,
+                    $intent,
+                    $now
+                );
+                $targetId = AutosaveTargetIdentity::requireProvisional($verified['target_id'] ?? '');
+            } else {
+                $service->verifyCanonicalAction(
+                    $this->app->getIdentity(),
+                    $operationId,
+                    self::AUTOSAVE_CONTEXT,
+                    $targetId,
+                    $intent,
+                    $now
+                );
+            }
         } catch (\Throwable $exception) {
             try {
                 $service->finalizeCanonicalActionFailure(
@@ -198,6 +225,65 @@ trait AutosaveFormControllerTrait
         $this->finalizeAutosaveCanonicalSuccess();
 
         return $result;
+    }
+
+    /** Resolve FormController's native table primary-key field. */
+    private function resolveAutosavePrimaryKey(?string $key): ?string
+    {
+        if ($key !== null && $key !== '') {
+            return $key;
+        }
+
+        try {
+            $resolved = $this->getModel()->getTable()->getKeyName();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return \is_string($resolved) && $resolved !== '' ? $resolved : null;
+    }
+
+    /** Classify a raw Joomla route or submitted table identity without coercion. */
+    private function classifyAutosaveNumericIdentity(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return ['state' => 'missing', 'id' => null];
+        }
+
+        if (\is_int($value)) {
+            return $value === 0
+                ? ['state' => 'zero', 'id' => 0]
+                : ($value > 0 ? ['state' => 'positive', 'id' => $value] : ['state' => 'malformed', 'id' => null]);
+        }
+
+        if (!\is_string($value) || preg_match('/^(?:0|[1-9][0-9]*)$/D', $value) !== 1) {
+            return ['state' => 'malformed', 'id' => null];
+        }
+
+        if ($value === '0') {
+            return ['state' => 'zero', 'id' => 0];
+        }
+
+        $id = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+        return \is_int($id)
+            ? ['state' => 'positive', 'id' => $id]
+            : ['state' => 'malformed', 'id' => null];
+    }
+
+    /** Require route and submitted identities to describe the same native operation. */
+    private function autosaveCanonicalIdentitiesMatch(array $route, array $submitted): bool
+    {
+        if ($route['state'] === 'zero') {
+            return $submitted['state'] === 'missing' || $submitted['state'] === 'zero';
+        }
+
+        if ($route['state'] !== 'positive') {
+            return false;
+        }
+
+        return $submitted['state'] === 'missing'
+            || ($submitted['state'] === 'positive' && $submitted['id'] === $route['id']);
     }
 
     /**

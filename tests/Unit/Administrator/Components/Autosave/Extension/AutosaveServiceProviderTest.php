@@ -57,9 +57,10 @@ class AutosaveServiceProviderTest extends UnitTestCase
     {
         $application = $this->getMockBuilder(AdministratorApplication::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['getInput'])
+            ->onlyMethods(['getInput', 'get'])
             ->getMock();
         $application->method('getInput')->willReturn(new Input());
+        $application->method('get')->with('secret')->willReturn('site-secret');
 
         $parent = new Container();
         $parent->alias(AdministratorApplication::class, 'JApplicationAdministrator')
