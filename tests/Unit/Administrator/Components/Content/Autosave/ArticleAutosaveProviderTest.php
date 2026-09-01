@@ -120,12 +120,12 @@ class ArticleAutosaveProviderTest extends UnitTestCase
      */
     public function testCreateAuthorizationRejectsMalformedNormalizedCategory(): void
     {
-        $provider  = new ArticleAutosaveProvider($this->databaseReturning());
-        $calls     = [];
-        $user      = $this->user(7, ['core.create' => true], $calls);
-        $payload   = $this->validPayload();
+        $provider         = new ArticleAutosaveProvider($this->databaseReturning());
+        $calls            = [];
+        $user             = $this->user(7, ['core.create' => true], $calls);
+        $payload          = $this->validPayload();
         $payload['catid'] = '2';
-        $exception = $this->captureFailure(
+        $exception        = $this->captureFailure(
             fn () => $provider->authorizeCreate($user, AutosaveOperation::Preserve, $payload)
         );
 
@@ -155,10 +155,10 @@ class ArticleAutosaveProviderTest extends UnitTestCase
         );
 
         $provider->authorizeCreate($user, AutosaveOperation::Preserve, $this->validPayload());
-        $permissions = [];
-        $changed = $this->validPayload();
+        $permissions      = [];
+        $changed          = $this->validPayload();
         $changed['catid'] = 3;
-        $exception = $this->captureFailure(
+        $exception        = $this->captureFailure(
             fn () => $provider->authorizeCreate($user, AutosaveOperation::PrepareCanonicalAction, $changed)
         );
 
