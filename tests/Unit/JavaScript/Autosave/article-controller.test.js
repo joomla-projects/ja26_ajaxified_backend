@@ -5,6 +5,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import './article-create-binding.test.js';
 import ArticleAutosaveController, {
   ARTICLE_CANONICAL_TASK_POLICY,
   ARTICLE_OPTIONS_KEY,
@@ -175,6 +176,11 @@ class FakeRuntime {
     this.changeCalls = 0;
     this.recoveryCalls = 0;
     this.unsubscribe = null;
+    this.state = {
+      targetId: options.targetId,
+      canonicalAction: null,
+      status: 'clean',
+    };
   }
 
   start() {
@@ -219,7 +225,7 @@ const endpoints = Object.freeze({
   getCanonicalActionOutcome: 'index.php?task=autosave.getCanonicalActionOutcome',
 });
 
-const createFixture = ({ startResults = [], presenterFactory } = {}) => {
+const createFixture = ({ startResults = [], presenterFactory, createBindingFactory } = {}) => {
   const document = new FakeDocument();
   const registry = new FakeEditorRegistry();
   const options = {
@@ -269,6 +275,7 @@ const createFixture = ({ startResults = [], presenterFactory } = {}) => {
     documentSource: document,
     optionsReader: (key, fallback) => options[key] ?? fallback,
     editorRegistry: registry,
+    createBindingFactory,
     apiClientFactory: (configuration) => {
       const client = { configuration };
       clients.push(client);
@@ -412,6 +419,87 @@ test('supported existing Article activates exactly once with literal runtime con
   ]);
   assert.equal(fixture.coordinators[0].startCalls, 1);
   assert.equal(fixture.runtimes[0].changeCalls, 0);
+});
+
+const settle = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+
+test('new Article production wiring activates one unresolved runtime with its browser lineage', async () => {
+  const provisional = `p1:${'a'.repeat(64)}`;
+  const releases = [];
+  const descriptor = Object.freeze({
+    initializationKey: 'new-article-form',
+    targetId: null,
+    formInstanceId: 'new-article-form',
+    onInitialized: () => {},
+    acquire: async () => true,
+    release: () => releases.push(true),
+    onCanonicalSuccess: () => {},
+  });
+  const fixture = createFixture({
+    createBindingFactory: ({ context }) => ({
+      descriptor: () => descriptor,
+      release: descriptor.release,
+      context,
+    }),
+  });
+  fixture.options[ARTICLE_OPTIONS_KEY].mode = 'create';
+  fixture.options[ARTICLE_OPTIONS_KEY].targetId = null;
+  fixture.options[RUNTIME_OPTIONS_KEY].endpoints.initializeCreate = 'index.php?task=autosave.initializeCreate';
+
+  fixture.controller.start();
+  await fixture.controller.reconcile();
+
+  assert.equal(fixture.runtimes.length, 1);
+  assert.equal(fixture.runtimes[0].options.targetId, null);
+  assert.strictEqual(fixture.runtimes[0].options.createMode, descriptor);
+  assert.equal(fixture.clients[0].configuration.endpoints.initializeCreate, 'index.php?task=autosave.initializeCreate');
+  assert.equal(releases.length, 0);
+
+  fixture.controller.destroy();
+});
+
+test('target-changing DPU keeps the provisional pair until durable success is reconciled', async () => {
+  const descriptor = Object.freeze({
+    initializationKey: 'handoff-form',
+    targetId: null,
+    formInstanceId: 'handoff-form',
+    onInitialized: () => {},
+    acquire: async () => true,
+    release: () => {},
+    onCanonicalSuccess: () => {},
+  });
+  const fixture = createFixture({
+    createBindingFactory: () => ({ descriptor: () => descriptor, release: descriptor.release }),
+  });
+  fixture.options[ARTICLE_OPTIONS_KEY].mode = 'create';
+  fixture.options[ARTICLE_OPTIONS_KEY].targetId = null;
+  fixture.options[RUNTIME_OPTIONS_KEY].endpoints.initializeCreate = 'index.php?task=autosave.initializeCreate';
+  fixture.controller.start();
+  await fixture.controller.reconcile();
+
+  const provisionalRuntime = fixture.runtimes[0];
+  provisionalRuntime.state.targetId = `p1:${'a'.repeat(64)}`;
+  provisionalRuntime.state.canonicalAction = { operationId: 'operation-1' };
+  provisionalRuntime.state.status = 'canonical-action-pending';
+  fixture.options[ARTICLE_OPTIONS_KEY].mode = 'existing';
+  fixture.options[ARTICLE_OPTIONS_KEY].targetId = '73';
+
+  await fixture.controller.reconcile();
+
+  assert.equal(provisionalRuntime.destroyCalls, 0);
+  assert.equal(fixture.runtimes.length, 1);
+
+  provisionalRuntime.state.canonicalAction = null;
+  provisionalRuntime.state.status = 'clean';
+  fixture.eventTargets[0].dispatchEvent(new Event('joomla:autosave-statechange'));
+  await settle();
+
+  assert.equal(provisionalRuntime.destroyCalls, 1);
+  assert.equal(fixture.runtimes.length, 2);
+  assert.equal(fixture.runtimes[1].options.targetId, '73');
 });
 
 test('invalid, disabled and new Article configurations remain inactive', async (t) => {

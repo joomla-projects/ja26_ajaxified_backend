@@ -10,6 +10,7 @@ import createAutosavePresenter from 'com_autosave.ui';
 const RUNTIME_OPTIONS_KEY = 'com_autosave.runtime';
 const OPERATIONS = Object.freeze([
   'initialize',
+  'initializeCreate',
   'preserve',
   'detect',
   'read',
@@ -17,6 +18,7 @@ const OPERATIONS = Object.freeze([
   'prepareCanonicalAction',
   'getCanonicalActionOutcome',
 ]);
+const REQUIRED_OPERATIONS = OPERATIONS.filter((operation) => operation !== 'initializeCreate');
 const RESERVED_PAIR_PROPERTIES = new Set([
   'generation',
   'runtime',
@@ -50,29 +52,33 @@ const defaultOptionsReader = (key, fallback) => {
 const validateRuntimeConfiguration = (configuration, csrf) => {
   if (!isPlainObject(configuration)
     || !isPlainObject(configuration.endpoints)
-    || !OPERATIONS.every(
+    || !REQUIRED_OPERATIONS.every(
       (operation) => typeof configuration.endpoints[operation] === 'string'
         && configuration.endpoints[operation].length > 0,
     )
+    || (configuration.endpoints.initializeCreate !== undefined
+      && (typeof configuration.endpoints.initializeCreate !== 'string'
+        || configuration.endpoints.initializeCreate.length === 0))
     || typeof csrf !== 'string'
     || csrf.length === 0) {
     throw new TypeError('The Autosave runtime configuration is invalid.');
   }
 
+  const endpointOperations = configuration.endpoints.initializeCreate
+    ? OPERATIONS
+    : REQUIRED_OPERATIONS;
+
   return Object.freeze({
-    endpoints: Object.freeze(
-      Object.fromEntries(OPERATIONS.map((operation) => [
-        operation,
-        configuration.endpoints[operation],
-      ])),
-    ),
+    endpoints: Object.freeze(Object.fromEntries(endpointOperations.map((operation) => [
+      operation,
+      configuration.endpoints[operation],
+    ]))),
     csrf,
   });
 };
 
-const sameEndpoints = (first, second) => OPERATIONS.every(
-  (operation) => first[operation] === second[operation],
-);
+const sameEndpoints = (first, second) => [...new Set([...Object.keys(first), ...Object.keys(second)])]
+  .every((operation) => first[operation] === second[operation]);
 
 const sameIdentityParts = (first, second) => first.length === second.length
   && first.every((part, index) => part === second[index]);
@@ -89,14 +95,19 @@ const sameRuntimeResolution = (pair, resolution) => pair
 
 const samePresentationConfiguration = (first, second) => first.locale === second.locale
   && first.timeZone === second.timeZone;
+const isProvisionalTarget = (targetId) => typeof targetId === 'string'
+  && /^p1:[a-f0-9]{64}$/.test(targetId);
 
 const validateIntegrationResolution = (resolution) => {
   if (!isPlainObject(resolution)
     || !isPlainObject(resolution.descriptor)
     || typeof resolution.descriptor.context !== 'string'
     || resolution.descriptor.context.length === 0
-    || typeof resolution.descriptor.targetId !== 'string'
-    || resolution.descriptor.targetId.length === 0
+    || !(
+      (typeof resolution.descriptor.targetId === 'string'
+        && resolution.descriptor.targetId.length > 0)
+      || (resolution.descriptor.targetId === null && isPlainObject(resolution.createMode))
+    )
     || !Number.isInteger(resolution.descriptor.payloadSchemaVersion)
     || resolution.descriptor.payloadSchemaVersion <= 0
     || !resolution.form
@@ -247,6 +258,18 @@ export default class AutosaveIntegrationController {
       return true;
     }
 
+    if (this.activePair
+      && isProvisionalTarget(this.activePair.runtime.state?.targetId)
+      && this.activePair.runtime.state?.canonicalAction
+      && (!resolution || resolution.descriptor.context === this.activePair.context)) {
+      // A DPU replacement may publish the canonical target before the Ajax
+      // completion event. Keep the provisional coordinator alive until its
+      // durable operation outcome has been reconciled.
+      this.activePair.deferredTargetChange = true;
+
+      return true;
+    }
+
     const generation = this.invalidatePairs();
 
     if (!resolution) {
@@ -297,11 +320,14 @@ export default class AutosaveIntegrationController {
         targetId: resolution.descriptor.targetId,
         schemaVersion: resolution.descriptor.payloadSchemaVersion,
         eventTarget,
+        createMode: resolution.createMode || null,
       });
       coordinator = this.coordinatorFactory({
         form: resolution.form,
         runtime,
         taskPolicy: resolution.taskPolicy,
+        allowDetachedDuringCanonical: resolution.descriptor.targetId === null
+          || resolution.descriptor.targetId.startsWith('p1:'),
       });
 
       if (!coordinator
@@ -340,6 +366,18 @@ export default class AutosaveIntegrationController {
       runtimeConfiguration: resolution.runtime,
       ...(resolution.pairProperties || {}),
     };
+    pair.handleRuntimeState = () => {
+      if (pair.targetId === null && isProvisionalTarget(pair.runtime.state?.targetId)) {
+        pair.targetId = pair.runtime.state.targetId;
+      }
+
+      if (pair.deferredTargetChange
+        && pair.runtime.state?.canonicalAction === null
+        && pair.runtime.state?.status === 'clean') {
+        void this.reconcile();
+      }
+    };
+    eventTarget.addEventListener('joomla:autosave-statechange', pair.handleRuntimeState);
     this.pendingPair = pair;
 
     try {
@@ -397,12 +435,18 @@ export default class AutosaveIntegrationController {
 
     validateIntegrationResolution(integration);
 
+    const runtime = validateRuntimeConfiguration(
+      this.optionsReader(RUNTIME_OPTIONS_KEY, null),
+      this.optionsReader('csrf.token', ''),
+    );
+
+    if (integration.createMode && !runtime.endpoints.initializeCreate) {
+      throw new TypeError('The Autosave create endpoint is unavailable.');
+    }
+
     return {
       ...integration,
-      runtime: validateRuntimeConfiguration(
-        this.optionsReader(RUNTIME_OPTIONS_KEY, null),
-        this.optionsReader('csrf.token', ''),
-      ),
+      runtime,
     };
   }
 
@@ -485,6 +529,7 @@ export default class AutosaveIntegrationController {
     pair.presenterGeneration += 1;
     pair.presenter?.destroy();
     pair.presenter = null;
+    pair.eventTarget.removeEventListener('joomla:autosave-statechange', pair.handleRuntimeState);
     pair.coordinator.destroy();
     pair.runtime.destroy();
   }

@@ -13,6 +13,7 @@ import {
 
 const endpoints = {
   initialize: '/subdir/administrator/index.php?option=com_autosave&task=autosave.initialize&format=json',
+  initializeCreate: '/subdir/administrator/index.php?option=com_autosave&task=autosave.initializeCreate&format=json',
   preserve: '/subdir/administrator/index.php?option=com_autosave&task=autosave.preserve&format=json',
   detect: '/subdir/administrator/index.php?option=com_autosave&task=autosave.detect&format=json',
   read: '/subdir/administrator/index.php?option=com_autosave&task=autosave.read&format=json',
@@ -106,6 +107,14 @@ test('uses the literal PR 7 requests, injected endpoints, and transport options'
       base_revision: 'base-1',
       payload_schema_version: 1,
     },
+    initializeCreate: {
+      continuation_id: 'create-continuation',
+      generation_id: 'create-generation',
+      context: 'com_content.article',
+      target_id: `p1:${'a'.repeat(64)}`,
+      base_revision: 'autosave:create:v1:revision',
+      payload_schema_version: 1,
+    },
     preserve: { status: 'accepted' },
     detect: metadata,
     read: { ...metadata, created_at: '2026-08-01T00:00:00Z', payload: { title: 'Draft' } },
@@ -142,6 +151,7 @@ test('uses the literal PR 7 requests, injected endpoints, and transport options'
   });
   const operationRequests = {
     initialize: { context: 'com_example.record', target_id: '42', initialization_key: 'init-key' },
+    initializeCreate: { context: 'com_content.article', initialization_key: 'create-init-key' },
     preserve: {
       continuation_id: 'continuation',
       generation_id: 'generation',

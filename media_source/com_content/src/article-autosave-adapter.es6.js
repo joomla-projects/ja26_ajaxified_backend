@@ -25,6 +25,14 @@ const normalizeCanonicalId = (value, fieldName) => {
   return candidate;
 };
 
+const normalizeAutosaveTarget = (value) => {
+  if (value === null || (typeof value === 'string' && /^p1:[a-f0-9]{64}$/.test(value))) {
+    return value;
+  }
+
+  return normalizeCanonicalId(value, 'target');
+};
+
 const validatePayload = (payload) => {
   if (!isPlainObject(payload)) {
     throw new TypeError('The Article Autosave recovery payload is invalid.');
@@ -93,7 +101,7 @@ export default class ArticleAutosaveAdapter {
 
     this.descriptor = Object.freeze({
       context: descriptor.context,
-      targetId: normalizeCanonicalId(descriptor.targetId, 'target'),
+      targetId: normalizeAutosaveTarget(descriptor.targetId),
       payloadSchemaVersion: descriptor.payloadSchemaVersion,
     });
     this.form = form;

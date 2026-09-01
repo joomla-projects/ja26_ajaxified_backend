@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Content\Administrator\View\Article;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -147,7 +149,7 @@ class HtmlView extends FormView
         );
         $configurator->disable('com_content.autosave.article');
 
-        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+        if ($this->getLayout() !== 'edit') {
             return;
         }
 
@@ -155,10 +157,21 @@ class HtmlView extends FormView
             $provider = Factory::getApplication()
                 ->bootComponent('com_content')
                 ->getAutosaveProvider('com_content.article');
-            $targetId = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+            $targetId = null;
+            $itemId   = (int) $this->item->id;
 
-            if (!$provider->targetExists($targetId)) {
+            if ($itemId > 0) {
+                $targetId = $provider->canonicalizeTargetId((string) $itemId);
+
+                if (!$provider->targetExists($targetId)) {
+                    return;
+                }
+            } elseif ($itemId !== 0) {
                 return;
+            } elseif (!$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($this->getCurrentUser(), AutosaveOperation::InitializeCreate, null);
             }
         } catch (\Throwable) {
             return;

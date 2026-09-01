@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Content\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
@@ -26,7 +27,7 @@ use Joomla\Database\ParameterType;
  *
  * @since  __DEPLOY_VERSION__
  */
-final class ArticleAutosaveProvider implements AutosaveProviderInterface
+final class ArticleAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     /**
      * Exact supported context.
@@ -57,6 +58,13 @@ final class ArticleAutosaveProvider implements AutosaveProviderInterface
     private const PAYLOAD_SCHEMA_VERSION = 1;
 
     /**
+     * Versioned server contract for new Article drafts.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    private const CREATE_CONTRACT_VERSION = 'article-create-v1';
+
+    /**
      * Domain and version prefix for opaque canonical Article revisions.
      *
      * @since  __DEPLOY_VERSION__
@@ -80,6 +88,41 @@ final class ArticleAutosaveProvider implements AutosaveProviderInterface
     public function getContext(): string
     {
         return self::CONTEXT;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getCreateContractVersion(): string
+    {
+        return self::CREATE_CONTRACT_VERSION;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        if ($normalizedPayload === null) {
+            if (
+                !$user->authorise('core.create', self::CATEGORY_EXTENSION)
+                && \count($user->getAuthorisedCategories(self::CATEGORY_EXTENSION, 'core.create')) === 0
+            ) {
+                throw new AutosaveException('forbidden', 'An Article cannot be created by this user.');
+            }
+
+            return;
+        }
+
+        $categoryId = $normalizedPayload['catid'] ?? null;
+
+        if (!\is_int($categoryId) || $categoryId <= 0 || !$this->categoryExists((string) $categoryId)) {
+            throw $this->invalidPayload();
+        }
+
+        if (!$user->authorise('core.create', 'com_content.category.' . $categoryId)) {
+            throw new AutosaveException('forbidden', 'An Article cannot be created in this category.');
+        }
     }
 
     /**

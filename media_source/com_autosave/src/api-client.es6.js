@@ -5,6 +5,7 @@
 
 const OPERATIONS = [
   'initialize',
+  'initializeCreate',
   'preserve',
   'detect',
   'read',
@@ -12,8 +13,10 @@ const OPERATIONS = [
   'prepareCanonicalAction',
   'getCanonicalActionOutcome',
 ];
+const REQUIRED_OPERATIONS = OPERATIONS.filter((operation) => operation !== 'initializeCreate');
 const MUTATION_OPERATIONS = new Set([
   'initialize',
+  'initializeCreate',
   'preserve',
   'discard',
   'prepareCanonicalAction',
@@ -103,6 +106,7 @@ const assertDraftMetadata = (value, payloadSchemaNullable = false) => {
 const validateData = (operation, data) => {
   switch (operation) {
     case 'initialize':
+    case 'initializeCreate':
       return isObject(data)
         && assertStringProperties(data, [
           'continuation_id',
@@ -210,6 +214,10 @@ const validateRequest = (operation, request) => {
     case 'initialize':
       return hasExactKeys(request, ['context', 'target_id', 'initialization_key'])
         && assertStringProperties(request, ['context', 'target_id', 'initialization_key']);
+
+    case 'initializeCreate':
+      return hasExactKeys(request, ['context', 'initialization_key'])
+        && assertStringProperties(request, ['context', 'initialization_key']);
 
     case 'preserve':
       return hasExactKeys(request, [
@@ -361,7 +369,8 @@ export class AutosaveApiClient {
     now = () => Date.now(),
   }) {
     if (!isObject(endpoints)
-      || !OPERATIONS.every((operation) => isNonEmptyString(endpoints[operation]))) {
+      || !REQUIRED_OPERATIONS.every((operation) => isNonEmptyString(endpoints[operation]))
+      || (endpoints.initializeCreate !== undefined && !isNonEmptyString(endpoints.initializeCreate))) {
       throw new TypeError('Autosave API endpoints are required.');
     }
 
@@ -387,6 +396,10 @@ export class AutosaveApiClient {
 
   initialize(request, options) {
     return this.request('initialize', request, options);
+  }
+
+  initializeCreate(request, options) {
+    return this.request('initializeCreate', request, options);
   }
 
   preserve(request, options) {

@@ -40,6 +40,139 @@ class ArticleAutosaveProviderTest extends UnitTestCase
     }
 
     /**
+     * @testdox  The provider declares one bounded versioned create contract
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testDeclaresTheBoundedArticleCreateContract(): void
+    {
+        $provider = new ArticleAutosaveProvider($this->databaseReturning());
+
+        $this->assertSame('article-create-v1', $provider->getCreateContractVersion());
+    }
+
+    /**
+     * @testdox  Create authorization uses the normalized category relation
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCreateAuthorizationUsesTheNormalizedCategory(): void
+    {
+        $provider = new ArticleAutosaveProvider($this->databaseReturning(null, 1));
+        $calls    = [];
+        $user     = $this->user(7, ['core.create' => true], $calls);
+
+        $provider->authorizeCreate($user, AutosaveOperation::Preserve, $this->validPayload());
+
+        $this->assertSame([['core.create', 'com_content.category.2']], $calls);
+    }
+
+    /**
+     * @testdox  Create initialization requires component or category create access
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCreateInitializationFailsClosedWithoutCreateAccess(): void
+    {
+        $provider  = new ArticleAutosaveProvider($this->databaseReturning());
+        $user      = $this->createMock(User::class);
+        $user->method('authorise')->willReturn(false);
+        $user->method('getAuthorisedCategories')->willReturn([]);
+        $exception = $this->captureFailure(
+            fn () => $provider->authorizeCreate($user, AutosaveOperation::InitializeCreate, null)
+        );
+
+        $this->assertSame('forbidden', $exception->getErrorCode());
+    }
+
+    /**
+     * @testdox  Create authorization denies an unauthorized normalized category
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCreateAuthorizationRejectsAnUnauthorizedCategory(): void
+    {
+        $provider  = new ArticleAutosaveProvider($this->databaseReturning(null, 1));
+        $calls     = [];
+        $user      = $this->user(7, [], $calls);
+        $exception = $this->captureFailure(
+            fn () => $provider->authorizeCreate($user, AutosaveOperation::Preserve, $this->validPayload())
+        );
+
+        $this->assertSame('forbidden', $exception->getErrorCode());
+        $this->assertSame([['core.create', 'com_content.category.2']], $calls);
+    }
+
+    /**
+     * @testdox  Create authorization rejects malformed normalized category state
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCreateAuthorizationRejectsMalformedNormalizedCategory(): void
+    {
+        $provider         = new ArticleAutosaveProvider($this->databaseReturning());
+        $calls            = [];
+        $user             = $this->user(7, ['core.create' => true], $calls);
+        $payload          = $this->validPayload();
+        $payload['catid'] = '2';
+        $exception        = $this->captureFailure(
+            fn () => $provider->authorizeCreate($user, AutosaveOperation::Preserve, $payload)
+        );
+
+        $this->assertSame('invalid_payload', $exception->getErrorCode());
+        $this->assertSame([], $calls);
+    }
+
+    /**
+     * @testdox  Category authorization is reevaluated for every create generation
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function testCreateAuthorizationIsReevaluatedForEveryNormalizedGeneration(): void
+    {
+        $provider    = new ArticleAutosaveProvider($this->databaseReturning(null, 1));
+        $calls       = [];
+        $permissions = ['core.create' => true];
+        $user        = $this->createMock(User::class);
+        $user->method('authorise')->willReturnCallback(
+            static function (string $action, ?string $asset = null) use (&$permissions, &$calls): bool {
+                $calls[] = [$action, $asset];
+
+                return $permissions[$action] ?? false;
+            }
+        );
+
+        $provider->authorizeCreate($user, AutosaveOperation::Preserve, $this->validPayload());
+        $permissions      = [];
+        $changed          = $this->validPayload();
+        $changed['catid'] = 3;
+        $exception        = $this->captureFailure(
+            fn () => $provider->authorizeCreate($user, AutosaveOperation::PrepareCanonicalAction, $changed)
+        );
+
+        $this->assertSame('forbidden', $exception->getErrorCode());
+        $this->assertSame(
+            [
+                ['core.create', 'com_content.category.2'],
+                ['core.create', 'com_content.category.3'],
+            ],
+            $calls
+        );
+    }
+
+    /**
      * @testdox  Canonical Article identities are returned unchanged
      *
      * @param   string  $targetId  The canonical Article identity.
