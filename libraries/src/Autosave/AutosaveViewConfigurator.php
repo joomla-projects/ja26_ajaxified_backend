@@ -31,6 +31,7 @@ final class AutosaveViewConfigurator
 {
     private const OPERATIONS = [
         'initialize',
+        'initializeCreate',
         'preserve',
         'detect',
         'read',
@@ -73,7 +74,7 @@ final class AutosaveViewConfigurator
      * Configure one eligible existing-record edit form.
      *
      * @param   AutosaveProviderInterface  $provider    Component-owned provider.
-     * @param   string                     $targetId    Canonical provider target.
+     * @param   ?string                    $targetId    Canonical provider target, or null for create mode.
      * @param   string                     $optionsKey  Component script-options key.
      * @param   string                     $formId      Explicit owned form ID.
      * @param   array<string, string>       $fieldIds   Explicit payload field IDs.
@@ -86,7 +87,7 @@ final class AutosaveViewConfigurator
      */
     public function configure(
         AutosaveProviderInterface $provider,
-        string $targetId,
+        ?string $targetId,
         string $optionsKey,
         string $formId,
         array $fieldIds,
@@ -98,6 +99,7 @@ final class AutosaveViewConfigurator
             || $formId === ''
             || $asset === ''
             || $fieldIds === []
+            || ($targetId !== null && $targetId === '')
             || array_filter($fieldIds, static fn ($id) => !\is_string($id) || $id === '') !== []
         ) {
             throw new \InvalidArgumentException('The Autosave view configuration is invalid.');
@@ -144,6 +146,7 @@ final class AutosaveViewConfigurator
             'enabled'              => true,
             'context'              => $provider->getContext(),
             'targetId'             => $targetId,
+            'mode'                 => $targetId === null ? 'create' : 'existing',
             'payloadSchemaVersion' => $provider->getPayloadSchemaVersion(),
             'formId'               => $formId,
             'fieldIds'             => $fieldIds,

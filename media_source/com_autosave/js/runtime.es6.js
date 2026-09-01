@@ -89,6 +89,7 @@ export class AutosaveRuntime {
     isOnline = () => globalThis.navigator?.onLine !== false,
     isHidden = () => globalThis.document?.visibilityState === 'hidden',
     abortControllerFactory = () => new AbortController(),
+    createMode = null,
     configuration = {},
   }) {
     if (!apiClient
@@ -102,14 +103,31 @@ export class AutosaveRuntime {
         'getCanonicalActionOutcome',
       ].every(
         (method) => typeof apiClient[method] === 'function',
-      )) {
+      )
+      || (createMode !== null && typeof apiClient.initializeCreate !== 'function')) {
       throw new TypeError('The Autosave API client contract is invalid.');
     }
 
     validateAutosaveAdapter(adapter);
 
+    const validCreateMode = createMode !== null
+      && typeof createMode === 'object'
+      && !Array.isArray(createMode)
+      && typeof createMode.initializationKey === 'string'
+      && createMode.initializationKey.length > 0
+      && (createMode.targetId === null
+        || (typeof createMode.targetId === 'string' && /^p1:[a-f0-9]{64}$/.test(createMode.targetId)))
+      && typeof createMode.onInitialized === 'function'
+      && typeof createMode.acquire === 'function'
+      && typeof createMode.release === 'function'
+      && typeof createMode.onCanonicalSuccess === 'function'
+      && (createMode.subscribeConflict === undefined
+        || typeof createMode.subscribeConflict === 'function');
+
     if (typeof context !== 'string' || context.length === 0
-      || typeof targetId !== 'string' || targetId.length === 0
+      || !((typeof targetId === 'string' && targetId.length > 0)
+        || (targetId === null && validCreateMode))
+      || (validCreateMode && targetId !== createMode.targetId)
       || !Number.isInteger(schemaVersion) || schemaVersion <= 0
       || !eventTarget || typeof eventTarget.dispatchEvent !== 'function'
       || typeof eventFactory !== 'function'
@@ -126,7 +144,8 @@ export class AutosaveRuntime {
     this.apiClient = apiClient;
     this.adapter = adapter;
     this.context = context;
-    this.targetId = targetId;
+    this.createMode = validCreateMode ? createMode : null;
+    this.targetId = this.createMode?.targetId || targetId;
     this.schemaVersion = schemaVersion;
     this.eventTarget = eventTarget;
     this.eventFactory = eventFactory;
@@ -140,7 +159,22 @@ export class AutosaveRuntime {
     this.configuration = validateConfiguration(configuration);
 
     this.runtimeIdentity = identityFactory();
-    this.initializationKey = identityFactory();
+    this.initializationKey = this.createMode?.initializationKey || identityFactory();
+    this.createOwnership = this.createMode ? 'unclaimed' : 'not-applicable';
+    this.unsubscribeCreateConflict = this.createMode?.subscribeConflict?.(() => {
+      if (this.destroyed || this.terminal) {
+        return;
+      }
+
+      this.createOwnership = 'denied';
+      this.status = 'paused';
+      this.lastError = {
+        code: 'provisional_lineage_in_use',
+        classification: 'conflict',
+        retryable: false,
+      };
+      this.emitState();
+    }) || null;
 
     if (typeof this.runtimeIdentity !== 'string' || this.runtimeIdentity.length === 0
       || typeof this.initializationKey !== 'string' || this.initializationKey.length === 0) {
@@ -255,7 +289,9 @@ export class AutosaveRuntime {
     this.onlineSource?.addEventListener?.('offline', this.handleOffline);
     this.visibilitySource?.addEventListener?.('visibilitychange', this.handleVisibilityChange);
 
-    if (this.configuration.detectOnStart) {
+    if (this.createMode && this.targetId) {
+      void this.activateCreateTarget();
+    } else if (this.configuration.detectOnStart && this.targetId) {
       if (this.isOnline()) {
         this.detect();
       } else {
@@ -270,6 +306,51 @@ export class AutosaveRuntime {
     }
 
     return this;
+  }
+
+  async activateCreateTarget() {
+    if (!await this.ensureCreateOwnership()) {
+      return;
+    }
+
+    if (this.configuration.detectOnStart) {
+      await this.detect();
+    } else {
+      this.detectionComplete = true;
+      this.lifecycle = 'active';
+      this.emitState();
+    }
+  }
+
+  async ensureCreateOwnership() {
+    if (!this.createMode || this.createOwnership === 'owned') {
+      return true;
+    }
+
+    if (this.createOwnership === 'denied') {
+      return false;
+    }
+
+    const acquired = await this.createMode.acquire(this.targetId);
+
+    if (this.destroyed) {
+      return false;
+    }
+
+    this.createOwnership = acquired ? 'owned' : 'denied';
+
+    if (!acquired) {
+      this.lifecycle = 'active';
+      this.status = 'paused';
+      this.lastError = {
+        code: 'provisional_lineage_in_use',
+        classification: 'conflict',
+        retryable: false,
+      };
+      this.emitState();
+    }
+
+    return acquired;
   }
 
   async detect() {
@@ -691,6 +772,10 @@ export class AutosaveRuntime {
       throw this.runtimeError('canonical_action_unavailable', 'canonical-action-failure');
     }
 
+    if (this.createOwnership === 'denied') {
+      throw this.runtimeError('provisional_lineage_in_use', 'conflict');
+    }
+
     if (this.recoveryCandidate) {
       this.requestRecoveryResolution();
       throw this.runtimeError('recovery_resolution_required', 'canonical-action-blocked');
@@ -742,6 +827,10 @@ export class AutosaveRuntime {
 
       if (this.destroyed) {
         throw this.runtimeError('canonical_action_destroyed', 'request-aborted');
+      }
+
+      if (this.createOwnership === 'denied') {
+        throw this.runtimeError('provisional_lineage_in_use', 'conflict');
       }
 
       this.pendingSnapshot = null;
@@ -869,6 +958,20 @@ export class AutosaveRuntime {
       this.dirty = hasLaterChanges;
       this.lastError = null;
       this.status = hasLaterChanges ? 'waiting-debounce' : 'clean';
+
+      if (this.createMode) {
+        this.dirty = false;
+        this.status = 'clean';
+        this.terminal = true;
+        try {
+          this.createMode.onCanonicalSuccess({
+            finalTargetId: outcome.final_target_id,
+            intent: outcome.intent,
+          });
+        } catch (error) {
+          // Durable canonical success must not be downgraded by local cleanup.
+        }
+      }
     } else if (outcome.outcome === 'failed') {
       this.dirty = true;
       this.lastError = {
@@ -932,19 +1035,33 @@ export class AutosaveRuntime {
   }
 
   async initializeForCanonicalAction() {
-    const initializationRequest = Object.freeze({
-      context: this.context,
-      target_id: this.targetId,
-      initialization_key: this.initializationKey,
-    });
+    const initializationRequest = this.createMode
+      ? Object.freeze({ context: this.context, initialization_key: this.initializationKey })
+      : Object.freeze({
+        context: this.context,
+        target_id: this.targetId,
+        initialization_key: this.initializationKey,
+      });
     const identity = await this.retryCanonicalMutation(
-      (options) => this.apiClient.initialize(initializationRequest, options),
+      (options) => (this.createMode
+        ? this.apiClient.initializeCreate(initializationRequest, options)
+        : this.apiClient.initialize(initializationRequest, options)),
     );
 
     if (identity.context !== this.context
-      || identity.target_id !== this.targetId
+      || (!this.createMode && identity.target_id !== this.targetId)
+      || (this.createMode && !/^p1:[a-f0-9]{64}$/.test(identity.target_id))
       || identity.payload_schema_version !== this.schemaVersion) {
       throw this.runtimeError('initialized_identity_mismatch', 'conflict');
+    }
+
+    if (this.createMode) {
+      this.targetId = identity.target_id;
+      this.createMode.onInitialized(identity);
+
+      if (!await this.ensureCreateOwnership()) {
+        throw this.runtimeError('provisional_lineage_in_use', 'conflict');
+      }
     }
 
     this.identity = {
@@ -1014,6 +1131,8 @@ export class AutosaveRuntime {
     }
 
     this.destroyed = true;
+    this.unsubscribeCreateConflict?.();
+    this.unsubscribeCreateConflict = null;
     this.lifecycle = 'destroyed';
     this.status = 'destroyed';
     this.clearDirtyTimers();
@@ -1048,6 +1167,7 @@ export class AutosaveRuntime {
 
     if (!this.adapterDestroyed && this.adapter?.destroy) {
       this.adapterDestroyed = true;
+      this.createMode?.release();
 
       try {
         this.adapter.destroy();
@@ -1183,20 +1303,31 @@ export class AutosaveRuntime {
     const controller = this.createController();
 
     try {
-      const identity = await this.apiClient.initialize({
-        context: this.context,
-        target_id: this.targetId,
-        initialization_key: this.initializationKey,
-      }, { signal: controller.signal });
+      const request = this.createMode
+        ? { context: this.context, initialization_key: this.initializationKey }
+        : { context: this.context, target_id: this.targetId, initialization_key: this.initializationKey };
+      const identity = await (this.createMode
+        ? this.apiClient.initializeCreate(request, { signal: controller.signal })
+        : this.apiClient.initialize(request, { signal: controller.signal }));
 
       if (this.destroyed) {
         return;
       }
 
       if (identity.context !== this.context
-        || identity.target_id !== this.targetId
+        || (!this.createMode && identity.target_id !== this.targetId)
+        || (this.createMode && !/^p1:[a-f0-9]{64}$/.test(identity.target_id))
         || identity.payload_schema_version !== this.schemaVersion) {
         throw this.runtimeError('initialized_identity_mismatch', 'conflict');
+      }
+
+      if (this.createMode) {
+        this.targetId = identity.target_id;
+        this.createMode.onInitialized(identity);
+
+        if (!await this.ensureCreateOwnership()) {
+          throw this.runtimeError('provisional_lineage_in_use', 'conflict');
+        }
       }
 
       this.identity = {
@@ -1248,6 +1379,12 @@ export class AutosaveRuntime {
       }, { signal: controller.signal });
 
       if (this.destroyed || this.pendingSnapshot !== snapshot) {
+        return;
+      }
+
+      if (this.createOwnership === 'denied') {
+        this.status = 'paused';
+
         return;
       }
 

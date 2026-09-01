@@ -169,6 +169,7 @@ const apiFailure = (classification, options = {}) => Object.assign(
 const createApi = (overrides = {}) => {
   const calls = {
     initialize: [],
+    initializeCreate: [],
     preserve: [],
     detect: [],
     read: [],
@@ -179,6 +180,7 @@ const createApi = (overrides = {}) => {
   const api = { calls };
   const defaults = {
     initialize: async () => identity,
+    initializeCreate: async () => ({ ...identity, target_id: `p1:${'a'.repeat(64)}` }),
     preserve: async () => ({ status: 'accepted' }),
     detect: async () => null,
     read: async () => recovered,
@@ -251,6 +253,8 @@ const createRuntime = ({
   online = true,
   hidden = false,
   configuration = {},
+  createMode = null,
+  targetId = '42',
   identities = ['document-id', 'initialization-key', 'successor-initialization-key'],
 } = {}) => {
   const clock = new FakeClock();
@@ -264,7 +268,7 @@ const createRuntime = ({
     apiClient: api,
     adapter,
     context: 'com_example.record',
-    targetId: '42',
+    targetId,
     schemaVersion: 1,
     eventTarget,
     eventFactory: (name, detail) => ({ type: name, detail }),
@@ -274,6 +278,7 @@ const createRuntime = ({
     visibilitySource,
     isOnline: () => currentOnline,
     isHidden: () => currentHidden,
+    createMode,
     configuration: {
       debounceInterval: 10,
       maximumDirtyAge: 40,
@@ -1067,6 +1072,128 @@ test('uncertain canonical preparation retries the exact snapshot and revision id
     api.calls.prepareCanonicalAction[0].request,
     api.calls.prepareCanonicalAction[1].request,
   );
+});
+
+test('unresolved create mode stays lazy then initializes and preserves through the existing pipeline', async () => {
+  const initialized = [];
+  const createMode = {
+    initializationKey: 'article-form-1',
+    targetId: null,
+    onInitialized: (value) => initialized.push(value),
+    acquire: async () => true,
+    release: () => {},
+    onCanonicalSuccess: () => {},
+  };
+  const harness = createRuntime({ createMode, targetId: null });
+  harness.runtime.start();
+  await settle();
+  assert.equal(harness.api.calls.initializeCreate.length, 0);
+  assert.equal(harness.api.calls.detect.length, 0);
+
+  harness.adapter.edit();
+  await harness.clock.tick(10);
+  await settle();
+
+  assert.equal(harness.api.calls.initializeCreate.length, 1);
+  assert.deepEqual(harness.api.calls.initializeCreate[0].request, {
+    context: 'com_example.record', initialization_key: 'article-form-1',
+  });
+  assert.equal(harness.api.calls.initialize.length, 0);
+  assert.equal(harness.api.calls.preserve.length, 1);
+  assert.equal(initialized.length, 1);
+  assert.match(harness.runtime.state.targetId, /^p1:[a-f0-9]{64}$/);
+});
+
+test('an advisory duplicate-lineage conflict pauses further provisional work', async () => {
+  let reportConflict;
+  const harness = createRuntime({
+    targetId: null,
+    createMode: {
+      initializationKey: 'article-form-conflict',
+      targetId: null,
+      onInitialized: () => {},
+      acquire: async () => true,
+      release: () => {},
+      onCanonicalSuccess: () => {},
+      subscribeConflict: (callback) => {
+        reportConflict = callback;
+
+        return () => {};
+      },
+    },
+  });
+  harness.runtime.start();
+  harness.adapter.edit();
+  await harness.clock.tick(10);
+
+  reportConflict();
+
+  assert.equal(harness.runtime.state.status, 'paused');
+  assert.equal(harness.runtime.state.error.code, 'provisional_lineage_in_use');
+  const preserveCount = harness.api.calls.preserve.length;
+  harness.adapter.edit();
+  await harness.clock.tick(10);
+  assert.equal(harness.api.calls.preserve.length, preserveCount);
+});
+
+test('unresolved canonical preparation initializes once before prepare and retains retry identity', async () => {
+  const order = [];
+  const api = createApi({
+    initializeCreate: async () => {
+      order.push('initialize-create');
+
+      return { ...identity, target_id: `p1:${'b'.repeat(64)}` };
+    },
+    prepareCanonicalAction: async () => {
+      order.push('prepare');
+
+      return { operation_id: 'operation', intent: 'apply', outcome: 'pending', expires_at: 'later' };
+    },
+  });
+  const harness = createRuntime({
+    api,
+    targetId: null,
+    createMode: {
+      initializationKey: 'stable-create-key',
+      targetId: null,
+      onInitialized: () => {},
+      acquire: async () => true,
+      release: () => {},
+      onCanonicalSuccess: () => {},
+    },
+  });
+  harness.runtime.start();
+  const prepared = await harness.runtime.prepareCanonicalAction('apply');
+
+  assert.equal(prepared.operationId, 'operation');
+  assert.deepEqual(order, ['initialize-create', 'prepare']);
+  assert.equal(api.calls.initializeCreate[0].request.initialization_key, 'stable-create-key');
+  assert.equal(api.calls.prepareCanonicalAction[0].request.target_id, `p1:${'b'.repeat(64)}`);
+});
+
+test('provisional success clears browser binding while failure and unknown retain it', async () => {
+  const successes = [];
+  const createMode = {
+    initializationKey: 'article-form-1',
+    targetId: null,
+    onInitialized: () => {},
+    acquire: async () => true,
+    release: () => {},
+    onCanonicalSuccess: (value) => successes.push(value),
+  };
+  const harness = createRuntime({ createMode, targetId: null });
+  harness.runtime.start();
+  const prepared = await harness.runtime.prepareCanonicalAction('apply');
+  const outcome = {
+    ...successfulOutcome,
+    operation_id: prepared.operationId,
+    target_id: harness.runtime.state.targetId,
+    final_target_id: '73',
+  };
+  assert.equal(harness.runtime.reconcileCanonicalAction({ ...outcome, outcome: 'unknown', final_target_id: null, final_base_revision: null }), false);
+  assert.equal(successes.length, 0);
+  assert.equal(harness.runtime.reconcileCanonicalAction(outcome), true);
+  assert.deepEqual(successes, [{ finalTargetId: '73', intent: 'apply' }]);
 });
 
 test('offline and reconnect during canonical preparation preserve the canonical state and exact retry', async () => {

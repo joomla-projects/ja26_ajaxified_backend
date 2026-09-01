@@ -10,6 +10,7 @@ import AutosaveIntegrationController, {
 } from 'com_autosave.integration-controller';
 import { JoomlaEditor } from 'editor-api';
 import ArticleAutosaveAdapter, { normalizeCanonicalId } from './article-autosave-adapter.es6.js';
+import ArticleAutosaveCreateBinding from './article-autosave-create-binding.es6.js';
 
 const ARTICLE_OPTIONS_KEY = 'com_content.autosave.article';
 const RUNTIME_OPTIONS_KEY = 'com_autosave.runtime';
@@ -41,9 +42,20 @@ const validateArticleConfiguration = (configuration) => {
     throw new TypeError('The Article Autosave page configuration is invalid.');
   }
 
+  const mode = configuration.mode === 'create' ? 'create' : 'existing';
+  const targetId = mode === 'create'
+    ? null
+    : normalizeCanonicalId(configuration.targetId, 'target');
+
+  if ((mode === 'create' && configuration.targetId !== null)
+    || (mode === 'existing' && configuration.targetId === null)) {
+    throw new TypeError('The Article Autosave target mode is invalid.');
+  }
+
   return Object.freeze({
     context: configuration.context,
-    targetId: normalizeCanonicalId(configuration.targetId, 'target'),
+    mode,
+    targetId,
     payloadSchemaVersion: configuration.payloadSchemaVersion,
     formId: configuration.formId,
     fieldIds: Object.freeze({ ...configuration.fieldIds }),
@@ -61,6 +73,7 @@ export default class ArticleAutosaveController extends AutosaveIntegrationContro
     optionsReader = defaultOptionsReader,
     editorRegistry = JoomlaEditor,
     adapterFactory = (options) => new ArticleAutosaveAdapter(options),
+    createBindingFactory = (options) => new ArticleAutosaveCreateBinding(options),
     ...integrationOptions
   } = {}) {
     if (!documentSource
@@ -68,18 +81,30 @@ export default class ArticleAutosaveController extends AutosaveIntegrationContro
       || !editorRegistry
       || typeof editorRegistry.get !== 'function'
       || typeof editorRegistry.subscribeLifecycle !== 'function'
-      || typeof adapterFactory !== 'function') {
+      || typeof adapterFactory !== 'function'
+      || typeof createBindingFactory !== 'function') {
       throw new TypeError('The Article Autosave controller configuration is invalid.');
     }
 
+    let createBinding = null;
     const resolveArticle = () => {
       const article = validateArticleConfiguration(
         optionsReader(ARTICLE_OPTIONS_KEY, null),
       );
 
       if (!article) {
+        createBinding = null;
+
         return null;
       }
+
+      if (article.mode === 'create' && !createBinding) {
+        createBinding = createBindingFactory({ context: article.context });
+      } else if (article.mode === 'existing' && createBinding) {
+        createBinding = null;
+      }
+
+      const createMode = createBinding?.descriptor() || null;
 
       const form = documentSource.getElementById(article.formId);
 
@@ -112,12 +137,14 @@ export default class ArticleAutosaveController extends AutosaveIntegrationContro
       return {
         descriptor: {
           context: article.context,
-          targetId: article.targetId,
+          targetId: createMode?.targetId || article.targetId,
           payloadSchemaVersion: article.payloadSchemaVersion,
         },
+        createMode,
         form,
         identityParts: [
           editor,
+          createMode?.formInstanceId || article.targetId,
           article.fieldIds.articletext,
           ...FIELD_KEYS.map((key) => fields[key]),
         ],

@@ -83,7 +83,7 @@ class FakeEditor {
   }
 }
 
-const createFixture = () => {
+const createFixture = (targetId = '42') => {
   const form = new FakeForm('item-form');
   const fields = {
     title: new FakeElement('jform_title', ' Original title '),
@@ -98,7 +98,7 @@ const createFixture = () => {
   const adapter = new ArticleAutosaveAdapter({
     descriptor: {
       context: 'com_content.article',
-      targetId: '42',
+      targetId,
       payloadSchemaVersion: 1,
     },
     form,
@@ -132,6 +132,15 @@ test('constructs an exact stable descriptor without URL or task identity', () =>
   });
   assert.equal(Object.isFrozen(adapter.getDescriptor()), true);
   assert.throws(() => new ArticleAutosaveAdapter({}), TypeError);
+});
+
+test('the same Article adapter accepts unresolved and provisional create targets', () => {
+  const unresolved = createFixture(null).adapter;
+  const provisional = createFixture(`p1:${'a'.repeat(64)}`).adapter;
+
+  assert.equal(unresolved.getDescriptor().targetId, null);
+  assert.equal(provisional.getDescriptor().targetId, `p1:${'a'.repeat(64)}`);
+  assert.throws(() => createFixture('p1:forged'), /target/);
 });
 
 test('capture returns exactly four immutable-source values and uses the live editor', () => {

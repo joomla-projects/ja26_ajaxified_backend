@@ -122,6 +122,7 @@ export default class AutosaveCanonicalActionCoordinator {
     submitForm = defaultSubmitForm,
     maximumOutcomeAttempts = 5,
     outcomeRetryDelay = 750,
+    allowDetachedDuringCanonical = false,
   }) {
     if (!form
       || typeof form.addEventListener !== 'function'
@@ -140,7 +141,8 @@ export default class AutosaveCanonicalActionCoordinator {
       || !Number.isInteger(maximumOutcomeAttempts)
       || maximumOutcomeAttempts < 1
       || !Number.isFinite(outcomeRetryDelay)
-      || outcomeRetryDelay < 0) {
+      || outcomeRetryDelay < 0
+      || typeof allowDetachedDuringCanonical !== 'boolean') {
       throw new TypeError('The Autosave canonical action coordinator configuration is invalid.');
     }
 
@@ -152,6 +154,7 @@ export default class AutosaveCanonicalActionCoordinator {
     this.submitForm = submitForm;
     this.maximumOutcomeAttempts = maximumOutcomeAttempts;
     this.outcomeRetryDelay = outcomeRetryDelay;
+    this.allowDetachedDuringCanonical = allowDetachedDuringCanonical;
     this.started = false;
     this.destroyed = false;
     this.activeAction = null;
@@ -447,7 +450,7 @@ export default class AutosaveCanonicalActionCoordinator {
 
   isCurrent(token) {
     return !this.destroyed
-      && this.form?.isConnected !== false
+      && (this.form?.isConnected !== false || this.allowDetachedDuringCanonical)
       && this.activeAction?.token === token;
   }
 
