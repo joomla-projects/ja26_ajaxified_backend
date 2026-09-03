@@ -26,7 +26,8 @@
       "type": "script",
       "uri": "com_finder/filter-autosave.min.js",
       "dependencies": [
-        "com_autosave.integration-controller"
+        "com_autosave.integration-controller",
+        "com_autosave.create-binding"
       ],
       "attributes": {
         "type": "module"

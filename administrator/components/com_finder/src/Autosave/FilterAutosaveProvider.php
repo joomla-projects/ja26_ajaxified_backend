@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Finder\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
@@ -27,7 +28,7 @@ use Joomla\String\StringHelper;
  *
  * @since  __DEPLOY_VERSION__
  */
-final class FilterAutosaveProvider implements AutosaveProviderInterface
+final class FilterAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const STRING_LIMITS = [
         'title'            => 255,
@@ -49,6 +50,18 @@ final class FilterAutosaveProvider implements AutosaveProviderInterface
     public function getContext(): string
     {
         return 'com_finder.filter';
+    }
+
+    public function getCreateContractVersion(): string
+    {
+        return 'finder-filter-create-v1';
+    }
+
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        if (!$user->authorise('core.create', 'com_finder')) {
+            throw new AutosaveException('forbidden', 'A Finder Filter cannot be created by this user.');
+        }
     }
 
     public function getPayloadSchemaVersion(): int

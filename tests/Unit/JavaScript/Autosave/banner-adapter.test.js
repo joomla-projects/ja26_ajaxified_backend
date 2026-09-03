@@ -20,7 +20,7 @@ const payload = () => ({
   clickurl: 'https://example.test', version_note: '', publish_up: '25 August 2026 10:00',
   publish_up_alt: '2026-08-25 10:00:00', publish_down: '', publish_down_alt: '',
   imageurl: 'images/banner.jpg#joomlaImage://local-images/banner.jpg', width: '800', height: '200',
-  alt: 'Banner alt', metakey: '', metakey_prefix: '', type: 0, own_prefix: 1,
+  alt: 'Banner alt', metakey: '', metakey_prefix: '', type: 0, own_prefix: 1, catid: 2, cid: 3,
 });
 
 const fixture = () => {
@@ -46,7 +46,7 @@ const fixture = () => {
     subscribeChange: (callback) => { editorCallback = callback; return () => { editorCallback = null; }; },
   };
   const adapter = new BannerAutosaveAdapter({
-    descriptor: { context: 'com_banners.banner', targetId: '42', payloadSchemaVersion: 1 },
+    descriptor: { context: 'com_banners.banner', targetId: '42', payloadSchemaVersion: 2 },
     form, fields, editor, getCurrentEditor: () => editor, mediaField,
   });
   return {
@@ -67,7 +67,7 @@ test('Banner recovery restores editor, both calendar representations and media t
   const { adapter, fields } = fixture();
   const restored = {
     ...payload(), description: '<p>Recovered</p>', publish_up: 'Tomorrow', publish_up_alt: '2026-08-26 00:00:00',
-    imageurl: 'https://cdn.example.test/banner.jpg', type: 1, own_prefix: 0,
+    imageurl: 'https://cdn.example.test/banner.jpg', type: 1, own_prefix: 0, catid: 4, cid: 5,
   };
   let dirty = 0;
   adapter.initializeBaseline().subscribe(() => { dirty += 1; });
@@ -99,4 +99,27 @@ test('Banner payload rejects missing, extra, transient, credentialed and invalid
   ]) assert.throws(() => validatePayload(invalid), /payload is invalid/);
   assert.equal(isStableMediaReference('images/banner.jpg'), true);
   assert.equal(isStableMediaReference('data:image/png;base64,AA'), false);
+});
+
+test('Banner relation fields keep the category mandatory and the client optional', () => {
+  assert.deepEqual(validatePayload({ ...payload(), cid: 0 }), { ...payload(), cid: 0 });
+  assert.throws(() => validatePayload({ ...payload(), catid: 0 }), /payload is invalid/);
+  assert.throws(() => validatePayload({ ...payload(), cid: -1 }), /payload is invalid/);
+});
+
+test('Banner adapter arms an incomplete new form and activates on the first valid change', () => {
+  const { adapter, fields } = fixture();
+  fields.catid.value = '';
+  fields.cid.value = '';
+  adapter.initializeBaseline();
+  assert.equal(adapter.baseline, null);
+
+  let dirty = 0;
+  adapter.subscribe(() => { dirty += 1; });
+  fields.catid.value = '3';
+  fields.catid.dispatchEvent(new Event('change'));
+
+  assert.equal(dirty, 1);
+  assert.equal(adapter.baseline.catid, 3);
+  assert.equal(adapter.baseline.cid, 0);
 });

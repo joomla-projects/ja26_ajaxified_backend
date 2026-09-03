@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Banners\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
@@ -27,7 +28,7 @@ use Joomla\String\StringHelper;
  *
  * @since  __DEPLOY_VERSION__
  */
-final class ClientAutosaveProvider implements AutosaveProviderInterface
+final class ClientAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const CONTEXT                = 'com_banners.client';
     private const MAXIMUM_ID             = '4294967295';
@@ -56,6 +57,18 @@ final class ClientAutosaveProvider implements AutosaveProviderInterface
     public function getContext(): string
     {
         return self::CONTEXT;
+    }
+
+    public function getCreateContractVersion(): string
+    {
+        return 'banner-client-create-v1';
+    }
+
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        if (!$user->authorise('core.create', 'com_banners')) {
+            throw new AutosaveException('forbidden', 'A Banner client cannot be created by this user.');
+        }
     }
 
     public function canonicalizeTargetId(string $targetId): string

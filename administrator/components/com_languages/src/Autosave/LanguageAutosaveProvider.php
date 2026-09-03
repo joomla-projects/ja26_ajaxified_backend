@@ -9,6 +9,7 @@
 
 namespace Joomla\Component\Languages\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
@@ -21,7 +22,7 @@ use Joomla\String\StringHelper;
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class LanguageAutosaveProvider implements AutosaveProviderInterface
+final class LanguageAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const LIMITS = ['title' => 50, 'title_native' => 50, 'description' => 512, 'metadesc' => 300, 'sitename' => 1024];
     public function __construct(private readonly DatabaseInterface $db)
@@ -30,6 +31,16 @@ final class LanguageAutosaveProvider implements AutosaveProviderInterface
     public function getContext(): string
     {
         return 'com_languages.language';
+    }
+    public function getCreateContractVersion(): string
+    {
+        return 'language-create-v1';
+    }
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        if (!$user->authorise('core.create', 'com_languages')) {
+            throw new AutosaveException('forbidden', 'A Content Language cannot be created by this user.');
+        }
     }
     public function getPayloadSchemaVersion(): int
     {

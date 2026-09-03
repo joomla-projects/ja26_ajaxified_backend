@@ -36,11 +36,11 @@ class Runtime {
   destroy() { if (!this.destroyCalls) { this.destroyCalls += 1; this.unsubscribe?.(); this.options.adapter.destroy(); } }
 }
 
-const configuration = { enabled: true, context: 'com_banners.banner', targetId: '42', payloadSchemaVersion: 1, formId: 'banner-form', fieldIds };
+const configuration = { enabled: true, context: 'com_banners.banner', targetId: '42', payloadSchemaVersion: 2, formId: 'banner-form', fieldIds };
 
 const fixture = () => {
   const form = new Form();
-  const fields = Object.fromEntries(FIELD_KEYS.map((key) => [key, new Element(fieldIds[key], key === 'type' ? '0' : '')]));
+  const fields = Object.fromEntries(FIELD_KEYS.map((key) => [key, new Element(fieldIds[key], key === 'type' ? '0' : ['catid', 'cid'].includes(key) ? '1' : '')]));
   fields.own_prefix = [new Element('jform_own_prefix0', '0'), new Element('jform_own_prefix1', '1')];
   fields.own_prefix[0].checked = true;
   const mediaField = { isConnected: true, contains: (field) => field === fields.imageurl, setValue: (value) => { fields.imageurl.value = value; } };
@@ -87,6 +87,39 @@ test('missing configuration remains native fallback without a runtime', async ()
   const controller = new BannerAutosaveController({ documentSource, editorRegistry, optionsReader: () => null, runtimeFactory: () => { runtimeCalls += 1; return new Runtime({}); } });
   controller.start(); await controller.reconcile();
   assert.equal(runtimeCalls, 0);
+});
+
+test('new Banner without a category or client still boots the unresolved create runtime', async () => {
+  const form = new Form();
+  const fields = Object.fromEntries(FIELD_KEYS.map((key) => [key, new Element(fieldIds[key], '')]));
+  fields.type.value = '0';
+  fields.own_prefix = [new Element('jform_own_prefix0', '0'), new Element('jform_own_prefix1', '1')];
+  fields.own_prefix[0].checked = true;
+  const mediaField = { isConnected: true, contains: (field) => field === fields.imageurl, setValue: (value) => { fields.imageurl.value = value; } };
+  fields.imageurl.mediaField = mediaField;
+  Object.values(fields).flat().forEach((field) => form.children.add(field)); form.children.add(mediaField);
+  const editor = { supportsChangeObservation: () => true, getValue: () => '', setValue() {}, subscribeChange: () => () => {} };
+  const editorRegistry = { get: () => editor, subscribeLifecycle: () => () => {} };
+  const createConfiguration = {
+    enabled: true, context: 'com_banners.banner', mode: 'create', targetId: null, payloadSchemaVersion: 2,
+    formId: 'banner-form', fieldIds, locale: 'en-GB', timeZone: 'UTC',
+  };
+  const runtimes = [];
+  const controller = new BannerAutosaveController({
+    documentSource: new DocumentSource(form, fields), editorRegistry,
+    optionsReader: (key, fallback) => (key === OPTIONS_KEY ? createConfiguration : key === 'com_autosave.runtime' ? { endpoints: {
+      initializeCreate: 'ic', initialize: 'i', preserve: 'p', detect: 'd', read: 'r', discard: 'x', prepareCanonicalAction: 'c', getCanonicalActionOutcome: 'o',
+    } } : key === 'csrf.token' ? 'token' : fallback),
+    apiClientFactory: () => ({}),
+    runtimeFactory: (options) => { const runtime = new Runtime(options); runtimes.push(runtime); return runtime; },
+    coordinatorFactory: () => ({ start() { return this; }, destroy() {} }),
+    presenterFactory: () => ({ start() { return this; }, destroy() {} }),
+  });
+  controller.start(); await controller.reconcile();
+  assert.equal(runtimes.length, 1);
+  assert.equal(runtimes[0].startCalls, 1);
+  assert.equal(runtimes[0].options.targetId, null);
+  assert.equal(runtimes[0].options.adapter.baseline, null);
 });
 
 test('Banner entrypoint and template activate the controller and generic UI', async () => {

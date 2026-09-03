@@ -24,7 +24,7 @@ class BannerAutosaveProviderTest extends UnitTestCase
         $provider = new BannerAutosaveProvider($this->databaseReturning($this->banner()));
 
         $this->assertSame('com_banners.banner', $provider->getContext());
-        $this->assertSame(1, $provider->getPayloadSchemaVersion());
+        $this->assertSame(2, $provider->getPayloadSchemaVersion());
         $this->assertSame('2147483647', $provider->canonicalizeTargetId('2147483647'));
         $this->assertTrue($provider->targetExists('42'));
 
@@ -41,14 +41,15 @@ class BannerAutosaveProviderTest extends UnitTestCase
         $provider = new BannerAutosaveProvider($this->databaseReturning());
         $payload  = $this->payload();
 
-        $this->assertSame($payload, $provider->normalizePayload($payload, 1));
+        $this->assertSame($payload, $provider->normalizePayload($payload, 2));
+        $this->assertSame(0, $provider->normalizePayload([...$payload, 'cid' => 0], 2)['cid']);
         $dates = $provider->normalizePayload([
             ...$payload,
             'publish_up'       => '',
             'publish_up_alt'   => '',
             'publish_down'     => 'Tomorrow',
             'publish_down_alt' => '',
-        ], 1);
+        ], 2);
         $this->assertSame('', $dates['publish_up']);
         $this->assertSame('', $dates['publish_up_alt']);
         $this->assertSame('Tomorrow', $dates['publish_down']);
@@ -64,7 +65,7 @@ class BannerAutosaveProviderTest extends UnitTestCase
             'name'       => str_repeat('é', 255),
             'publish_up' => str_repeat('x', 255),
             'imageurl'   => str_repeat('a', 2048),
-        ], 1);
+        ], 2);
         $this->assertSame(str_repeat('é', 255), $boundary['name']);
 
         $invalid = [
@@ -78,12 +79,14 @@ class BannerAutosaveProviderTest extends UnitTestCase
             [...$payload, 'imageurl' => str_repeat('a', 2049)],
             [...$payload, 'type' => 2],
             [...$payload, 'own_prefix' => '1'],
+            [...$payload, 'catid' => 0],
+            [...$payload, 'cid' => -1],
             [...$payload, 'width' => '-1'],
             [...$payload, 'height' => '2147483648'],
         ];
 
         foreach ($invalid as $candidate) {
-            $this->assertSame('invalid_payload', $this->failure(fn () => $provider->normalizePayload($candidate, 1))->getErrorCode());
+            $this->assertSame('invalid_payload', $this->failure(fn () => $provider->normalizePayload($candidate, 2))->getErrorCode());
         }
     }
 
@@ -92,13 +95,13 @@ class BannerAutosaveProviderTest extends UnitTestCase
         $provider = new BannerAutosaveProvider($this->databaseReturning());
 
         foreach (['', 'images/banner.jpg', 'images/banner.jpg#joomlaImage://local-images/banner.jpg', 'https://cdn.example.test/banner.jpg'] as $reference) {
-            $this->assertSame($reference, $provider->normalizePayload([...$this->payload(), 'imageurl' => $reference], 1)['imageurl']);
+            $this->assertSame($reference, $provider->normalizePayload([...$this->payload(), 'imageurl' => $reference], 2)['imageurl']);
         }
 
         foreach (['/images/banner.jpg', '//example.test/banner.jpg', 'blob:abc', 'data:image/png;base64,AA', 'file:///tmp/a', 'https://user@example.test/a', 'images\\a.jpg'] as $reference) {
             $this->assertSame(
                 'invalid_payload',
-                $this->failure(fn () => $provider->normalizePayload([...$this->payload(), 'imageurl' => $reference], 1))->getErrorCode()
+                $this->failure(fn () => $provider->normalizePayload([...$this->payload(), 'imageurl' => $reference], 2))->getErrorCode()
             );
         }
     }
@@ -116,6 +119,44 @@ class BannerAutosaveProviderTest extends UnitTestCase
         $denied->method('authorise')->willReturn(false);
         $this->assertSame('forbidden', $this->failure(fn () => (new BannerAutosaveProvider($this->databaseReturning($this->banner())))->authorize($denied, '42', AutosaveOperation::Read))->getErrorCode());
         $this->assertSame('checked_out', $this->failure(fn () => (new BannerAutosaveProvider($this->databaseReturning($this->banner(['checked_out' => 99]))))->authorize($user, '42', AutosaveOperation::Read))->getErrorCode());
+    }
+
+    public function testCreateAuthorizationUsesOnlyNormalizedExistingRelations(): void
+    {
+        $db = $this->databaseReturning();
+        $db->method('loadResult')->willReturn(1);
+        $user = $this->createMock(User::class);
+        $user->method('authorise')->willReturnCallback(
+            static fn (string $action, string $asset): bool => $action === 'core.create' && $asset === 'com_banners.category.3'
+        );
+
+        (new BannerAutosaveProvider($db))->authorizeCreate($user, AutosaveOperation::Preserve, $this->payload());
+
+        $this->assertSame(
+            'invalid_payload',
+            $this->failure(fn () => (new BannerAutosaveProvider($this->databaseReturning()))
+                ->authorizeCreate($user, AutosaveOperation::Preserve, [...$this->payload(), 'cid' => 999]))->getErrorCode()
+        );
+    }
+
+    public function testCreateAuthorizationAllowsNoClientAndRejectsInvalidCategory(): void
+    {
+        $db = $this->databaseReturning();
+        $db->method('loadResult')->willReturn(1);
+        $user = $this->createMock(User::class);
+        $user->method('authorise')->willReturnCallback(
+            static fn (string $action, string $asset): bool => $action === 'core.create' && $asset === 'com_banners.category.3'
+        );
+
+        // A client is optional on the native Banner form; cid 0 must pass.
+        $provider = new BannerAutosaveProvider($db);
+        $provider->authorizeCreate($user, AutosaveOperation::Preserve, [...$this->payload(), 'cid' => 0]);
+
+        $this->assertSame(
+            'invalid_payload',
+            $this->failure(fn () => (new BannerAutosaveProvider($this->databaseReturning()))
+                ->authorizeCreate($user, AutosaveOperation::Preserve, [...$this->payload(), 'catid' => 0]))->getErrorCode()
+        );
     }
 
     public function testBaseRevisionIgnoresCheckoutButIncludesCanonicalContentAndCategory(): void
@@ -137,6 +178,7 @@ class BannerAutosaveProviderTest extends UnitTestCase
             'version_note'     => '', 'publish_up' => '', 'publish_up_alt' => '', 'publish_down' => '',
             'publish_down_alt' => '', 'imageurl' => '', 'width' => '', 'height' => '', 'alt' => '',
             'metakey'          => '', 'metakey_prefix' => '', 'type' => 0, 'own_prefix' => 0,
+            'catid'            => 3, 'cid' => 2,
         ];
     }
 

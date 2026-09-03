@@ -16,12 +16,12 @@ class CanonicalRelationsProvidersTest extends UnitTestCase
     {
         $newsfeed          = new NewsfeedAutosaveProvider($this->database());
         $transition        = new TransitionAutosaveProvider($this->database());
-        $newsPayload       = ['metakey' => '', 'name' => '', 'description' => '', 'link' => '', 'version_note' => '', 'numarticles' => 5, 'cache_time' => 3600, 'metadesc' => ''];
+        $newsPayload       = ['metakey' => '', 'name' => '', 'description' => '', 'link' => '', 'version_note' => '', 'numarticles' => 5, 'cache_time' => 3600, 'metadesc' => '', 'catid' => 2];
         $transitionPayload = ['to_stage_id' => 2, 'description' => '', 'title' => '', 'from_stage_id' => -1];
 
         $this->assertSame('com_newsfeeds.newsfeed', $newsfeed->getContext());
         $this->assertSame('com_workflow.transition', $transition->getContext());
-        $this->assertSame(['name', 'description', 'link', 'version_note', 'numarticles', 'cache_time', 'metadesc', 'metakey'], array_keys($newsfeed->normalizePayload($newsPayload, 1)));
+        $this->assertSame(['name', 'description', 'link', 'version_note', 'numarticles', 'cache_time', 'metadesc', 'metakey', 'catid'], array_keys($newsfeed->normalizePayload($newsPayload, 2)));
         $this->assertSame(['title', 'description', 'from_stage_id', 'to_stage_id'], array_keys($transition->normalizePayload($transitionPayload, 1)));
 
         foreach (['0', '-1', '01', ' 1', '1 ', '1.0', '2147483648'] as $invalid) {
@@ -29,8 +29,8 @@ class CanonicalRelationsProvidersTest extends UnitTestCase
             $this->assertFailure('invalid_target', fn () => $transition->canonicalizeTargetId($invalid));
         }
 
-        $this->assertFailure('invalid_payload', fn () => $newsfeed->normalizePayload(array_replace($newsPayload, ['numarticles' => '5']), 1));
-        $this->assertFailure('invalid_payload', fn () => $newsfeed->normalizePayload($newsPayload + ['catid' => 2], 1));
+        $this->assertFailure('invalid_payload', fn () => $newsfeed->normalizePayload(array_replace($newsPayload, ['numarticles' => '5']), 2));
+        $this->assertFailure('invalid_payload', fn () => $newsfeed->normalizePayload($newsPayload + ['client_id' => 2], 2));
         $this->assertFailure('invalid_payload', fn () => $transition->normalizePayload(array_replace($transitionPayload, ['from_stage_id' => -2]), 1));
         $this->assertFailure('invalid_payload', fn () => $transition->normalizePayload(array_replace($transitionPayload, ['workflow_id' => 3]), 1));
     }
@@ -64,6 +64,24 @@ class CanonicalRelationsProvidersTest extends UnitTestCase
 
         $record->checked_out = 99;
         $this->assertFailure('checked_out', fn () => (new NewsfeedAutosaveProvider($db))->authorize($user, '42', AutosaveOperation::Read));
+    }
+
+    public function testNewsfeedCreateAuthorizationRechecksNormalizedCategory(): void
+    {
+        $db = $this->database();
+        $db->method('loadResult')->willReturn(1);
+        $user = $this->createMock(User::class);
+        $user->method('authorise')->willReturnCallback(
+            static fn (string $action, string $asset): bool => $action === 'core.create' && $asset === 'com_newsfeeds.category.2'
+        );
+
+        (new NewsfeedAutosaveProvider($db))->authorizeCreate($user, AutosaveOperation::Preserve, ['catid' => 2]);
+
+        $this->assertFailure(
+            'invalid_payload',
+            fn () => (new NewsfeedAutosaveProvider($this->database()))
+                ->authorizeCreate($user, AutosaveOperation::Preserve, ['catid' => 99])
+        );
     }
 
     public function testTransitionAuthorizationDerivesExtensionAndEnforcesCheckout(): void

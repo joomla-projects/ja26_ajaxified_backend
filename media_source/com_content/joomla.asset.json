@@ -12,6 +12,7 @@
       "dependencies": [
         "core",
         "editors",
+        "com_autosave.create-binding",
         "com_autosave.integration-controller"
       ],
       "attributes": {

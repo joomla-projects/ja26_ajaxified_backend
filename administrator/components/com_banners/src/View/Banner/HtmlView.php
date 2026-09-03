@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Banners\Administrator\View\Banner;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
@@ -100,15 +102,23 @@ class HtmlView extends BaseHtmlView
         $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
         $configurator->disable('com_banners.autosave.banner');
 
-        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+        if ($this->getLayout() !== 'edit') {
             return;
         }
 
         try {
             $provider = $app->bootComponent('com_banners')->getAutosaveProvider('com_banners.banner');
-            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+            $itemId   = (int) $this->item->id;
+            $target   = null;
 
-            if (!$provider->targetExists($target)) {
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+            if ($target !== null && !$provider->targetExists($target)) {
                 return;
             }
         } catch (\Throwable) {
@@ -117,6 +127,8 @@ class HtmlView extends BaseHtmlView
 
         $fieldGroups = [
             'name'             => null,
+            'catid'            => null,
+            'cid'              => null,
             'alias'            => null,
             'description'      => null,
             'type'             => null,

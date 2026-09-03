@@ -30,6 +30,14 @@ const normalizeCanonicalId = (value) => {
   return candidate;
 };
 
+const normalizeAutosaveTarget = (value) => {
+  if (value === null || (typeof value === 'string' && /^p1:[a-f0-9]{64}$/.test(value))) {
+    return value;
+  }
+
+  return normalizeCanonicalId(value);
+};
+
 const validatePayload = (payload) => {
   if (!isPlainObject(payload)) {
     throw new TypeError('The Redirect Autosave recovery payload is invalid.');
@@ -88,7 +96,7 @@ export default class LinkAutosaveAdapter {
 
     this.descriptor = Object.freeze({
       context: descriptor.context,
-      targetId: normalizeCanonicalId(descriptor.targetId),
+      targetId: normalizeAutosaveTarget(descriptor.targetId),
       payloadSchemaVersion: descriptor.payloadSchemaVersion,
     });
     this.form = form;

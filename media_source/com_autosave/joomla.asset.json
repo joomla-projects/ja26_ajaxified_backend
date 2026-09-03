@@ -43,6 +43,18 @@
       }
     },
     {
+      "name": "com_autosave.create-binding",
+      "type": "script",
+      "uri": "com_autosave/create-binding.min.js",
+      "dependencies": [
+        "core"
+      ],
+      "importmap": true,
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
       "name": "com_autosave.integration-controller",
       "type": "script",
       "uri": "com_autosave/integration-controller.min.js",

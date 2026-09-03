@@ -8,6 +8,7 @@ import AutosaveIntegrationController, {
   isPlainObject,
   resolveAutosaveUiMount,
 } from 'com_autosave.integration-controller';
+import AutosaveCreateBinding from 'com_autosave.create-binding';
 import { JoomlaEditor } from 'editor-api';
 import TourAutosaveAdapter, { normalizeCanonicalId } from './tour-autosave-adapter.es6.js';
 
@@ -33,9 +34,15 @@ const validateTourConfiguration = (configuration) => {
     throw new TypeError('The Guided Tour Autosave page configuration is invalid.');
   }
 
+  const mode = configuration.mode === 'create' ? 'create' : 'existing';
+  const targetId = mode === 'create' ? null : normalizeCanonicalId(configuration.targetId);
+  if ((mode === 'create' && configuration.targetId !== null) || (mode === 'existing' && configuration.targetId === null)) {
+    throw new TypeError('The Guided Tour Autosave target mode is invalid.');
+  }
   return Object.freeze({
     context: configuration.context,
-    targetId: normalizeCanonicalId(configuration.targetId),
+    mode,
+    targetId,
     payloadSchemaVersion: configuration.payloadSchemaVersion,
     formId: configuration.formId,
     fieldIds: Object.freeze({ ...configuration.fieldIds }),
@@ -50,19 +57,24 @@ export default class TourAutosaveController extends AutosaveIntegrationControlle
     optionsReader = defaultOptionsReader,
     editorRegistry = JoomlaEditor,
     adapterFactory = (options) => new TourAutosaveAdapter(options),
+    createBindingFactory = (options) => new AutosaveCreateBinding(options),
     ...integrationOptions
   } = {}) {
     if (!documentSource || typeof documentSource.getElementById !== 'function'
       || typeof documentSource.querySelectorAll !== 'function'
       || !editorRegistry || typeof editorRegistry.get !== 'function'
       || typeof editorRegistry.subscribeLifecycle !== 'function'
-      || typeof adapterFactory !== 'function') {
+      || typeof adapterFactory !== 'function' || typeof createBindingFactory !== 'function') {
       throw new TypeError('The Guided Tour Autosave controller configuration is invalid.');
     }
 
+    let createBinding = null;
     const resolveTour = () => {
       const tour = validateTourConfiguration(optionsReader(TOUR_OPTIONS_KEY, null));
-      if (!tour) return null;
+      if (!tour) { createBinding = null; return null; }
+      if (tour.mode === 'create' && !createBinding) createBinding = createBindingFactory({ context: tour.context });
+      else if (tour.mode === 'existing' && createBinding) createBinding = null;
+      const createMode = createBinding?.descriptor() || null;
       const form = documentSource.getElementById(tour.formId);
       if (!form?.isConnected) return null;
 
@@ -83,9 +95,10 @@ export default class TourAutosaveController extends AutosaveIntegrationControlle
         || typeof editor.getValue !== 'function' || typeof editor.setValue !== 'function') return null;
 
       return {
-        descriptor: { context: tour.context, targetId: tour.targetId, payloadSchemaVersion: tour.payloadSchemaVersion },
+        descriptor: { context: tour.context, targetId: createMode?.targetId || tour.targetId, payloadSchemaVersion: tour.payloadSchemaVersion },
+        createMode,
         form,
-        identityParts: [editor, tour.fieldIds.description, ...FIELD_KEYS.flatMap((key) => fields[key])],
+        identityParts: [createMode?.formInstanceId || tour.targetId, editor, tour.fieldIds.description, ...FIELD_KEYS.flatMap((key) => fields[key])],
         taskPolicy: TOUR_CANONICAL_TASK_POLICY,
         statusMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-status-ui]'),
         recoveryMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-recovery-ui]'),

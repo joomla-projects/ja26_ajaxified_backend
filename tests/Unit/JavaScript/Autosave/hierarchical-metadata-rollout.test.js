@@ -17,11 +17,12 @@ class Runtime { constructor(options, calls) { this.options = options; this.calls
 const richFields = ['title', 'note', 'description', 'version_note', 'metadesc', 'metakey'];
 const specs = [
   { Controller: CategoryController, key: 'com_categories.autosave.category', context: 'com_categories.category', fields: richFields, editor: true },
-  { Controller: TagController, key: 'com_tags.autosave.tag', context: 'com_tags.tag', fields: richFields, editor: true },
+  { Controller: TagController, key: 'com_tags.autosave.tag', context: 'com_tags.tag', fields: [...richFields, 'parent_id'], editor: true },
   { Controller: GroupController, key: 'com_fields.autosave.group', context: 'com_fields.group', fields: ['title', 'note', 'description'] },
 ];
 const fixture = (spec) => {
   const form = new Form('item-form'); const fields = Object.fromEntries(spec.fields.map((key) => [key, new Element(`jform_${key}`)])); Object.values(fields).forEach((field) => form.children.add(field));
+  if (fields.parent_id) fields.parent_id.value = '1';
   const documentSource = new Document(form, fields); const editor = new Editor(); const calls = { detect: 0, preserve: 0 }; const runtimes = [];
   const configuration = { enabled: true, context: spec.context, targetId: '7', payloadSchemaVersion: 1, formId: 'item-form', fieldIds: Object.fromEntries(spec.fields.map((key) => [key, `jform_${key}`])) };
   const controller = new spec.Controller({ documentSource, optionsReader: (key, fallback) => (key === spec.key ? configuration : key === 'com_autosave.runtime' ? { endpoints } : key === 'csrf.token' ? 'token' : fallback), ...(spec.editor ? { editorRegistry: { get: () => editor, subscribeLifecycle: () => () => {} } } : {}), apiClientFactory: () => ({}), runtimeFactory: (options) => { const runtime = new Runtime(options, calls); runtimes.push(runtime); return runtime; }, coordinatorFactory: () => ({ start() { return this; }, destroy() {} }), presenterFactory: () => ({ destroy() {} }) });
@@ -31,13 +32,13 @@ const fixture = (spec) => {
 test('hierarchical metadata payloads are exact and ordered', () => {
   const rich = { metakey: '', title: '', note: '', description: '', version_note: '', metadesc: '' };
   assert.deepEqual(validateCategory(rich), Object.fromEntries(richFields.map((key) => [key, ''])));
-  assert.deepEqual(validateTag(rich), Object.fromEntries(richFields.map((key) => [key, ''])));
+  assert.deepEqual(validateTag({ ...rich, parent_id: 1 }), { ...Object.fromEntries(richFields.map((key) => [key, ''])), parent_id: 1 });
   assert.deepEqual(validateGroup({ description: '', note: '', title: '' }), { title: '', note: '', description: '' });
   assert.throws(() => validateCategory({ ...rich, parent_id: '2' }), TypeError);
   assert.throws(() => validateGroup({ title: '', note: '', description: '', context: 'x' }), TypeError);
 });
 test('configuration is context-specific and rejects ID zero', () => {
   const config = (context, fields, targetId = '7') => ({ enabled: true, context, targetId, payloadSchemaVersion: 1, formId: 'item-form', fieldIds: Object.fromEntries(fields.map((key) => [key, `jform_${key}`])) });
-  assert.equal(validateCategoryConfiguration(config('com_categories.category', richFields)).targetId, '7'); assert.equal(validateTagConfiguration(config('com_tags.tag', richFields)).context, 'com_tags.tag'); assert.equal(validateGroupConfiguration(config('com_fields.group', ['title', 'note', 'description'])).context, 'com_fields.group'); assert.throws(() => validateCategoryConfiguration(config('com_categories.category', richFields, '0')), TypeError);
+  assert.equal(validateCategoryConfiguration(config('com_categories.category', richFields)).targetId, '7'); assert.equal(validateTagConfiguration(config('com_tags.tag', [...richFields, 'parent_id'])).context, 'com_tags.tag'); assert.equal(validateGroupConfiguration(config('com_fields.group', ['title', 'note', 'description'])).context, 'com_fields.group'); assert.throws(() => validateCategoryConfiguration(config('com_categories.category', richFields, '0')), TypeError);
 });
 for (const spec of specs) test(`${spec.context} starts one runtime and observes approved fields`, async () => { const current = fixture(spec); current.controller.start(); await current.controller.reconcile(); await current.controller.reconcile(); assert.equal(current.runtimes.length, 1); assert.equal(current.calls.detect, 1); assert.equal(current.runtimes[0].options.context, spec.context); current.fields.title.value = 'Changed'; current.fields.title.dispatchEvent(new Event('input')); assert.equal(current.calls.preserve, 1); current.controller.destroy(); });

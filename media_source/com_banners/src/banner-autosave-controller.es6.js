@@ -9,6 +9,7 @@ import AutosaveIntegrationController, {
   resolveAutosaveUiMount,
 } from 'com_autosave.integration-controller';
 import { JoomlaEditor } from 'editor-api';
+import AutosaveCreateBinding from 'com_autosave.create-binding';
 import BannerAutosaveAdapter, { normalizeCanonicalId } from './banner-autosave-adapter.es6.js';
 
 const OPTIONS_KEY = 'com_banners.autosave.banner';
@@ -16,6 +17,7 @@ const FIELD_KEYS = Object.freeze([
   'name', 'alias', 'description', 'type', 'custombannercode', 'clickurl', 'version_note',
   'publish_up', 'publish_down', 'imageurl', 'width', 'height', 'alt', 'metakey',
   'metakey_prefix', 'own_prefix',
+  'catid', 'cid',
 ]);
 const TASK_POLICY = Object.freeze({
   'banner.apply': Object.freeze({ intent: 'apply', transport: 'ajax', canonical: true }),
@@ -33,9 +35,15 @@ const validateConfiguration = (value) => {
     || !FIELD_KEYS.every((key) => typeof value.fieldIds[key] === 'string' && value.fieldIds[key])) {
     throw new TypeError('The Banner Autosave page configuration is invalid.');
   }
+  const mode = value.mode === 'create' ? 'create' : 'existing';
+  const targetId = mode === 'create' ? null : normalizeCanonicalId(value.targetId);
+  if ((mode === 'create' && value.targetId !== null) || (mode === 'existing' && value.targetId === null)) {
+    throw new TypeError('The Banner Autosave target mode is invalid.');
+  }
   return Object.freeze({
     ...value,
-    targetId: normalizeCanonicalId(value.targetId),
+    mode,
+    targetId,
     fieldIds: Object.freeze({ ...value.fieldIds }),
   });
 };
@@ -46,11 +54,16 @@ export default class BannerAutosaveController extends AutosaveIntegrationControl
     optionsReader = defaultOptionsReader,
     editorRegistry = JoomlaEditor,
     adapterFactory = (options) => new BannerAutosaveAdapter(options),
+    createBindingFactory = (options) => new AutosaveCreateBinding(options),
     ...options
   } = {}) {
+    let createBinding = null;
     const resolve = () => {
       const config = validateConfiguration(optionsReader(OPTIONS_KEY, null));
-      if (!config) return null;
+      if (!config) { createBinding = null; return null; }
+      if (config.mode === 'create' && !createBinding) createBinding = createBindingFactory({ context: config.context });
+      else if (config.mode === 'existing' && createBinding) createBinding = null;
+      const createMode = createBinding?.descriptor() || null;
       const form = documentSource.getElementById(config.formId);
       const fields = Object.fromEntries(FIELD_KEYS.map((key) => [
         key,
@@ -66,9 +79,10 @@ export default class BannerAutosaveController extends AutosaveIntegrationControl
       if (!editor?.supportsChangeObservation?.() || typeof editor.subscribeChange !== 'function'
         || !mediaField?.isConnected || !form.contains(mediaField) || typeof mediaField.setValue !== 'function') return null;
       return {
-        descriptor: { context: config.context, targetId: config.targetId, payloadSchemaVersion: config.payloadSchemaVersion },
+        descriptor: { context: config.context, targetId: createMode?.targetId || config.targetId, payloadSchemaVersion: config.payloadSchemaVersion },
+        createMode,
         form,
-        identityParts: [editor, mediaField, ...FIELD_KEYS.flatMap((key) => (Array.isArray(fields[key]) ? fields[key] : [fields[key]]))],
+        identityParts: [createMode?.formInstanceId || config.targetId, editor, mediaField, ...FIELD_KEYS.flatMap((key) => (Array.isArray(fields[key]) ? fields[key] : [fields[key]]))],
         taskPolicy: TASK_POLICY,
         statusMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-status-ui]'),
         recoveryMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-recovery-ui]'),

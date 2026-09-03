@@ -9,6 +9,7 @@
 
 namespace Joomla\Component\Tags\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
@@ -21,7 +22,7 @@ use Joomla\String\StringHelper;
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class TagAutosaveProvider implements AutosaveProviderInterface
+final class TagAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const LIMITS = ['title' => 255, 'note' => 255, 'description' => 65535, 'version_note' => 255, 'metadesc' => 300, 'metakey' => 1024];
 
@@ -34,7 +35,20 @@ final class TagAutosaveProvider implements AutosaveProviderInterface
     }
     public function getPayloadSchemaVersion(): int
     {
-        return 1;
+        return 2;
+    }
+    public function getCreateContractVersion(): string
+    {
+        return 'tag-create-v1';
+    }
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        if (!$user->authorise('core.create', 'com_tags')) {
+            throw new AutosaveException('forbidden', 'A Tag cannot be created by this user.');
+        }
+        if ($normalizedPayload !== null && (!$this->isPositiveId($normalizedPayload['parent_id'] ?? null) || $this->load((string) $normalizedPayload['parent_id']) === null)) {
+            throw $this->invalidPayload();
+        }
     }
     public function canonicalizeTargetId(string $targetId): string
     {
@@ -72,8 +86,11 @@ final class TagAutosaveProvider implements AutosaveProviderInterface
     }
     public function normalizePayload(mixed $payload, int $schemaVersion): array
     {
-        $required = array_fill_keys(array_keys(self::LIMITS), true);
-        if ($schemaVersion !== 1 || !\is_array($payload) || array_is_list($payload) || array_diff_key($payload, $required) || array_diff_key($required, $payload)) {
+        $required = array_fill_keys([...array_keys(self::LIMITS), 'parent_id'], true);
+        if ($schemaVersion !== 2 || !\is_array($payload) || array_is_list($payload) || array_diff_key($payload, $required) || array_diff_key($required, $payload)) {
+            throw $this->invalidPayload();
+        }
+        if (!$this->isPositiveId($payload['parent_id'])) {
             throw $this->invalidPayload();
         }
         foreach (self::LIMITS as $key => $limit) {
@@ -88,6 +105,10 @@ final class TagAutosaveProvider implements AutosaveProviderInterface
         }
 
         return $normalized;
+    }
+    private function isPositiveId(mixed $id): bool
+    {
+        return \is_int($id) && $id > 0 && $id <= 2147483647;
     }
     private function load(string $targetId): ?object
     {

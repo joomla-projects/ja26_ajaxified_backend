@@ -5,6 +5,11 @@ const isPlainObject = (value) => value !== null && typeof value === 'object' && 
   && Object.getPrototypeOf(value) === Object.prototype;
 const canonicalId = (value) => typeof value === 'string' && /^[1-9][0-9]{0,9}$/.test(value)
   && Number(value) <= 2147483647;
+const normalizeAutosaveTarget = (value) => {
+  if (value === null || (typeof value === 'string' && /^p1:[a-f0-9]{64}$/.test(value))) return value;
+  if (!canonicalId(value)) throw new TypeError('The Finder Filter Autosave target is invalid.');
+  return value;
+};
 
 const validatePayload = (payload) => {
   const keys = ['title', 'alias', 'created', 'created_alt', 'created_by', 'created_by_alias', 'state', 'params', 'taxonomy_ids'];
@@ -26,7 +31,7 @@ const validatePayload = (payload) => {
 export default class FilterAutosaveAdapter {
   constructor({ descriptor, form, fields, taxonomySelector = 'input.filter-node[name="t[]"]', eventFactory = (type) => new Event(type, { bubbles: true }) }) {
     if (!isPlainObject(descriptor) || !form || !isPlainObject(fields) || !FIELD_KEYS.every((key) => fields[key])) throw new TypeError('The Finder Filter Autosave adapter configuration is invalid.');
-    this.descriptor = Object.freeze({ ...descriptor }); this.form = form; this.fields = { ...fields };
+    this.descriptor = Object.freeze({ ...descriptor, targetId: normalizeAutosaveTarget(descriptor.targetId) }); this.form = form; this.fields = { ...fields };
     this.taxonomySelector = taxonomySelector; this.eventFactory = eventFactory; this.baseline = null; this.callback = null;
     this.destroyed = false; this.suppress = 0; this.listener = () => this.changed();
   }

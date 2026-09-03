@@ -20,7 +20,7 @@ use Joomla\Tests\Unit\UnitTestCase;
 class HtmlViewAutosaveTest extends UnitTestCase
 {
     /**
-     * @testdox  Only the edit layout for an existing positive Client can activate Autosave
+     * @testdox  Only the edit layout can activate Autosave and new records go through create authorization
      *
      * @since   __DEPLOY_VERSION__
      */
@@ -28,7 +28,10 @@ class HtmlViewAutosaveTest extends UnitTestCase
     {
         $source = $this->viewSource();
 
-        $this->assertStringContainsString("\$this->getLayout() !== 'edit' || (int) \$this->item->id <= 0", $source);
+        $this->assertStringContainsString("if (\$this->getLayout() !== 'edit') {", $source);
+        $this->assertStringContainsString('AutosaveCreateProviderInterface', $source);
+        $this->assertStringContainsString('AutosaveOperation::InitializeCreate', $source);
+        $this->assertStringContainsString("\$targetId = null;", $source);
         $this->assertStringContainsString("getAutosaveProvider('com_banners.client')", $source);
         $this->assertStringContainsString("\$this->autosaveEnabled = true;", $source);
     }
