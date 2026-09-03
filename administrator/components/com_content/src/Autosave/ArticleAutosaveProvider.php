@@ -155,6 +155,7 @@ final class ArticleAutosaveProvider implements AutosaveProviderInterface, Autosa
         $targetId = $this->canonicalizeTargetId($targetId);
 
         match ($operation) {
+            AutosaveOperation::InitializeCreate,
             AutosaveOperation::Initialize,
             AutosaveOperation::Preserve,
             AutosaveOperation::Detect,

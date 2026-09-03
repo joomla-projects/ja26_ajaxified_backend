@@ -17,6 +17,7 @@ const normalizeCanonicalId = (value) => {
   if (typeof candidate !== 'string' || !/^[1-9][0-9]{0,9}$/.test(candidate) || Number(candidate) > MAXIMUM_ID) throw new TypeError('The Guided Tour Step Autosave target is invalid.');
   return candidate;
 };
+const normalizeAutosaveTarget = (value) => (value === null || (typeof value === 'string' && /^p1:[a-f0-9]{64}$/.test(value)) ? value : normalizeCanonicalId(value));
 const parseInteger = (value, key) => {
   if (typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value)) throw new TypeError('The Guided Tour Step Autosave field is invalid.');
   const parsed = Number(value); if (!ENUMS[key].includes(parsed)) throw new TypeError('The Guided Tour Step Autosave field is invalid.'); return parsed;
@@ -38,7 +39,7 @@ export default class StepAutosaveAdapter {
       || descriptor.payloadSchemaVersion <= 0 || !form || !isPlainObject(fields) || !PAYLOAD_KEYS.every((key) => fields[key])
       || !editor || typeof editor.getValue !== 'function' || typeof editor.setValue !== 'function' || typeof editor.subscribeChange !== 'function'
       || typeof getCurrentEditor !== 'function' || typeof eventFactory !== 'function') throw new TypeError('The Guided Tour Step Autosave adapter configuration is invalid.');
-    this.descriptor = Object.freeze({ context: descriptor.context, targetId: normalizeCanonicalId(descriptor.targetId), payloadSchemaVersion: descriptor.payloadSchemaVersion });
+    this.descriptor = Object.freeze({ context: descriptor.context, targetId: normalizeAutosaveTarget(descriptor.targetId), payloadSchemaVersion: descriptor.payloadSchemaVersion });
     this.form = form; this.fields = { ...fields }; this.editor = editor; this.editorId = fields.description.id; this.getCurrentEditor = getCurrentEditor; this.eventFactory = eventFactory;
     this.baseline = null; this.callback = null; this.subscribed = false; this.destroyed = false; this.suppressChanges = 0; this.unsubscribeEditor = null;
     this.listeners = Object.fromEntries([...CONTROL_KEYS, 'required'].map((key) => [key, () => this.handleChange()]));

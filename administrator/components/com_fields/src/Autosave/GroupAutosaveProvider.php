@@ -9,9 +9,11 @@
 
 namespace Joomla\Component\Fields\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
+use Joomla\CMS\Factory;
 use Joomla\CMS\User\User;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Database\ParameterType;
@@ -21,16 +23,46 @@ use Joomla\String\StringHelper;
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class GroupAutosaveProvider implements AutosaveProviderInterface
+final class GroupAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const LIMITS = ['title' => 255, 'note' => 255, 'description' => 65535];
 
-    public function __construct(private readonly DatabaseInterface $db)
+    /** @var callable(): string */
+    private $contextResolver;
+
+    public function __construct(private readonly DatabaseInterface $db, ?callable $contextResolver = null)
     {
+        // The owning fields context is immutable creation scope. It is never read from the
+        // Autosave request: GroupModel::populateState() stores it in server-side user state
+        // when the native form is built, and only that state is consulted here.
+        $this->contextResolver = $contextResolver
+            ?? static fn (): string => (string) Factory::getApplication()
+                ->getUserState('com_fields.groups.context');
     }
     public function getContext(): string
     {
         return 'com_fields.group';
+    }
+    public function getCreateContractVersion(): string
+    {
+        return 'field-group-create-v1';
+    }
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        // GroupController::__construct() plus allowAdd() authorise core.create on the
+        // component part of the fields context. The context is resolved from server-side
+        // state and must be a real "component.section" pair - the bare com_fields default
+        // is the "nonsense situation" the native view also refuses to render - so a forged
+        // "context" request variable can neither reach this check nor pick the component.
+        $context = ($this->contextResolver)();
+
+        if (preg_match('/^com_[a-z][a-z0-9_]{0,48}\.[A-Za-z0-9_.-]{1,64}$/D', $context) !== 1) {
+            throw new AutosaveException('forbidden', 'A Field Group has no resolvable owning context.');
+        }
+
+        if (!$user->authorise('core.create', explode('.', $context, 2)[0])) {
+            throw new AutosaveException('forbidden', 'A Field Group cannot be created in this context.');
+        }
     }
     public function getPayloadSchemaVersion(): int
     {

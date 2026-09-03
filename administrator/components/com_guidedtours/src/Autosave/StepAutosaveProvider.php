@@ -10,9 +10,11 @@
 
 namespace Joomla\Component\Guidedtours\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
+use Joomla\CMS\Factory;
 use Joomla\CMS\User\User;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Database\ParameterType;
@@ -23,11 +25,11 @@ use Joomla\String\StringHelper;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Read-only Autosave provider for existing Guided Tour Steps.
+ * Component-owned Autosave contract for Guided Tour Steps.
  *
  * @since  __DEPLOY_VERSION__
  */
-final class StepAutosaveProvider implements AutosaveProviderInterface
+final class StepAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const CONTEXT                = 'com_guidedtours.step';
     private const MAXIMUM_ID             = '4294967295';
@@ -46,13 +48,41 @@ final class StepAutosaveProvider implements AutosaveProviderInterface
     private const TYPE_VALUES            = [0, 1, 2];
     private const INTERACTIVE_VALUES     = [1, 2, 3, 4, 5, 6];
 
-    public function __construct(private readonly DatabaseInterface $db)
+    /** @var callable(): int */
+    private $tourIdResolver;
+
+    public function __construct(private readonly DatabaseInterface $db, ?callable $tourIdResolver = null)
     {
+        // The owning Tour is immutable creation scope: it is never read from the Autosave
+        // request. Joomla keeps it in server-side user state, written only by StepsModel.
+        $this->tourIdResolver = $tourIdResolver
+            ?? static fn (): int => (int) Factory::getApplication()->getUserState('com_guidedtours.tour_id');
     }
 
     public function getContext(): string
     {
         return self::CONTEXT;
+    }
+
+    public function getCreateContractVersion(): string
+    {
+        return 'guided-tour-step-create-v1';
+    }
+
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        // Mirrors FormController::allowAdd(); com_guidedtours has no per-Tour ACL section.
+        if (!$user->authorise('core.create', 'com_guidedtours')) {
+            throw new AutosaveException('forbidden', 'A Guided Tour Step cannot be created by this user.');
+        }
+
+        // A Step is only creatable inside a Tour the server itself resolved. A missing,
+        // malformed or deleted Tour fails closed on every provisional operation.
+        $tourId = ($this->tourIdResolver)();
+
+        if ($tourId <= 0 || $tourId > (int) self::MAXIMUM_ID || !$this->tourExists($tourId)) {
+            throw new AutosaveException('forbidden', 'A Guided Tour Step has no resolvable owning Tour.');
+        }
     }
 
     public function canonicalizeTargetId(string $targetId): string
@@ -77,6 +107,7 @@ final class StepAutosaveProvider implements AutosaveProviderInterface
         $targetId = $this->canonicalizeTargetId($targetId);
 
         match ($operation) {
+            AutosaveOperation::InitializeCreate,
             AutosaveOperation::Initialize,
             AutosaveOperation::Preserve,
             AutosaveOperation::Detect,
@@ -204,6 +235,17 @@ final class StepAutosaveProvider implements AutosaveProviderInterface
             ->bind(':id', $id, ParameterType::INTEGER);
 
         return $this->db->setQuery($query)->loadObject() ?: null;
+    }
+
+    private function tourExists(int $tourId): bool
+    {
+        $query = $this->db->createQuery()
+            ->select('COUNT(*)')
+            ->from($this->db->quoteName('#__guidedtours'))
+            ->where($this->db->quoteName('id') . ' = :tourId')
+            ->bind(':tourId', $tourId, ParameterType::INTEGER);
+
+        return (int) $this->db->setQuery($query)->loadResult() === 1;
     }
 
     private function invalidPayload(): AutosaveException

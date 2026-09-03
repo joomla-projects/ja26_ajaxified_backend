@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Guidedtours\Administrator\View\Step;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -96,14 +98,24 @@ class HtmlView extends BaseHtmlView
         $configurator = new AutosaveViewConfigurator($application, $this->getDocument(), $application->getIdentity());
         $configurator->disable('com_guidedtours.autosave.step');
 
-        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+        if ($this->getLayout() !== 'edit') {
             return;
         }
 
         try {
             $provider = $application->bootComponent('com_guidedtours')->getAutosaveProvider('com_guidedtours.step');
-            $targetId = $provider->canonicalizeTargetId((string) (int) $this->item->id);
-            if (!$provider->targetExists($targetId)) {
+            $itemId   = (int) $this->item->id;
+            $targetId = null;
+
+            if ($itemId > 0) {
+                $targetId = $provider->canonicalizeTargetId((string) $itemId);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($application->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+
+            if ($targetId !== null && !$provider->targetExists($targetId)) {
                 return;
             }
         } catch (\Throwable) {

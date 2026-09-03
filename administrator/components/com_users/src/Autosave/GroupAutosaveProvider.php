@@ -5,6 +5,7 @@
 namespace Joomla\Component\Users\Administrator\Autosave;
 
 use Joomla\CMS\Access\Access;
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
@@ -17,7 +18,7 @@ use Joomla\String\StringHelper;
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class GroupAutosaveProvider implements AutosaveProviderInterface
+final class GroupAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     public function __construct(private readonly DatabaseInterface $db)
     {
@@ -25,6 +26,23 @@ final class GroupAutosaveProvider implements AutosaveProviderInterface
     public function getContext(): string
     {
         return 'com_users.group';
+    }
+    public function getCreateContractVersion(): string
+    {
+        return 'user-group-create-v1';
+    }
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        // Mirrors GroupController::allowSave() for a new record: the com_users core.admin
+        // gate plus FormController::allowAdd(). The draft payload carries only the title,
+        // so no hierarchy relation is authored through Autosave and the native parent_id
+        // safeguards in GroupModel::save() stay the sole authority over placement.
+        if (
+            !$user->authorise('core.admin', 'com_users')
+            || (!$user->authorise('core.create', 'com_users') && \count($user->getAuthorisedCategories('com_users', 'core.create')) === 0)
+        ) {
+            throw new AutosaveException('forbidden', 'A User Group cannot be created by this user.');
+        }
     }
     public function getPayloadSchemaVersion(): int
     {

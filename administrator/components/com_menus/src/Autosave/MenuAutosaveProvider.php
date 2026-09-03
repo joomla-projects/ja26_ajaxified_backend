@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Menus\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
@@ -23,11 +24,11 @@ use Joomla\String\StringHelper;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Read-only Autosave provider for existing Menu metadata records.
+ * Component-owned Autosave contract for Menu metadata records.
  *
  * @since  __DEPLOY_VERSION__
  */
-final class MenuAutosaveProvider implements AutosaveProviderInterface
+final class MenuAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const CONTEXT                = 'com_menus.menu';
     private const MAXIMUM_ID             = '4294967295';
@@ -42,6 +43,29 @@ final class MenuAutosaveProvider implements AutosaveProviderInterface
     public function getContext(): string
     {
         return self::CONTEXT;
+    }
+
+    public function getCreateContractVersion(): string
+    {
+        return 'menu-create-v1';
+    }
+
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        // Mirrors FormController::allowAdd(); ContentHelper::getActions('com_menus', 'menu', 0)
+        // also resolves to the plain com_menus asset for a new Menu, so there is no
+        // per-menu asset to scope against yet.
+        //
+        // client_id is immutable creation scope and stays out of the draft payload: the
+        // native MenuModel reconstructs it from com_menus.menus.client_id server-side
+        // state, and menutype (the natural key MenuController::executeMenuSave() guards
+        // for the protected 'main' menu) is likewise not authored through Autosave.
+        if (
+            !$user->authorise('core.create', 'com_menus')
+            && \count($user->getAuthorisedCategories('com_menus', 'core.create')) === 0
+        ) {
+            throw new AutosaveException('forbidden', 'A Menu cannot be created by this user.');
+        }
     }
 
     public function canonicalizeTargetId(string $targetId): string
@@ -66,6 +90,7 @@ final class MenuAutosaveProvider implements AutosaveProviderInterface
         $targetId = $this->canonicalizeTargetId($targetId);
 
         match ($operation) {
+            AutosaveOperation::InitializeCreate,
             AutosaveOperation::Initialize,
             AutosaveOperation::Preserve,
             AutosaveOperation::Detect,

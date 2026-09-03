@@ -18,7 +18,9 @@ class HtmlViewAutosaveTest extends UnitTestCase
     {
         $source = $this->viewSource();
 
-        $this->assertStringContainsString("\$this->getLayout() !== 'edit' || (int) \$this->item->id <= 0", $source);
+        $this->assertStringContainsString("if (\$this->getLayout() !== 'edit') {", $source);
+        $this->assertStringContainsString('AutosaveCreateProviderInterface', $source);
+        $this->assertStringContainsString('AutosaveOperation::InitializeCreate', $source);
         $this->assertStringContainsString("getAutosaveProvider('com_guidedtours.tour')", $source);
         $this->assertStringContainsString("\$this->autosaveEnabled = true;", $source);
     }

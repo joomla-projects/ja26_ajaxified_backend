@@ -10,9 +10,11 @@
 
 namespace Joomla\Component\Workflow\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
+use Joomla\CMS\Factory;
 use Joomla\CMS\User\User;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Database\ParameterType;
@@ -22,20 +24,52 @@ use Joomla\String\StringHelper;
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class WorkflowAutosaveProvider implements AutosaveProviderInterface
+final class WorkflowAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const CONTEXT       = 'com_workflow.workflow';
     private const MAXIMUM_ID    = '2147483647';
     private const STRING_LIMITS = ['title' => 255, 'description' => 65535];
 
-    public function __construct(private readonly DatabaseInterface $db)
+    /** @var callable(): string */
+    private $extensionResolver;
+
+    public function __construct(private readonly DatabaseInterface $db, ?callable $extensionResolver = null)
     {
+        // The owning extension is immutable creation scope. It is never read from the
+        // Autosave request: WorkflowModel::populateState() stores it in server-side user
+        // state when the native form is built, and only that state is consulted here.
+        $this->extensionResolver = $extensionResolver
+            ?? static fn (): string => (string) Factory::getApplication()
+                ->getUserState('com_workflow.workflow.filter.extension');
     }
 
     public function getContext(): string
     {
         return self::CONTEXT;
     }
+
+    public function getCreateContractVersion(): string
+    {
+        return 'workflow-create-v1';
+    }
+
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        // WorkflowController::allowAdd() authorises core.create on the component part of
+        // the extension. The component is resolved from server-side state and validated
+        // against the component-name shape, so a forged "extension" request variable can
+        // neither reach this check nor move it to another component.
+        $component = explode('.', ($this->extensionResolver)(), 2)[0];
+
+        if (preg_match('/^com_[a-z][a-z0-9_]{0,48}$/D', $component) !== 1) {
+            throw new AutosaveException('forbidden', 'A Workflow has no resolvable owning extension.');
+        }
+
+        if (!$user->authorise('core.create', $component)) {
+            throw new AutosaveException('forbidden', 'A Workflow cannot be created in this extension.');
+        }
+    }
+
     public function getPayloadSchemaVersion(): int
     {
         return 1;

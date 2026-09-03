@@ -85,6 +85,7 @@ final class TourAutosaveProvider implements AutosaveProviderInterface, AutosaveC
         $targetId = $this->canonicalizeTargetId($targetId);
 
         match ($operation) {
+            AutosaveOperation::InitializeCreate,
             AutosaveOperation::Initialize,
             AutosaveOperation::Preserve,
             AutosaveOperation::Detect,
