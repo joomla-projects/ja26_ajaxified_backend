@@ -123,13 +123,15 @@ class ImmutableStaticScopeAutosaveRolloutTest extends UnitTestCase
         );
 
         // parent_id bounds: 0, negatives, strings, overflow and missing keys are invalid.
-        foreach ([
+        foreach (
+            [
             [...$valid, 'parent_id' => 0],
             [...$valid, 'parent_id' => -1],
             [...$valid, 'parent_id' => '1'],
             [...$valid, 'parent_id' => 2147483648],
             array_diff_key($valid, ['parent_id' => true]),
-        ] as $invalid) {
+            ] as $invalid
+        ) {
             $this->assertSame(
                 'invalid_payload',
                 $this->failure(fn () => $provider->normalizePayload($invalid, 2))->getErrorCode()
