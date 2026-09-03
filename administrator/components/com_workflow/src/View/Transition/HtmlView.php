@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Workflow\Administrator\View\Transition;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
@@ -158,15 +160,24 @@ class HtmlView extends BaseHtmlView
         $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
         $configurator->disable('com_workflow.autosave.transition');
 
-        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+        if ($this->getLayout() !== 'edit') {
             return;
         }
 
         try {
             $provider = $app->bootComponent('com_workflow')->getAutosaveProvider('com_workflow.transition');
-            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+            $itemId   = (int) $this->item->id;
+            $target   = null;
 
-            if (!$provider->targetExists($target)) {
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+
+            if ($target !== null && !$provider->targetExists($target)) {
                 return;
             }
         } catch (\Throwable) {

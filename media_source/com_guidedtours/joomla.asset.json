@@ -11,6 +11,7 @@
       "uri": "com_guidedtours/step-autosave.min.js",
       "dependencies": [
         "com_autosave.integration-controller",
+        "com_autosave.create-binding",
         "editors"
       ],
       "attributes": {

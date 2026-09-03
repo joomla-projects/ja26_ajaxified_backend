@@ -9,21 +9,21 @@
       "name": "com_workflow.workflow-autosave",
       "type": "script",
       "uri": "com_workflow/workflow-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller"],
+      "dependencies": ["com_autosave.integration-controller", "com_autosave.create-binding"],
       "attributes": {"type": "module"}
     },
     {
       "name": "com_workflow.stage-autosave",
       "type": "script",
       "uri": "com_workflow/stage-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller"],
+      "dependencies": ["com_autosave.integration-controller", "com_autosave.create-binding"],
       "attributes": {"type": "module"}
     },
     {
       "name": "com_workflow.transition-autosave",
       "type": "script",
       "uri": "com_workflow/transition-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller"],
+      "dependencies": ["com_autosave.integration-controller", "com_autosave.create-binding"],
       "attributes": {"type": "module"}
     },
     {

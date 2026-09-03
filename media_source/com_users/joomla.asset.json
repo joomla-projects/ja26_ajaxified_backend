@@ -9,7 +9,7 @@
       "name": "com_users.group-autosave",
       "type": "script",
       "uri": "com_users/group-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller"],
+      "dependencies": ["com_autosave.integration-controller", "com_autosave.create-binding"],
       "attributes": {"type": "module"}
     },
     {

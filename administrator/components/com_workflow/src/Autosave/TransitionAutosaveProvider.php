@@ -9,9 +9,11 @@
 
 namespace Joomla\Component\Workflow\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\TargetAwareAutosaveProviderInterface;
+use Joomla\CMS\Factory;
 use Joomla\CMS\User\User;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Database\ParameterType;
@@ -21,17 +23,63 @@ use Joomla\String\StringHelper;
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class TransitionAutosaveProvider implements TargetAwareAutosaveProviderInterface
+final class TransitionAutosaveProvider implements TargetAwareAutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const KEYS = ['title', 'description', 'from_stage_id', 'to_stage_id'];
 
-    public function __construct(private readonly DatabaseInterface $db)
+    /** @var callable(): int */
+    private $workflowIdResolver;
+
+    public function __construct(private readonly DatabaseInterface $db, ?callable $workflowIdResolver = null)
     {
+        // The owning Workflow is immutable creation scope. It is never read from the
+        // Autosave request: TransitionModel::getForm() puts it into server-side user
+        // state when the native new-Transition form is built, and only that state is
+        // consulted here.
+        $this->workflowIdResolver = $workflowIdResolver
+            ?? static fn (): int => (int) Factory::getApplication()
+                ->getUserState('com_workflow.transition.filter.workflow_id');
     }
 
     public function getContext(): string
     {
         return 'com_workflow.transition';
+    }
+
+    public function getCreateContractVersion(): string
+    {
+        return 'workflow-transition-create-v1';
+    }
+
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        $workflowId = ($this->workflowIdResolver)();
+        $workflow   = $workflowId > 0 && $workflowId <= 2147483647 ? $this->loadWorkflow($workflowId) : null;
+
+        if ($workflow === null) {
+            throw new AutosaveException('forbidden', 'A Workflow Transition has no resolvable owning Workflow.');
+        }
+
+        // TransitionController::allowAdd() scopes creation to the owning Workflow asset.
+        // The component part is taken from the stored Workflow row rather than the request,
+        // so a forged extension cannot move the permission check to another component.
+        $component = explode('.', (string) $workflow->extension, 2)[0];
+
+        if ($component === '' || !$user->authorise('core.create', $component . '.workflow.' . $workflowId)) {
+            throw new AutosaveException('forbidden', 'A Workflow Transition cannot be created in this Workflow.');
+        }
+
+        // Both authored stage relations must belong to the resolved Workflow, so a draft
+        // can never pair "Workflow A" with a stage owned by "Workflow B".
+        if (
+            $normalizedPayload !== null
+            && (
+                !$this->stageIsValid($workflowId, (int) $normalizedPayload['from_stage_id'], true)
+                || !$this->stageIsValid($workflowId, (int) $normalizedPayload['to_stage_id'], false)
+            )
+        ) {
+            throw $this->invalidPayload();
+        }
     }
 
     public function getPayloadSchemaVersion(): int
@@ -131,6 +179,19 @@ final class TransitionAutosaveProvider implements TargetAwareAutosaveProviderInt
         $query = $this->db->createQuery()->select('COUNT(*)')->from($this->db->quoteName('#__workflow_stages'))->where($this->db->quoteName('id') . ' = :id')->where($this->db->quoteName('workflow_id') . ' = :workflow')->where($this->db->quoteName('published') . ' = 1')->bind(':id', $stageId, ParameterType::INTEGER)->bind(':workflow', $workflowId, ParameterType::INTEGER);
 
         return (int) $this->db->setQuery($query)->loadResult() === 1;
+    }
+
+    private function loadWorkflow(int $workflowId): ?object
+    {
+        $query = $this->db->createQuery()
+            ->select($this->db->quoteName(['id', 'extension']))
+            ->from($this->db->quoteName('#__workflows'))
+            ->where($this->db->quoteName('id') . ' = :id')
+            ->bind(':id', $workflowId, ParameterType::INTEGER);
+
+        $record = $this->db->setQuery($query)->loadObject() ?: null;
+
+        return $record !== null && \is_string($record->extension) && $record->extension !== '' ? $record : null;
     }
 
     private function load(string $targetId): ?object

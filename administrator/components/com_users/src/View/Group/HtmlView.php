@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Users\Administrator\View\Group;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -100,13 +102,21 @@ class HtmlView extends BaseHtmlView
         $key          = 'com_users.autosave.group';
         $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
         $configurator->disable($key);
-        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+        if ($this->getLayout() !== 'edit') {
             return;
         }
         try {
             $provider = $app->bootComponent('com_users')->getAutosaveProvider('com_users.group');
-            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->id);
-            if (!$provider->targetExists($target)) {
+            $itemId   = (int) $this->item->id;
+            $target   = null;
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+            if ($target !== null && !$provider->targetExists($target)) {
                 return;
             }
         } catch (\Throwable) {

@@ -17,7 +17,8 @@
       "type": "script",
       "uri": "com_menus/menu-autosave.min.js",
       "dependencies": [
-        "com_autosave.integration-controller"
+        "com_autosave.integration-controller",
+        "com_autosave.create-binding"
       ],
       "attributes": {
         "type": "module"

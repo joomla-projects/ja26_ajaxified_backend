@@ -17,6 +17,10 @@ const normalizeCanonicalId = (value) => {
   return candidate;
 };
 
+const normalizeAutosaveTarget = (value) => (value === null
+  || (typeof value === 'string' && /^p1:[a-f0-9]{64}$/.test(value))
+  ? value : normalizeCanonicalId(value));
+
 const validatePayload = (payload) => {
   if (!isPlainObject(payload)) throw new TypeError('The Menu Autosave recovery payload is invalid.');
   const keys = Object.keys(payload).sort();
@@ -40,7 +44,7 @@ export default class MenuAutosaveAdapter {
       || !Number.isInteger(descriptor.payloadSchemaVersion) || descriptor.payloadSchemaVersion <= 0
       || !form || !isPlainObject(fields) || !PAYLOAD_KEYS.every((key) => fields[key])
       || typeof eventFactory !== 'function') throw new TypeError('The Menu Autosave adapter configuration is invalid.');
-    this.descriptor = Object.freeze({ context: descriptor.context, targetId: normalizeCanonicalId(descriptor.targetId), payloadSchemaVersion: descriptor.payloadSchemaVersion });
+    this.descriptor = Object.freeze({ context: descriptor.context, targetId: normalizeAutosaveTarget(descriptor.targetId), payloadSchemaVersion: descriptor.payloadSchemaVersion });
     this.form = form; this.fields = { ...fields }; this.eventFactory = eventFactory;
     this.baseline = null; this.callback = null; this.subscribed = false; this.destroyed = false; this.suppressChanges = 0;
     this.listeners = Object.fromEntries(PAYLOAD_KEYS.map((key) => [key, () => this.handleChange(key)]));

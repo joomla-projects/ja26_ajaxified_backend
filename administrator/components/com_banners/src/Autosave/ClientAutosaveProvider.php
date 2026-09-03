@@ -93,6 +93,7 @@ final class ClientAutosaveProvider implements AutosaveProviderInterface, Autosav
         $targetId = $this->canonicalizeTargetId($targetId);
 
         match ($operation) {
+            AutosaveOperation::InitializeCreate,
             AutosaveOperation::Initialize,
             AutosaveOperation::Preserve,
             AutosaveOperation::Detect,
