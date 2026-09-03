@@ -10,6 +10,9 @@
 
 namespace Joomla\Component\Categories\Administrator\View\Category;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
+use Joomla\CMS\Autosave\AutosaveStaticScopeProviderInterface;
 use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
@@ -158,17 +161,33 @@ class HtmlView extends BaseHtmlView
 
     private function prepareAutosave(): void
     {
-        $app          = Factory::getApplication();
-        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $app             = Factory::getApplication();
+        $configurator    = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $candidateScope  = null;
         $configurator->disable('com_categories.autosave.category');
-        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+        if ($this->getLayout() !== 'edit') {
             return;
         }
 
         try {
             $provider = $app->bootComponent('com_categories')->getAutosaveProvider('com_categories.category');
-            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->id);
-            if (!$provider->targetExists($target)) {
+            $itemId   = (int) $this->item->id;
+            $target   = null;
+
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } elseif ($provider instanceof AutosaveStaticScopeProviderInterface) {
+                // The candidate owning extension is transported once at initialization and
+                // canonicalized/authorized server-side before it is anchored to the lineage.
+                $candidateScope = $provider->canonicalizeStaticCreateScope((string) $this->state->get('category.extension', ''));
+                $provider->authorizeStaticCreateScope($app->getIdentity(), $candidateScope, AutosaveOperation::InitializeCreate, null);
+            } else {
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+
+            if ($target !== null && !$provider->targetExists($target)) {
                 return;
             }
         } catch (\Throwable) {
@@ -176,7 +195,7 @@ class HtmlView extends BaseHtmlView
         }
 
         $ids = [];
-        foreach (['title', 'note', 'description', 'version_note', 'metadesc', 'metakey'] as $name) {
+        foreach (['title', 'note', 'description', 'version_note', 'metadesc', 'metakey', 'parent_id'] as $name) {
             $field = $this->form->getField($name);
             if (!$field || !\is_string($field->id) || $field->id === '') {
                 return;
@@ -185,7 +204,16 @@ class HtmlView extends BaseHtmlView
             $ids[$name] = $field->id;
         }
 
-        $configurator->configure($provider, $target, 'com_categories.autosave.category', 'item-form', $ids, 'com_categories.category-autosave');
+        $configurator->configure(
+            $provider,
+            $target,
+            'com_categories.autosave.category',
+            'item-form',
+            $ids,
+            'com_categories.category-autosave',
+            null,
+            $candidateScope
+        );
         $this->autosaveEnabled = true;
     }
 

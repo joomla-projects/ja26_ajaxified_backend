@@ -43,7 +43,20 @@ export default class SubmissionSynchronization {
 
         const strategy = this.resolveSynchronizationStrategy(context);
 
-        await this.synchronizeAssets(snapshot);
+        const assetsSatisfied = await this.synchronizeAssets(snapshot);
+
+        if (!assetsSatisfied) {
+            /*
+             * The response declares module assets that cannot be executed in
+             * the live document (their import-map entries are absent and native
+             * import maps cannot be extended after the first module load).
+             * Activate the response through a full navigation so its module
+             * assets evaluate with the document import map they were built for.
+             */
+            this.performNavigation(response);
+
+            return;
+        }
 
         this.synchronizeWorkspace(snapshot, strategy, submissionState);
 
@@ -113,10 +126,11 @@ export default class SubmissionSynchronization {
      *
      * @param {ResponseSnapshot} snapshot
      *
-     * @returns {Promise<void>}
+     * @returns {Promise<boolean>} Whether the response module assets could be
+     * satisfied in the live document.
      */
     static async synchronizeAssets(snapshot) {
-        await AssetSynchronizer.synchronize(snapshot);
+        return AssetSynchronizer.synchronize(snapshot);
     }
 
     /**

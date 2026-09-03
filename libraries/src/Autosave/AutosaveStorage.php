@@ -26,7 +26,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  *
  * @since  __DEPLOY_VERSION__
  */
-final class AutosaveStorage implements AutosaveCreateStorageInterface
+final class AutosaveStorage implements AutosaveCreateStorageInterface, AutosaveStaticScopeStorageInterface
 {
     private const MAX_INSERT_ATTEMPTS         = 3;
     private const MAX_ID_ATTEMPTS             = 3;
@@ -326,6 +326,90 @@ final class AutosaveStorage implements AutosaveCreateStorageInterface
 
             throw $exception;
         }
+    }
+
+    /**
+     * Anchor one canonical static creation scope onto an owner-bound continuation.
+     *
+     * The scope is immutable for the lifetime of the continuation: when a scope is already
+     * anchored the previously anchored value is returned unchanged, so the caller can
+     * detect a retry that attempts to initialize the same lineage with a different scope.
+     *
+     * @return  string|null
+     *
+     * @throws  AutosaveException
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function bindContinuationStaticScope(int $userId, string $continuationId, string $canonicalScope, Date $now): ?string
+    {
+        $this->validateStaticScope($canonicalScope);
+        $transactionStarted = false;
+
+        try {
+            $this->db->transactionStart();
+            $transactionStarted = true;
+            $current            = $this->loadContinuationScope($userId, $continuationId);
+
+            if ($current !== null) {
+                $this->db->transactionCommit();
+                $transactionStarted = false;
+
+                return $current;
+            }
+
+            // Compare-and-set: only an unbound continuation may be anchored, so two
+            // concurrent initializations of the same lineage can never overwrite each
+            // other's scope. The losing caller observes the committed scope below and the
+            // lifecycle rejects the mismatch.
+            $query = $this->db->createQuery()
+                ->update($this->db->quoteName('#__autosave_continuations'))
+                ->set($this->db->quoteName('create_scope') . ' = :scope')
+                ->where($this->db->quoteName('user_id') . ' = :user_id')
+                ->where($this->db->quoteName('public_id') . ' = :continuation_id')
+                ->where($this->db->quoteName('create_scope') . ' IS NULL')
+                ->bind(':scope', $canonicalScope)
+                ->bind(':user_id', $userId, ParameterType::INTEGER)
+                ->bind(':continuation_id', $continuationId);
+
+            $this->db->setQuery($query)->execute();
+
+            if ((int) $this->db->getAffectedRows() !== 1) {
+                $existing = $this->loadContinuationScope($userId, $continuationId);
+
+                if ($existing === null) {
+                    throw $this->failure('draft_not_found', 'The Autosave continuation was not found.');
+                }
+
+                $this->db->transactionCommit();
+                $transactionStarted = false;
+
+                return $existing;
+            }
+
+            $this->db->transactionCommit();
+            $transactionStarted = false;
+
+            return null;
+        } catch (\Throwable $exception) {
+            if ($transactionStarted) {
+                $this->db->transactionRollback();
+            }
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * Recover the anchored canonical static creation scope of a continuation.
+     *
+     * @return  string|null
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getContinuationStaticScope(int $userId, string $continuationId): ?string
+    {
+        return $this->loadContinuationScope($userId, $continuationId);
     }
 
     /**
@@ -2428,6 +2512,39 @@ final class AutosaveStorage implements AutosaveCreateStorageInterface
             ->bind(':quota_slot', $quotaSlot, ParameterType::INTEGER);
 
         return (bool) $this->db->setQuery($query)->loadResult();
+    }
+
+    /**
+     * Load the anchored static scope of one owner-bound continuation.
+     */
+    private function loadContinuationScope(int $userId, string $continuationId): ?string
+    {
+        $query = $this->db->createQuery()
+            ->select($this->db->quoteName('c.create_scope'))
+            ->from($this->db->quoteName('#__autosave_continuations', 'c'))
+            ->where($this->db->quoteName('c.user_id') . ' = :user_id')
+            ->where($this->db->quoteName('c.public_id') . ' = :continuation_id')
+            ->bind(':user_id', $userId, ParameterType::INTEGER)
+            ->bind(':continuation_id', $continuationId);
+
+        $scope = $this->db->setQuery($query)->loadResult();
+
+        return \is_string($scope) && $scope !== '' ? $scope : null;
+    }
+
+    /**
+     * Validate one bounded canonical static scope before persistence.
+     */
+    private function validateStaticScope(string $canonicalScope): void
+    {
+        if (
+            $canonicalScope === ''
+            || \strlen($canonicalScope) > 255
+            || preg_match('//u', $canonicalScope) !== 1
+            || preg_match('/[\x00-\x1F\x7F]/', $canonicalScope) === 1
+        ) {
+            throw $this->failure('invalid_scope', 'The Autosave static creation scope is invalid.');
+        }
     }
 
     /**

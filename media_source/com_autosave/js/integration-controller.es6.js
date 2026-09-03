@@ -117,7 +117,12 @@ const validateIntegrationResolution = (resolution) => {
     || !isPlainObject(resolution.presentationConfiguration)
     || typeof resolution.presentationConfiguration.locale !== 'string'
     || typeof resolution.presentationConfiguration.timeZone !== 'string'
-    || (resolution.pairProperties !== undefined && !isPlainObject(resolution.pairProperties))) {
+    || (resolution.pairProperties !== undefined && !isPlainObject(resolution.pairProperties))
+    || (resolution.createScope !== undefined
+      && !(typeof resolution.createScope === 'string'
+        && resolution.createScope.length > 0
+        && resolution.createScope.length <= 255
+        && !/[\x00-\x1F\x7F]/.test(resolution.createScope)))) {
     throw new TypeError('The Autosave integration resolution is invalid.');
   }
 
@@ -321,6 +326,7 @@ export default class AutosaveIntegrationController {
         schemaVersion: resolution.descriptor.payloadSchemaVersion,
         eventTarget,
         createMode: resolution.createMode || null,
+        createScope: resolution.createScope || null,
       });
       coordinator = this.coordinatorFactory({
         form: resolution.form,

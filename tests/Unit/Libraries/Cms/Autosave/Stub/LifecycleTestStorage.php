@@ -3,12 +3,13 @@
 namespace Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub;
 
 use Joomla\CMS\Autosave\AutosaveCreateStorageInterface;
+use Joomla\CMS\Autosave\AutosaveStaticScopeStorageInterface;
 use Joomla\CMS\Date\Date;
 
 /**
  * Configurable database-free persistence fake used by lifecycle tests.
  */
-final class LifecycleTestStorage implements AutosaveCreateStorageInterface
+final class LifecycleTestStorage implements AutosaveCreateStorageInterface, AutosaveStaticScopeStorageInterface
 {
     public array $calls            = [];
     public array $initializeResult = [
@@ -232,5 +233,31 @@ final class LifecycleTestStorage implements AutosaveCreateStorageInterface
         }
 
         return $this->canonicalResult;
+    }
+
+    public ?string $boundScope      = null;
+    public ?\Throwable $scopeFailure = null;
+
+    public function bindContinuationStaticScope(int $userId, string $continuationId, string $canonicalScope, Date $now): ?string
+    {
+        $this->events[]                   = 'storage.bindStaticScope';
+        $this->calls['bindStaticScope'][] = \func_get_args();
+
+        if ($this->scopeFailure !== null) {
+            throw $this->scopeFailure;
+        }
+
+        $previous        = $this->boundScope;
+        $this->boundScope ??= $canonicalScope;
+
+        return $previous;
+    }
+
+    public function getContinuationStaticScope(int $userId, string $continuationId): ?string
+    {
+        $this->events[]                   = 'storage.getStaticScope';
+        $this->calls['getStaticScope'][]  = \func_get_args();
+
+        return $this->boundScope;
     }
 }

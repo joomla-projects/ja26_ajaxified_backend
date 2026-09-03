@@ -79,19 +79,14 @@ for (const [context, validate, fields, component, controller, assetName] of spec
   });
 }
 
-test('deferred contexts are not wired for create mode', () => {
-  // com_categories.category stays deferred: the native new-category page never anchors the
-  // owning extension in server-side user state, so no static provider could verify the
-  // extension of the form the browser opened (see AuthorityBoundNewRecordAutosaveRolloutTest).
+test('PR34 anchors Category under the immutable static scope contract', () => {
+  // PR34 re-enables com_categories.category under the immutable static creation-scope
+  // contract: the owning extension candidate is canonicalized/authorized server-side and
+  // anchored onto the P1 lineage at initializeCreate, so the category asset now reuses the
+  // shared create binding and the controller imports it (see the static-scope suites).
   assert.ok(
-    !asset('com_categories', 'com_categories.category-autosave').dependencies.includes('com_autosave.create-binding'),
-    'com_categories.category-autosave is deferred.',
+    asset('com_categories', 'com_categories.category-autosave').dependencies.includes('com_autosave.create-binding'),
+    'com_categories.category-autosave is wired for create mode.',
   );
-  assert.doesNotMatch(read('media_source/com_categories/src/category-autosave-controller.es6.js'), /com_autosave\.create-binding/);
-
-  // The workflow stage sibling of the enabled transition/workflow contexts is enabled.
-  assert.ok(
-    asset('com_workflow', 'com_workflow.stage-autosave').dependencies.includes('com_autosave.create-binding'),
-    'com_workflow.stage-autosave is enabled.',
-  );
+  assert.match(read('media_source/com_categories/src/category-autosave-controller.es6.js'), /^import AutosaveCreateBinding from 'com_autosave\.create-binding';$/m);
 });

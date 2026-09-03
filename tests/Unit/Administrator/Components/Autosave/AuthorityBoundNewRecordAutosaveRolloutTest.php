@@ -53,21 +53,12 @@ class AuthorityBoundNewRecordAutosaveRolloutTest extends UnitTestCase
      * Contexts PR33 deliberately leaves without a create contract and the repository
      * evidence that justifies the deferral.
      *
-     * com_categories.category: the native new-category page never anchors the owning
-     * extension in server-side user state - CategoryModel::populateState() reads the
-     * "extension" input variable directly (default com_content) and the only stored key
-     * (com_categories.categories.filter.extension) is written by the Categories list with
-     * context suffixes for modal/forced-language layouts and can be stale or absent for
-     * direct, redirected or save2new entry. The Autosave request carries no request scope,
-     * so a static provider cannot independently verify the extension of the form the
-     * browser actually opened, and the form schema itself is extension-specific
-     * (loadForm('com_categories.category' . $extension)). Safe support would require the
-     * extension to be immutably bound to the provisional identity - new shared
-     * creation-state architecture that is outside the PR30/31/32 contract.
+     * com_categories.category was deferred in PR33 because its owning extension cannot be
+     * reconstructed from Joomla user state at Autosave time. PR34 re-enables it under the
+     * immutable static creation-scope contract, which anchors the canonicalized extension
+     * onto the provisional lineage at initialization - so no context remains deferred here.
      */
-    private const DEFERRED = [
-        'com_categories.category' => ['com_categories/src/Autosave/CategoryAutosaveProvider.php', 'com_categories/src/View/Category/HtmlView.php'],
-    ];
+    private const DEFERRED = [];
 
     /**
      * @dataProvider contextProvider
@@ -347,15 +338,10 @@ class AuthorityBoundNewRecordAutosaveRolloutTest extends UnitTestCase
 
     public function testDeferredContextsRemainWithoutCreateSupport(): void
     {
-        foreach (self::DEFERRED as $context => [$providerFile, $viewFile]) {
-            $providerSource = file_get_contents(JPATH_ADMINISTRATOR . '/components/' . $providerFile);
-            $viewSource     = file_get_contents(JPATH_ADMINISTRATOR . '/components/' . $viewFile);
-
-            $this->assertStringNotContainsString('AutosaveCreateProviderInterface', $providerSource, $context . ' is deferred.');
-            $this->assertStringNotContainsString('authorizeCreate', $providerSource, $context . ' is deferred.');
-            $this->assertStringNotContainsString('authorizeCreate', $viewSource, $context . ' is deferred.');
-            $this->assertStringNotContainsString('AutosaveOperation::InitializeCreate', $viewSource, $context . ' is deferred.');
-        }
+        // PR34 anchors Category's owning extension under the immutable static scope
+        // contract, so the PR33 static rollout leaves no deferred context behind.
+        $this->assertSame([], self::DEFERRED);
+        $this->assertCount(7, self::PROVIDER_FILES);
     }
 
     public static function contextProvider(): array
