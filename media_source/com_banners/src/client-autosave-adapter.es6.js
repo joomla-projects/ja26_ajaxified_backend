@@ -26,6 +26,9 @@ const normalizeCanonicalId = (value) => {
   }
   return candidate;
 };
+const normalizeAutosaveTarget = (value) => (value === null
+  || (typeof value === 'string' && /^p1:[a-f0-9]{64}$/.test(value))
+  ? value : normalizeCanonicalId(value));
 const parseInteger = (value, key) => {
   if (typeof value !== 'string' || !/^-?(?:0|[1-9][0-9]*)$/.test(value)) {
     throw new TypeError('The Banner Client Autosave field is invalid.');
@@ -58,7 +61,7 @@ export default class ClientAutosaveAdapter {
       throw new TypeError('The Banner Client Autosave adapter configuration is invalid.');
     }
     this.descriptor = Object.freeze({
-      context: descriptor.context, targetId: normalizeCanonicalId(descriptor.targetId), payloadSchemaVersion: descriptor.payloadSchemaVersion,
+      context: descriptor.context, targetId: normalizeAutosaveTarget(descriptor.targetId), payloadSchemaVersion: descriptor.payloadSchemaVersion,
     });
     this.form = form;
     this.fields = { ...fields };

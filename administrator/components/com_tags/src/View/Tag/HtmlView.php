@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Tags\Administrator\View\Tag;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
@@ -109,14 +111,22 @@ class HtmlView extends BaseHtmlView
         $app          = Factory::getApplication();
         $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
         $configurator->disable('com_tags.autosave.tag');
-        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+        if ($this->getLayout() !== 'edit') {
             return;
         }
 
         try {
             $provider = $app->bootComponent('com_tags')->getAutosaveProvider('com_tags.tag');
-            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->id);
-            if (!$provider->targetExists($target)) {
+            $itemId   = (int) $this->item->id;
+            $target   = null;
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+            if ($target !== null && !$provider->targetExists($target)) {
                 return;
             }
         } catch (\Throwable) {
@@ -124,7 +134,7 @@ class HtmlView extends BaseHtmlView
         }
 
         $ids = [];
-        foreach (['title', 'note', 'description', 'version_note', 'metadesc', 'metakey'] as $name) {
+        foreach (['title', 'note', 'description', 'version_note', 'metadesc', 'metakey', 'parent_id'] as $name) {
             $field = $this->form->getField($name);
             if (!$field || !\is_string($field->id) || $field->id === '') {
                 return;

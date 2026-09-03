@@ -9,7 +9,7 @@
       "name": "com_newsfeeds.newsfeed-autosave",
       "type": "script",
       "uri": "com_newsfeeds/newsfeed-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller", "editor-api"],
+      "dependencies": ["com_autosave.create-binding", "com_autosave.integration-controller", "editor-api"],
       "attributes": {"type": "module"}
     }
   ]

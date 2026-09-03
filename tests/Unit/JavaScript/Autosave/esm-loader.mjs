@@ -10,6 +10,7 @@ const aliases = {
   'com_autosave.runtime': new URL('../../../../media_source/com_autosave/js/runtime.es6.js', import.meta.url).href,
   'com_autosave.ui': new URL('../../../../media_source/com_autosave/js/ui.es6.js', import.meta.url).href,
   'com_autosave.canonical-actions': new URL('../../../../media_source/com_autosave/js/canonical-action-coordinator.es6.js', import.meta.url).href,
+  'com_autosave.create-binding': new URL('../../../../media_source/com_autosave/js/create-binding.es6.js', import.meta.url).href,
   'com_autosave.integration-controller': new URL('../../../../media_source/com_autosave/js/integration-controller.es6.js', import.meta.url).href,
   'editor-api': new URL('../../../../media_source/system/js/editors/editor-api.es6.js', import.meta.url).href,
   'editor-decorator': new URL('../../../../media_source/system/js/editors/editor-decorator.es6.js', import.meta.url).href,

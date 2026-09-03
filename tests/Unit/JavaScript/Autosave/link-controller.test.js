@@ -95,6 +95,7 @@ class FakeOwnedObject {
 }
 
 const endpoints = {
+  initializeCreate: 'index.php?task=autosave.initializeCreate',
   initialize: 'index.php?task=autosave.initialize',
   preserve: 'index.php?task=autosave.preserve',
   detect: 'index.php?task=autosave.detect',
@@ -104,13 +105,14 @@ const endpoints = {
   getCanonicalActionOutcome: 'index.php?task=autosave.getCanonicalActionOutcome',
 };
 
-const createFixture = ({ withMounts = true } = {}) => {
+const createFixture = ({ withMounts = true, createMode = false } = {}) => {
   const document = new FakeDocument();
   const options = {
     [LINK_OPTIONS_KEY]: {
       enabled: true,
       context: 'com_redirect.link',
-      targetId: '42',
+      mode: createMode ? 'create' : 'existing',
+      targetId: createMode ? null : '42',
       payloadSchemaVersion: 1,
       formId: 'link-form',
       fieldIds: {
@@ -151,6 +153,19 @@ const createFixture = ({ withMounts = true } = {}) => {
   const controller = new LinkAutosaveController({
     documentSource: document,
     optionsReader: (key, fallback) => options[key] ?? fallback,
+    createBindingFactory: ({ context }) => ({
+      descriptor: () => ({
+        initializationKey: 'redirect-form-instance',
+        targetId: null,
+        formInstanceId: 'redirect-form-instance',
+        onInitialized: () => {},
+        acquire: async () => true,
+        release: () => {},
+        onCanonicalSuccess: () => {},
+        subscribeConflict: () => () => {},
+        context,
+      }),
+    }),
     apiClientFactory: (configuration) => {
       const client = { configuration };
       clients.push(client);
@@ -220,6 +235,17 @@ test('valid existing Redirect activates once through the generic integration con
   assert.strictEqual(fixture.presenters[0].options.eventTarget, fixture.eventTargets[0]);
   assert.deepEqual(fixture.coordinators[0].options.taskPolicy, LINK_CANONICAL_TASK_POLICY);
   assert.equal('link.save2copy' in LINK_CANONICAL_TASK_POLICY, false);
+});
+
+test('new Redirect activates one unresolved runtime through the shared create binding', async () => {
+  const fixture = createFixture({ createMode: true });
+
+  fixture.controller.start();
+  await fixture.controller.reconcile();
+
+  assert.equal(fixture.runtimes.length, 1);
+  assert.equal(fixture.runtimes[0].options.targetId, null);
+  assert.equal(fixture.runtimes[0].options.createMode.initializationKey, 'redirect-form-instance');
 });
 
 test('new, disabled, malformed and incomplete Redirect pages remain inactive', async (t) => {

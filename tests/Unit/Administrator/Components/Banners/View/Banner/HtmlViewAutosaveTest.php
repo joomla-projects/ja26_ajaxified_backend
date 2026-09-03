@@ -14,11 +14,14 @@ use Joomla\Tests\Unit\UnitTestCase;
 
 class HtmlViewAutosaveTest extends UnitTestCase
 {
-    public function testExistingRecordEligibilityAndNewRecordFallback(): void
+    public function testExistingRecordEligibilityAndCreateModeAuthorization(): void
     {
         $source = $this->viewSource();
 
-        $this->assertStringContainsString("\$this->getLayout() !== 'edit' || (int) \$this->item->id <= 0", $source);
+        $this->assertStringContainsString("if (\$this->getLayout() !== 'edit') {", $source);
+        $this->assertStringContainsString('AutosaveCreateProviderInterface', $source);
+        $this->assertStringContainsString('AutosaveOperation::InitializeCreate', $source);
+        $this->assertStringContainsString("\$target   = null;", $source);
         $this->assertStringContainsString("getAutosaveProvider('com_banners.banner')", $source);
         $this->assertStringContainsString("\$this->autosaveEnabled = true;", $source);
     }
@@ -30,9 +33,9 @@ class HtmlViewAutosaveTest extends UnitTestCase
         preg_match_all("/'([^']+)'\s*=>/", $matches[1] ?? '', $fields);
 
         $this->assertSame([
-            'name', 'alias', 'description', 'type', 'custombannercode', 'clickurl', 'version_note',
-            'publish_up', 'publish_down', 'imageurl', 'width', 'height', 'alt', 'metakey',
-            'metakey_prefix', 'own_prefix',
+            'name', 'catid', 'cid', 'alias', 'description', 'type', 'custombannercode', 'clickurl',
+            'version_note', 'publish_up', 'publish_down', 'imageurl', 'width', 'height', 'alt',
+            'metakey', 'metakey_prefix', 'own_prefix',
         ], $fields[1]);
         $this->assertStringContainsString("'com_banners.autosave.banner'", $source);
         $this->assertStringContainsString("'banner-form'", $source);

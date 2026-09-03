@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Redirect\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
@@ -27,7 +28,7 @@ use Joomla\String\StringHelper;
  *
  * @since  __DEPLOY_VERSION__
  */
-final class LinkAutosaveProvider implements AutosaveProviderInterface
+final class LinkAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const CONTEXT                = 'com_redirect.link';
     private const MAXIMUM_ID             = '4294967295';
@@ -53,6 +54,18 @@ final class LinkAutosaveProvider implements AutosaveProviderInterface
     public function getContext(): string
     {
         return self::CONTEXT;
+    }
+
+    public function getCreateContractVersion(): string
+    {
+        return 'redirect-link-create-v1';
+    }
+
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        if (!$user->authorise('core.create', 'com_redirect')) {
+            throw new AutosaveException('forbidden', 'A Redirect link cannot be created by this user.');
+        }
     }
 
     /**

@@ -8,6 +8,7 @@ import AutosaveIntegrationController, {
   isPlainObject,
   resolveAutosaveUiMount,
 } from 'com_autosave.integration-controller';
+import AutosaveCreateBinding from 'com_autosave.create-binding';
 import LinkAutosaveAdapter, { normalizeCanonicalId } from './link-autosave-adapter.es6.js';
 
 const LINK_OPTIONS_KEY = 'com_redirect.autosave.link';
@@ -39,9 +40,18 @@ const validateLinkConfiguration = (configuration) => {
     throw new TypeError('The Redirect Autosave page configuration is invalid.');
   }
 
+  const mode = configuration.mode === 'create' ? 'create' : 'existing';
+  const targetId = mode === 'create' ? null : normalizeCanonicalId(configuration.targetId);
+
+  if ((mode === 'create' && configuration.targetId !== null)
+    || (mode === 'existing' && configuration.targetId === null)) {
+    throw new TypeError('The Redirect Autosave target mode is invalid.');
+  }
+
   return Object.freeze({
     context: configuration.context,
-    targetId: normalizeCanonicalId(configuration.targetId),
+    mode,
+    targetId,
     payloadSchemaVersion: configuration.payloadSchemaVersion,
     formId: configuration.formId,
     fieldIds: Object.freeze({ ...configuration.fieldIds }),
@@ -58,20 +68,33 @@ export default class LinkAutosaveController extends AutosaveIntegrationControlle
     documentSource = globalThis.document,
     optionsReader = defaultOptionsReader,
     adapterFactory = (options) => new LinkAutosaveAdapter(options),
+    createBindingFactory = (options) => new AutosaveCreateBinding(options),
     ...integrationOptions
   } = {}) {
     if (!documentSource
       || typeof documentSource.getElementById !== 'function'
-      || typeof adapterFactory !== 'function') {
+      || typeof adapterFactory !== 'function'
+      || typeof createBindingFactory !== 'function') {
       throw new TypeError('The Redirect Autosave controller configuration is invalid.');
     }
 
+    let createBinding = null;
     const resolveLink = () => {
       const link = validateLinkConfiguration(optionsReader(LINK_OPTIONS_KEY, null));
 
       if (!link) {
+        createBinding = null;
+
         return null;
       }
+
+      if (link.mode === 'create' && !createBinding) {
+        createBinding = createBindingFactory({ context: link.context });
+      } else if (link.mode === 'existing' && createBinding) {
+        createBinding = null;
+      }
+
+      const createMode = createBinding?.descriptor() || null;
 
       const form = documentSource.getElementById(link.formId);
 
@@ -93,11 +116,15 @@ export default class LinkAutosaveController extends AutosaveIntegrationControlle
       return {
         descriptor: {
           context: link.context,
-          targetId: link.targetId,
+          targetId: createMode?.targetId || link.targetId,
           payloadSchemaVersion: link.payloadSchemaVersion,
         },
+        createMode,
         form,
-        identityParts: FIELD_KEYS.map((key) => fields[key]),
+        identityParts: [
+          createMode?.formInstanceId || link.targetId,
+          ...FIELD_KEYS.map((key) => fields[key]),
+        ],
         taskPolicy: LINK_CANONICAL_TASK_POLICY,
         statusMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-status-ui]'),
         recoveryMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-recovery-ui]'),

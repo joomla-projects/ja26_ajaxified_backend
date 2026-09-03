@@ -35,6 +35,7 @@
       "uri": "com_guidedtours/tour-autosave.min.js",
       "dependencies": [
         "com_autosave.integration-controller",
+        "com_autosave.create-binding",
         "editor-api"
       ],
       "attributes": {

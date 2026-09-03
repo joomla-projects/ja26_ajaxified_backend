@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Finder\Administrator\View\Filter;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -131,15 +133,24 @@ class HtmlView extends BaseHtmlView
         $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
         $configurator->disable('com_finder.autosave.filter');
 
-        if ($this->getLayout() !== 'edit' || (int) $this->item->filter_id <= 0) {
+        if ($this->getLayout() !== 'edit') {
             return;
         }
 
         try {
             $provider = $app->bootComponent('com_finder')->getAutosaveProvider('com_finder.filter');
-            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->filter_id);
+            $itemId   = (int) $this->item->filter_id;
+            $target   = null;
 
-            if (!$provider->targetExists($target)) {
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+
+            if ($target !== null && !$provider->targetExists($target)) {
                 return;
             }
         } catch (\Throwable) {

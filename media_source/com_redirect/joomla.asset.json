@@ -11,6 +11,7 @@
       "uri": "com_redirect/link-autosave.min.js",
       "dependencies": [
         "core",
+        "com_autosave.create-binding",
         "com_autosave.integration-controller"
       ],
       "attributes": {

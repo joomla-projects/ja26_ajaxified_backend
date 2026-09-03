@@ -8,6 +8,7 @@ import AutosaveIntegrationController, {
   isPlainObject,
   resolveAutosaveUiMount,
 } from 'com_autosave.integration-controller';
+import AutosaveCreateBinding from 'com_autosave.create-binding';
 import ClientAutosaveAdapter, { normalizeCanonicalId } from './client-autosave-adapter.es6.js';
 
 const CLIENT_OPTIONS_KEY = 'com_banners.autosave.client';
@@ -34,9 +35,15 @@ const validateClientConfiguration = (configuration) => {
     throw new TypeError('The Banner Client Autosave page configuration is invalid.');
   }
 
+  const mode = configuration.mode === 'create' ? 'create' : 'existing';
+  const targetId = mode === 'create' ? null : normalizeCanonicalId(configuration.targetId);
+  if ((mode === 'create' && configuration.targetId !== null) || (mode === 'existing' && configuration.targetId === null)) {
+    throw new TypeError('The Banner Client Autosave target mode is invalid.');
+  }
   return Object.freeze({
     context: configuration.context,
-    targetId: normalizeCanonicalId(configuration.targetId),
+    mode,
+    targetId,
     payloadSchemaVersion: configuration.payloadSchemaVersion,
     formId: configuration.formId,
     fieldIds: Object.freeze({ ...configuration.fieldIds }),
@@ -50,18 +57,23 @@ export default class ClientAutosaveController extends AutosaveIntegrationControl
     documentSource = globalThis.document,
     optionsReader = defaultOptionsReader,
     adapterFactory = (options) => new ClientAutosaveAdapter(options),
+    createBindingFactory = (options) => new AutosaveCreateBinding(options),
     ...integrationOptions
   } = {}) {
     if (!documentSource
       || typeof documentSource.getElementById !== 'function'
       || typeof documentSource.querySelectorAll !== 'function'
-      || typeof adapterFactory !== 'function') {
+      || typeof adapterFactory !== 'function' || typeof createBindingFactory !== 'function') {
       throw new TypeError('The Banner Client Autosave controller configuration is invalid.');
     }
 
+    let createBinding = null;
     const resolveClient = () => {
       const client = validateClientConfiguration(optionsReader(CLIENT_OPTIONS_KEY, null));
-      if (!client) return null;
+      if (!client) { createBinding = null; return null; }
+      if (client.mode === 'create' && !createBinding) createBinding = createBindingFactory({ context: client.context });
+      else if (client.mode === 'existing' && createBinding) createBinding = null;
+      const createMode = createBinding?.descriptor() || null;
       const form = documentSource.getElementById(client.formId);
       if (!form?.isConnected) return null;
       const fields = Object.fromEntries(FIELD_KEYS.map((key) => [
@@ -75,9 +87,10 @@ export default class ClientAutosaveController extends AutosaveIntegrationControl
         : fields[key]?.isConnected && form.contains(fields[key])))) return null;
 
       return {
-        descriptor: { context: client.context, targetId: client.targetId, payloadSchemaVersion: client.payloadSchemaVersion },
+        descriptor: { context: client.context, targetId: createMode?.targetId || client.targetId, payloadSchemaVersion: client.payloadSchemaVersion },
+        createMode,
         form,
-        identityParts: FIELD_KEYS.flatMap((key) => (Array.isArray(fields[key]) ? fields[key] : [fields[key]])),
+        identityParts: [createMode?.formInstanceId || client.targetId, ...FIELD_KEYS.flatMap((key) => (Array.isArray(fields[key]) ? fields[key] : [fields[key]]))],
         taskPolicy: CLIENT_CANONICAL_TASK_POLICY,
         statusMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-status-ui]'),
         recoveryMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-recovery-ui]'),

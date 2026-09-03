@@ -8,7 +8,7 @@ const STRING_KEYS = Object.freeze([
   'publish_up', 'publish_up_alt', 'publish_down', 'publish_down_alt', 'imageurl',
   'width', 'height', 'alt', 'metakey', 'metakey_prefix',
 ]);
-const INTEGER_KEYS = Object.freeze(['type', 'own_prefix']);
+const INTEGER_KEYS = Object.freeze(['type', 'own_prefix', 'catid', 'cid']);
 const PAYLOAD_KEYS = Object.freeze([...STRING_KEYS, ...INTEGER_KEYS]);
 const ORDINARY_FIELD_KEYS = Object.freeze([
   'name', 'alias', 'custombannercode', 'clickurl', 'version_note', 'width', 'height',
@@ -36,6 +36,8 @@ const MAXIMUM_LENGTHS = Object.freeze({
 const INTEGER_VALUES = Object.freeze({
   type: Object.freeze([0, 1]),
   own_prefix: Object.freeze([0, 1]),
+  catid: null,
+  cid: null,
 });
 
 const isPlainObject = (value) => value !== null && typeof value === 'object'
@@ -48,13 +50,19 @@ const normalizeCanonicalId = (value) => {
   }
   return candidate;
 };
+const normalizeAutosaveTarget = (value) => (value === null
+  || (typeof value === 'string' && /^p1:[a-f0-9]{64}$/.test(value))
+  ? value : normalizeCanonicalId(value));
+
+const validRelationInteger = (key, integer) => (key === 'cid' ? integer >= 0 : integer > 0);
 
 const parseInteger = (value, key) => {
   if (typeof value !== 'string' || !/^(?:0|[1-9][0-9]*)$/.test(value)) {
     throw new TypeError('The Banner Autosave integer field is invalid.');
   }
   const integer = Number(value);
-  if (!Number.isSafeInteger(integer) || !INTEGER_VALUES[key].includes(integer)) {
+  if (!Number.isSafeInteger(integer)
+    || (INTEGER_VALUES[key] ? !INTEGER_VALUES[key].includes(integer) : !validRelationInteger(key, integer))) {
     throw new TypeError('The Banner Autosave integer field is invalid.');
   }
   return integer;
@@ -82,7 +90,7 @@ const validatePayload = (payload) => {
     || !STRING_KEYS.every((key) => typeof payload[key] === 'string'
       && Array.from(payload[key]).length <= MAXIMUM_LENGTHS[key])
     || !INTEGER_KEYS.every((key) => Number.isInteger(payload[key])
-      && INTEGER_VALUES[key].includes(payload[key]))
+      && (INTEGER_VALUES[key] ? INTEGER_VALUES[key].includes(payload[key]) : validRelationInteger(key, payload[key])))
     || !validDimension(payload.width) || !validDimension(payload.height)
     || !isStableMediaReference(payload.imageurl)) {
     throw new TypeError('The Banner Autosave recovery payload is invalid.');
@@ -101,7 +109,7 @@ export default class BannerAutosaveAdapter {
     eventFactory = (type) => new Event(type, { bubbles: true }),
   }) {
     if (!isPlainObject(descriptor) || !form || !isPlainObject(fields)
-      || ![...ORDINARY_FIELD_KEYS, ...DATE_KEYS, 'description', 'imageurl', 'type', 'own_prefix']
+      || ![...ORDINARY_FIELD_KEYS, ...DATE_KEYS, 'description', 'imageurl', 'type', 'own_prefix', 'catid', 'cid']
         .every((key) => fields[key])
       || !editor?.getValue || !editor?.setValue || !editor?.subscribeChange
       || typeof getCurrentEditor !== 'function' || !mediaField
@@ -111,7 +119,7 @@ export default class BannerAutosaveAdapter {
 
     this.descriptor = Object.freeze({
       context: descriptor.context,
-      targetId: normalizeCanonicalId(descriptor.targetId),
+      targetId: normalizeAutosaveTarget(descriptor.targetId),
       payloadSchemaVersion: descriptor.payloadSchemaVersion,
     });
     this.form = form;
@@ -127,7 +135,7 @@ export default class BannerAutosaveAdapter {
     this.destroyed = false;
     this.suppress = 0;
     this.listeners = Object.fromEntries(
-      [...ORDINARY_FIELD_KEYS, ...DATE_KEYS, 'imageurl', 'type', 'own_prefix']
+      [...ORDINARY_FIELD_KEYS, ...DATE_KEYS, 'imageurl', 'type', 'own_prefix', 'catid', 'cid']
         .map((key) => [key, () => this.changed()]),
     );
     this.editorListener = () => this.changed();
@@ -135,7 +143,20 @@ export default class BannerAutosaveAdapter {
 
   getDescriptor() { return this.descriptor; }
 
-  initializeBaseline() { this.assertCurrent(); this.baseline = this.snapshot(); return this; }
+  initializeBaseline() {
+    this.assertCurrent();
+
+    try {
+      this.baseline = this.snapshot();
+    } catch {
+      // A new Banner form may not yet hold a numeric category/client
+      // selection. Keep the runtime armed and let the first valid change
+      // establish the baseline instead of failing the bootstrap.
+      this.baseline = null;
+    }
+
+    return this;
+  }
 
   subscribe(callback) {
     if (typeof callback !== 'function' || this.callback || this.destroyed) {
@@ -188,6 +209,10 @@ export default class BannerAutosaveAdapter {
     const ownPrefix = this.fields.own_prefix.find((control) => control.checked);
     if (!ownPrefix) throw new TypeError('The Banner own-prefix field is invalid.');
     payload.own_prefix = parseInteger(ownPrefix.value, 'own_prefix');
+    payload.catid = parseInteger(this.fields.catid.value, 'catid');
+    // An empty client control means "no client", the same state the native
+    // form stores as cid 0.
+    payload.cid = parseInteger(this.fields.cid.value === '' ? '0' : this.fields.cid.value, 'cid');
     payload.imageurl = this.fields.imageurl.value;
     DATE_KEYS.forEach((key) => {
       payload[key] = this.fields[key].value;
@@ -200,6 +225,8 @@ export default class BannerAutosaveAdapter {
     ORDINARY_FIELD_KEYS.forEach((key) => this.writeControl(this.fields[key], payload[key]));
     this.editor.setValue(payload.description);
     this.writeControl(this.fields.type, String(payload.type));
+    this.writeControl(this.fields.catid, String(payload.catid));
+    this.writeControl(this.fields.cid, String(payload.cid));
     this.fields.own_prefix.forEach((control) => {
       control.checked = control.value === String(payload.own_prefix);
       control.dispatchEvent(this.eventFactory('input'));
@@ -218,7 +245,7 @@ export default class BannerAutosaveAdapter {
     control.dispatchEvent(this.eventFactory('change'));
   }
 
-  observableKeys() { return [...ORDINARY_FIELD_KEYS, ...DATE_KEYS, 'imageurl', 'type', 'own_prefix']; }
+  observableKeys() { return [...ORDINARY_FIELD_KEYS, ...DATE_KEYS, 'imageurl', 'type', 'own_prefix', 'catid', 'cid']; }
 
   controls(key) { return key === 'own_prefix' ? this.fields[key] : [this.fields[key]]; }
 
@@ -233,7 +260,7 @@ export default class BannerAutosaveAdapter {
 
   isCurrent() {
     return !this.destroyed && this.form?.isConnected && this.fields
-      && [...ORDINARY_FIELD_KEYS, ...DATE_KEYS, 'description', 'imageurl', 'type', 'own_prefix']
+      && [...ORDINARY_FIELD_KEYS, ...DATE_KEYS, 'description', 'imageurl', 'type', 'own_prefix', 'catid', 'cid']
         .every((key) => this.controls(key).every((control) => control?.isConnected && this.form.contains(control)))
       && this.mediaField.isConnected && this.mediaField.contains(this.fields.imageurl)
       && this.getCurrentEditor(this.editorId) === this.editor;
@@ -271,6 +298,7 @@ export {
   PAYLOAD_KEYS,
   STRING_KEYS,
   isStableMediaReference,
+  normalizeAutosaveTarget,
   normalizeCanonicalId,
   validatePayload,
 };

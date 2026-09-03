@@ -10,6 +10,7 @@
       "type": "script",
       "uri": "com_tags/tag-autosave.min.js",
       "dependencies": [
+        "com_autosave.create-binding",
         "com_autosave.integration-controller",
         "editor-api"
       ],

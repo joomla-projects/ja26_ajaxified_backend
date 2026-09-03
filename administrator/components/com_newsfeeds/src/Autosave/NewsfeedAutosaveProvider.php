@@ -9,6 +9,7 @@
 
 namespace Joomla\Component\Newsfeeds\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
@@ -21,13 +22,13 @@ use Joomla\String\StringHelper;
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class NewsfeedAutosaveProvider implements AutosaveProviderInterface
+final class NewsfeedAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const STRING_LIMITS = [
         'name'     => 100, 'description' => 65535, 'link' => 2048, 'version_note' => 255,
         'metadesc' => 300, 'metakey' => 65535,
     ];
-    private const KEYS = ['name', 'description', 'link', 'version_note', 'numarticles', 'cache_time', 'metadesc', 'metakey'];
+    private const KEYS = ['name', 'description', 'link', 'version_note', 'numarticles', 'cache_time', 'metadesc', 'metakey', 'catid'];
 
     public function __construct(private readonly DatabaseInterface $db)
     {
@@ -40,7 +41,29 @@ final class NewsfeedAutosaveProvider implements AutosaveProviderInterface
 
     public function getPayloadSchemaVersion(): int
     {
-        return 1;
+        return 2;
+    }
+
+    public function getCreateContractVersion(): string
+    {
+        return 'newsfeed-create-v1';
+    }
+
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        if ($normalizedPayload === null) {
+            if (!$user->authorise('core.create', 'com_newsfeeds') && \count($user->getAuthorisedCategories('com_newsfeeds', 'core.create')) === 0) {
+                throw new AutosaveException('forbidden', 'A Newsfeed cannot be created by this user.');
+            }
+            return;
+        }
+        $catid = $normalizedPayload['catid'] ?? null;
+        if (!\is_int($catid) || $catid <= 0 || !$this->categoryExists($catid)) {
+            throw $this->invalidPayload();
+        }
+        if (!$user->authorise('core.create', 'com_newsfeeds.category.' . $catid)) {
+            throw new AutosaveException('forbidden', 'A Newsfeed cannot be created in this category.');
+        }
     }
 
     public function canonicalizeTargetId(string $targetId): string
@@ -96,7 +119,7 @@ final class NewsfeedAutosaveProvider implements AutosaveProviderInterface
     {
         $required = array_fill_keys(self::KEYS, true);
 
-        if ($schemaVersion !== 1 || !\is_array($payload) || array_is_list($payload) || array_diff_key($payload, $required) || array_diff_key($required, $payload)) {
+        if ($schemaVersion !== 2 || !\is_array($payload) || array_is_list($payload) || array_diff_key($payload, $required) || array_diff_key($required, $payload)) {
             throw $this->invalidPayload();
         }
 
@@ -106,13 +129,22 @@ final class NewsfeedAutosaveProvider implements AutosaveProviderInterface
             }
         }
 
-        foreach (['numarticles', 'cache_time'] as $key) {
-            if (!\is_int($payload[$key]) || $payload[$key] < 0 || $payload[$key] > 4294967295) {
+        foreach (['numarticles', 'cache_time', 'catid'] as $key) {
+            if (!\is_int($payload[$key]) || $payload[$key] < ($key === 'catid' ? 1 : 0) || $payload[$key] > 4294967295) {
                 throw $this->invalidPayload();
             }
         }
 
         return array_replace(array_fill_keys(self::KEYS, null), $payload);
+    }
+
+    private function categoryExists(int $catid): bool
+    {
+        $extension = 'com_newsfeeds';
+        $query     = $this->db->createQuery()->select('COUNT(*)')->from($this->db->quoteName('#__categories'))
+            ->where($this->db->quoteName('id') . ' = :catid')->where($this->db->quoteName('extension') . ' = :extension')
+            ->bind(':catid', $catid, ParameterType::INTEGER)->bind(':extension', $extension);
+        return (int) $this->db->setQuery($query)->loadResult() === 1;
     }
 
     private function load(string $targetId): ?object

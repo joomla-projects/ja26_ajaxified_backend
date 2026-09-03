@@ -11,6 +11,7 @@
       "uri": "com_banners/client-autosave.min.js",
       "dependencies": [
         "core",
+        "com_autosave.create-binding",
         "com_autosave.integration-controller"
       ],
       "attributes": {
@@ -23,6 +24,7 @@
       "uri": "com_banners/banner-autosave.min.js",
       "dependencies": [
         "core",
+        "com_autosave.create-binding",
         "com_autosave.integration-controller",
         "editor-api",
         "webcomponent.field-media"

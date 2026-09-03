@@ -29,6 +29,9 @@ const normalizeCanonicalId = (value) => {
 
   return candidate;
 };
+const normalizeAutosaveTarget = (value) => (value === null
+  || (typeof value === 'string' && /^p1:[a-f0-9]{64}$/.test(value))
+  ? value : normalizeCanonicalId(value));
 
 const parseAutostart = (value) => {
   if (value !== '0' && value !== '1') {
@@ -79,7 +82,7 @@ export default class TourAutosaveAdapter {
 
     this.descriptor = Object.freeze({
       context: descriptor.context,
-      targetId: normalizeCanonicalId(descriptor.targetId),
+      targetId: normalizeAutosaveTarget(descriptor.targetId),
       payloadSchemaVersion: descriptor.payloadSchemaVersion,
     });
     this.form = form;

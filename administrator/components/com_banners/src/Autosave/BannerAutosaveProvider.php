@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Banners\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
@@ -27,10 +28,10 @@ use Joomla\String\StringHelper;
  *
  * @since  __DEPLOY_VERSION__
  */
-final class BannerAutosaveProvider implements AutosaveProviderInterface
+final class BannerAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const CONTEXT                = 'com_banners.banner';
-    private const PAYLOAD_SCHEMA_VERSION = 1;
+    private const PAYLOAD_SCHEMA_VERSION = 2;
     private const MAXIMUM_ID             = '2147483647';
     private const BASE_REVISION_DOMAIN   = 'autosave:com_banners.banner:base-revision:v1';
 
@@ -57,6 +58,7 @@ final class BannerAutosaveProvider implements AutosaveProviderInterface
         'type'       => [0, 1],
         'own_prefix' => [0, 1],
     ];
+    private const RELATION_KEYS = ['catid', 'cid'];
 
     public function __construct(private readonly DatabaseInterface $db)
     {
@@ -65,6 +67,30 @@ final class BannerAutosaveProvider implements AutosaveProviderInterface
     public function getContext(): string
     {
         return self::CONTEXT;
+    }
+
+    public function getCreateContractVersion(): string
+    {
+        return 'banner-create-v1';
+    }
+
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        if ($normalizedPayload === null) {
+            if (!$user->authorise('core.create', 'com_banners') && \count($user->getAuthorisedCategories('com_banners', 'core.create')) === 0) {
+                throw new AutosaveException('forbidden', 'A Banner cannot be created by this user.');
+            }
+            return;
+        }
+
+        $catid = $normalizedPayload['catid'] ?? null;
+        $cid   = $normalizedPayload['cid'] ?? null;
+        if (!\is_int($catid) || $catid <= 0 || !\is_int($cid) || $cid < 0 || !$this->relationExists('#__categories', $catid, 'extension', 'com_banners') || ($cid > 0 && !$this->relationExists('#__banner_clients', $cid))) {
+            throw $this->invalidPayload();
+        }
+        if (!$user->authorise('core.create', 'com_banners.category.' . $catid)) {
+            throw new AutosaveException('forbidden', 'A Banner cannot be created in this category.');
+        }
     }
 
     public function canonicalizeTargetId(string $targetId): string
@@ -132,7 +158,7 @@ final class BannerAutosaveProvider implements AutosaveProviderInterface
             throw new AutosaveException('unsupported_schema_version', 'The payload schema version is not supported.');
         }
 
-        $required = array_fill_keys([...array_keys(self::STRING_LIMITS), ...array_keys(self::INTEGER_VALUES)], true);
+        $required = array_fill_keys([...array_keys(self::STRING_LIMITS), ...array_keys(self::INTEGER_VALUES), ...self::RELATION_KEYS], true);
 
         if (
             !\is_array($payload) || array_is_list($payload) || \count($payload) !== \count($required)
@@ -152,6 +178,14 @@ final class BannerAutosaveProvider implements AutosaveProviderInterface
 
         foreach (self::INTEGER_VALUES as $key => $values) {
             if (!\is_int($payload[$key]) || !\in_array($payload[$key], $values, true)) {
+                throw $this->invalidPayload();
+            }
+        }
+        foreach (self::RELATION_KEYS as $key) {
+            // catid is required by the native Banner form and by the category
+            // scoped create permission; cid is optional (0 = no client).
+            $minimum = $key === 'catid' ? 1 : 0;
+            if (!\is_int($payload[$key]) || $payload[$key] < $minimum || $payload[$key] > 2147483647) {
                 throw $this->invalidPayload();
             }
         }
@@ -177,6 +211,9 @@ final class BannerAutosaveProvider implements AutosaveProviderInterface
         }
 
         foreach (array_keys(self::INTEGER_VALUES) as $key) {
+            $normalized[$key] = $payload[$key];
+        }
+        foreach (self::RELATION_KEYS as $key) {
             $normalized[$key] = $payload[$key];
         }
 
@@ -208,6 +245,16 @@ final class BannerAutosaveProvider implements AutosaveProviderInterface
             && !isset($parts['user'])
             && !isset($parts['pass'])
             && isset($parts['host']);
+    }
+
+    private function relationExists(string $table, int $id, ?string $scopeColumn = null, ?string $scope = null): bool
+    {
+        $query = $this->db->createQuery()->select('COUNT(*)')->from($this->db->quoteName($table))
+            ->where($this->db->quoteName('id') . ' = :relationId')->bind(':relationId', $id, ParameterType::INTEGER);
+        if ($scopeColumn !== null) {
+            $query->where($this->db->quoteName($scopeColumn) . ' = :relationScope')->bind(':relationScope', $scope);
+        }
+        return (int) $this->db->setQuery($query)->loadResult() === 1;
     }
 
     private function loadBanner(string $targetId): ?object
