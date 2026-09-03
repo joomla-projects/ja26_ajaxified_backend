@@ -66,9 +66,9 @@ final class AutosaveLifecycle
         Date $now,
         ?string $candidateScope = null
     ): array {
-        $userId        = $this->validateInvocation($user, $now);
-        $provider      = $this->resolveCreateProvider($context);
-        $static        = $this->staticScopeProvider($provider);
+        $userId         = $this->validateInvocation($user, $now);
+        $provider       = $this->resolveCreateProvider($context);
+        $static         = $this->staticScopeProvider($provider);
         $canonicalScope = null;
 
         if ($static === null && $candidateScope !== null) {
@@ -314,7 +314,7 @@ final class AutosaveLifecycle
             return null;
         }
 
-        if (isset($createProvider) && isset($static)) {
+        if (isset($createProvider, $static)) {
             $this->authorizeProvisional($user, $provider, $generation['continuation_id'], AutosaveOperation::Detect, null);
         }
 
@@ -549,7 +549,7 @@ final class AutosaveLifecycle
             $now
         );
 
-        if (isset($createProvider) && isset($static)) {
+        if (isset($createProvider, $static)) {
             $this->authorizeProvisional($user, $provider, $outcome['continuation_id'], AutosaveOperation::QueryCanonicalAction, null);
         }
 

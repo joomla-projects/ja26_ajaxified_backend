@@ -235,7 +235,7 @@ final class LifecycleTestStorage implements AutosaveCreateStorageInterface, Auto
         return $this->canonicalResult;
     }
 
-    public ?string $boundScope      = null;
+    public ?string $boundScope       = null;
     public ?\Throwable $scopeFailure = null;
 
     public function bindContinuationStaticScope(int $userId, string $continuationId, string $canonicalScope, Date $now): ?string

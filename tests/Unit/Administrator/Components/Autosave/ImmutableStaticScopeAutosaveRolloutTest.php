@@ -13,7 +13,6 @@ namespace Joomla\Tests\Unit\Administrator\Components\Autosave;
 use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
 use Joomla\CMS\Autosave\AutosaveStaticScopeProviderInterface;
 use Joomla\CMS\User\User;
 use Joomla\Component\Categories\Administrator\Autosave\CategoryAutosaveProvider;
@@ -140,8 +139,8 @@ class ImmutableStaticScopeAutosaveRolloutTest extends UnitTestCase
 
     public function testCategoryParentMustBelongToTheAnchoredExtension(): void
     {
-        $allowed = $this->user(true);
-        $payload = ['title' => 'News', 'note' => '', 'description' => '', 'version_note' => '', 'metadesc' => '', 'metakey' => '', 'parent_id' => 73];
+        $allowed     = $this->user(true);
+        $payload     = ['title' => 'News', 'note' => '', 'description' => '', 'version_note' => '', 'metadesc' => '', 'metakey' => '', 'parent_id' => 73];
         $payloadRoot = [...$payload, 'parent_id' => 1];
 
         // Root (the global ROOT row) is legal for every extension and needs no lookup.

@@ -191,7 +191,7 @@ final class CategoryAutosaveProvider implements
 
     public function normalizePayload(mixed $payload, int $schemaVersion): array
     {
-        $required = array_fill_keys(array_keys(self::LIMITS), true);
+        $required              = array_fill_keys(array_keys(self::LIMITS), true);
         $required['parent_id'] = true;
 
         if (

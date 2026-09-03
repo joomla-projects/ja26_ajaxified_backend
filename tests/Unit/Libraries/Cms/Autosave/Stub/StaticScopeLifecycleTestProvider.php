@@ -17,16 +17,16 @@ final class StaticScopeLifecycleTestProvider implements
     AutosaveCreateProviderInterface,
     AutosaveStaticScopeProviderInterface
 {
-    public string $contractVersion  = 'static-scope-v1';
-    public string $scopeVersion     = 'scope-v1';
-    public string $canonicalScope   = 'com_content';
-    public array $allowedScopes     = ['com_content', 'com_banners'];
-    public array $normalized        = ['normalized' => true];
-    public bool $denyScope          = false;
-    public bool $verifyFinalFails   = false;
-    public array $scopeArguments    = [];
+    public string $contractVersion   = 'static-scope-v1';
+    public string $scopeVersion      = 'scope-v1';
+    public string $canonicalScope    = 'com_content';
+    public array $allowedScopes      = ['com_content', 'com_banners'];
+    public array $normalized         = ['normalized' => true];
+    public bool $denyScope           = false;
+    public bool $verifyFinalFails    = false;
+    public array $scopeArguments     = [];
     public array $canonicalArguments = [];
-    public array $verifyArguments   = [];
+    public array $verifyArguments    = [];
     private array $events;
 
     public function __construct(array &$events)
@@ -87,7 +87,7 @@ final class StaticScopeLifecycleTestProvider implements
 
     public function canonicalizeStaticCreateScope(mixed $candidateScope): string
     {
-        $this->events[]            = 'scope.canonicalize';
+        $this->events[]             = 'scope.canonicalize';
         $this->canonicalArguments[] = [$candidateScope];
 
         if (!\is_string($candidateScope) || !\in_array($candidateScope, $this->allowedScopes, true)) {
@@ -109,7 +109,7 @@ final class StaticScopeLifecycleTestProvider implements
 
     public function verifyFinalTargetStaticScope(string $finalTargetId, string $canonicalScope): void
     {
-        $this->events[]         = 'scope.verifyFinal';
+        $this->events[]          = 'scope.verifyFinal';
         $this->verifyArguments[] = [$finalTargetId, $canonicalScope];
 
         if ($this->verifyFinalFails) {

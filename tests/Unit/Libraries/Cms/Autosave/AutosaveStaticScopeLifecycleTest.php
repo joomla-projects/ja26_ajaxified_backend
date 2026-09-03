@@ -14,7 +14,6 @@ use Joomla\CMS\Application\CMSApplicationInterface;
 use Joomla\CMS\Autosave\AutosaveContextResolver;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveLifecycle;
-use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveStorageInterface;
 use Joomla\CMS\Autosave\AutosaveTargetIdentity;
 use Joomla\CMS\Date\Date;
@@ -137,24 +136,24 @@ class AutosaveStaticScopeLifecycleTest extends UnitTestCase
         $storage   = new LifecycleTestStorage($events);
         $lifecycle = $this->lifecycle($provider, $storage, $events, 'site-secret');
 
-        $first = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now(), 'com_content');
+        $first                  = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now(), 'com_content');
         $provider->scopeVersion = 'scope-v2';
-        $second = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-2', $this->now(), 'com_content');
+        $second                 = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-2', $this->now(), 'com_content');
 
         $this->assertNotSame($first['base_revision'], $second['base_revision']);
     }
 
     public function testPreserveUsesAnchoredScopeAuthorization(): void
     {
-        $events                    = [];
-        $provider                  = new StaticScopeLifecycleTestProvider($events);
-        $storage                   = new LifecycleTestStorage($events);
-        $target                    = AutosaveTargetIdentity::provisional(7, 'com_example.record', 'request-1', 'site-secret');
-        $lifecycle                 = $this->lifecycle($provider, $storage, $events, 'site-secret');
-        $initialized               = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now(), 'com_content');
-        $storage->inspectResult    = $this->inspectedGeneration($initialized['base_revision']);
+        $events                              = [];
+        $provider                            = new StaticScopeLifecycleTestProvider($events);
+        $storage                             = new LifecycleTestStorage($events);
+        $target                              = AutosaveTargetIdentity::provisional(7, 'com_example.record', 'request-1', 'site-secret');
+        $lifecycle                           = $this->lifecycle($provider, $storage, $events, 'site-secret');
+        $initialized                         = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now(), 'com_content');
+        $storage->inspectResult              = $this->inspectedGeneration($initialized['base_revision']);
         $storage->inspectResult['target_id'] = $target;
-        $events                    = [];
+        $events                              = [];
 
         $lifecycle->preserve($this->user(), self::CONTINUATION_ID, self::GENERATION_ID, 1, ['draft' => true], 1, $this->now());
 
@@ -164,16 +163,16 @@ class AutosaveStaticScopeLifecycleTest extends UnitTestCase
 
     public function testPreserveFailsClosedWhenScopeIsNotBound(): void
     {
-        $events                    = [];
-        $provider                  = new StaticScopeLifecycleTestProvider($events);
-        $storage                   = new LifecycleTestStorage($events);
-        $lifecycle                 = $this->lifecycle($provider, $storage, $events, 'site-secret');
-        $initialized               = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now(), 'com_content');
-        $target                    = AutosaveTargetIdentity::provisional(7, 'com_example.record', 'request-1', 'site-secret');
-        $storage->boundScope       = null;
-        $storage->inspectResult    = $this->inspectedGeneration($initialized['base_revision']);
+        $events                              = [];
+        $provider                            = new StaticScopeLifecycleTestProvider($events);
+        $storage                             = new LifecycleTestStorage($events);
+        $lifecycle                           = $this->lifecycle($provider, $storage, $events, 'site-secret');
+        $initialized                         = $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now(), 'com_content');
+        $target                              = AutosaveTargetIdentity::provisional(7, 'com_example.record', 'request-1', 'site-secret');
+        $storage->boundScope                 = null;
+        $storage->inspectResult              = $this->inspectedGeneration($initialized['base_revision']);
         $storage->inspectResult['target_id'] = $target;
-        $events                    = [];
+        $events                              = [];
 
         $this->assertAutosaveFailure(
             'scope_required',
@@ -190,13 +189,13 @@ class AutosaveStaticScopeLifecycleTest extends UnitTestCase
         $lifecycle                 = $this->lifecycle($provider, $storage, $events, 'site-secret');
         $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now(), 'com_content');
         $storage->canonicalResult  = [
-            'operation_id'             => 'operation-1',
-            'continuation_id'          => self::CONTINUATION_ID,
-            'context'                  => 'com_example.record',
-            'target_id'                => $target,
-            'intent'                   => 'apply',
-            'outcome'                  => 'pending',
-            'expected_base_revision'   => 'base-1',
+            'operation_id'           => 'operation-1',
+            'continuation_id'        => self::CONTINUATION_ID,
+            'context'                => 'com_example.record',
+            'target_id'              => $target,
+            'intent'                 => 'apply',
+            'outcome'                => 'pending',
+            'expected_base_revision' => 'base-1',
         ];
         $events                    = [];
 
@@ -209,12 +208,12 @@ class AutosaveStaticScopeLifecycleTest extends UnitTestCase
 
     public function testFinalizeScopeMismatchFailsClosedWithoutRetiring(): void
     {
-        $events                    = [];
-        $provider                  = new StaticScopeLifecycleTestProvider($events);
+        $events                     = [];
+        $provider                   = new StaticScopeLifecycleTestProvider($events);
         $provider->verifyFinalFails = true;
-        $storage                   = new LifecycleTestStorage($events);
-        $target                    = AutosaveTargetIdentity::provisional(7, 'com_example.record', 'request-1', 'site-secret');
-        $lifecycle                 = $this->lifecycle($provider, $storage, $events, 'site-secret');
+        $storage                    = new LifecycleTestStorage($events);
+        $target                     = AutosaveTargetIdentity::provisional(7, 'com_example.record', 'request-1', 'site-secret');
+        $lifecycle                  = $this->lifecycle($provider, $storage, $events, 'site-secret');
         $lifecycle->initializeCreate($this->user(), 'com_example.record', 'request-1', $this->now(), 'com_content');
         $storage->canonicalResult  = ['operation_id' => 'operation-1', 'continuation_id' => self::CONTINUATION_ID];
         $events                    = [];
