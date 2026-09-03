@@ -141,7 +141,7 @@ final class NewsfeedAutosaveProvider implements AutosaveProviderInterface, Autos
     private function categoryExists(int $catid): bool
     {
         $extension = 'com_newsfeeds';
-        $query = $this->db->createQuery()->select('COUNT(*)')->from($this->db->quoteName('#__categories'))
+        $query     = $this->db->createQuery()->select('COUNT(*)')->from($this->db->quoteName('#__categories'))
             ->where($this->db->quoteName('id') . ' = :catid')->where($this->db->quoteName('extension') . ' = :extension')
             ->bind(':catid', $catid, ParameterType::INTEGER)->bind(':extension', $extension);
         return (int) $this->db->setQuery($query)->loadResult() === 1;
