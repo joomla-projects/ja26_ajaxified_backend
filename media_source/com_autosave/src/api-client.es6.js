@@ -39,6 +39,12 @@ const ERROR_CLASSIFICATIONS = new Map([
   ['unsupported_schema_version', 'payload-failure'],
   ['schema_version_conflict', 'payload-failure'],
   ['payload_too_large', 'payload-failure'],
+  ['scope_required', 'validation-failure'],
+  ['scope_unsupported', 'validation-failure'],
+  ['invalid_scope', 'validation-failure'],
+  ['static_scope_unsupported', 'validation-failure'],
+  ['scope_conflict', 'conflict'],
+  ['scope_mismatch', 'conflict'],
   ['draft_not_found', 'draft-not-found'],
   ['checkout_conflict', 'conflict'],
   ['initialization_conflict', 'conflict'],
@@ -216,7 +222,11 @@ const validateRequest = (operation, request) => {
         && assertStringProperties(request, ['context', 'target_id', 'initialization_key']);
 
     case 'initializeCreate':
-      return hasExactKeys(request, ['context', 'initialization_key'])
+      return (hasExactKeys(request, ['context', 'initialization_key'])
+          || (hasExactKeys(request, ['context', 'initialization_key', 'create_scope'])
+            && isNonEmptyString(request.create_scope)
+            && request.create_scope.length <= 255
+            && !/[\x00-\x1F\x7F]/.test(request.create_scope)))
         && assertStringProperties(request, ['context', 'initialization_key']);
 
     case 'preserve':

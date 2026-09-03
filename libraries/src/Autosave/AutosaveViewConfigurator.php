@@ -80,6 +80,7 @@ final class AutosaveViewConfigurator
      * @param   array<string, string>       $fieldIds   Explicit payload field IDs.
      * @param   string                     $asset       Component integration asset.
      * @param   array<string, mixed>|null  $dynamicSchema Bounded server-owned dynamic field schema.
+     * @param   string|null                 $createScope   Bounded candidate static creation scope.
      *
      * @return  void
      *
@@ -92,7 +93,8 @@ final class AutosaveViewConfigurator
         string $formId,
         array $fieldIds,
         string $asset,
-        ?array $dynamicSchema = null
+        ?array $dynamicSchema = null,
+        ?string $createScope = null
     ): void {
         if (
             $optionsKey === ''
@@ -103,6 +105,18 @@ final class AutosaveViewConfigurator
             || array_filter($fieldIds, static fn ($id) => !\is_string($id) || $id === '') !== []
         ) {
             throw new \InvalidArgumentException('The Autosave view configuration is invalid.');
+        }
+
+        if (
+            $createScope !== null
+            && (
+                $createScope === ''
+                || \strlen($createScope) > 255
+                || preg_match('//u', $createScope) !== 1
+                || preg_match('/[\x00-\x1F\x7F]/', $createScope) === 1
+            )
+        ) {
+            throw new \InvalidArgumentException('The Autosave static creation scope is invalid.');
         }
 
         if (
@@ -156,6 +170,10 @@ final class AutosaveViewConfigurator
 
         if ($dynamicSchema !== null) {
             $configuration['dynamicSchema'] = $dynamicSchema;
+        }
+
+        if ($createScope !== null) {
+            $configuration['createScope'] = $createScope;
         }
 
         $this->document->addScriptOptions(

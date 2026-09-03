@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS "#__autosave_continuations" (
   "context" varchar(255) NOT NULL,
   "target_id" varchar(191) NOT NULL,
   "initialization_key" varchar(191) NOT NULL,
+  "create_scope" varchar(255),
   "created_at" timestamp without time zone NOT NULL,
   "last_activity_at" timestamp without time zone NOT NULL,
   PRIMARY KEY ("id"),

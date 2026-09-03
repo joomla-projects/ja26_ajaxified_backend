@@ -23,7 +23,7 @@ class HierarchicalMetadataProvidersTest extends UnitTestCase
         $rich = ['metakey' => '', 'title' => '', 'note' => '', 'description' => '', 'version_note' => '', 'metadesc' => ''];
 
         $this->assertSame(['com_categories.category', 'com_tags.tag', 'com_fields.group'], array_map(fn ($provider) => $provider->getContext(), $providers));
-        $this->assertSame(['title', 'note', 'description', 'version_note', 'metadesc', 'metakey'], array_keys($providers[0]->normalizePayload($rich, 1)));
+        $this->assertSame(['title', 'note', 'description', 'version_note', 'metadesc', 'metakey', 'parent_id'], array_keys($providers[0]->normalizePayload([...$rich, 'parent_id' => 1], 2)));
         $this->assertSame(['title', 'note', 'description', 'version_note', 'metadesc', 'metakey', 'parent_id'], array_keys($providers[1]->normalizePayload([...$rich, 'parent_id' => 1], 2)));
         $this->assertSame(['title' => '', 'note' => '', 'description' => ''], $providers[2]->normalizePayload(['description' => '', 'title' => '', 'note' => ''], 1));
 
@@ -33,7 +33,8 @@ class HierarchicalMetadataProvidersTest extends UnitTestCase
             }
         }
 
-        $this->assertFailure('invalid_payload', fn () => $providers[0]->normalizePayload($rich + ['parent_id' => '2'], 1));
+        $this->assertFailure('invalid_payload', fn () => $providers[0]->normalizePayload([...$rich, 'parent_id' => '2'], 2));
+        $this->assertFailure('invalid_payload', fn () => $providers[0]->normalizePayload([...$rich, 'parent_id' => 0], 2));
         $this->assertFailure('invalid_payload', fn () => $providers[1]->normalizePayload(array_diff_key([...$rich, 'parent_id' => 1], ['title' => true]), 2));
         $this->assertFailure('invalid_payload', fn () => $providers[1]->normalizePayload(array_replace([...$rich, 'parent_id' => 1], ['title' => []]), 2));
         $this->assertFailure('invalid_payload', fn () => $providers[2]->normalizePayload(['title' => "\xC3\x28", 'note' => '', 'description' => ''], 1));

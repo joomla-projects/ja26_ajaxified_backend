@@ -90,6 +90,7 @@ export class AutosaveRuntime {
     isHidden = () => globalThis.document?.visibilityState === 'hidden',
     abortControllerFactory = () => new AbortController(),
     createMode = null,
+    createScope = null,
     configuration = {},
   }) {
     if (!apiClient
@@ -124,10 +125,17 @@ export class AutosaveRuntime {
       && (createMode.subscribeConflict === undefined
         || typeof createMode.subscribeConflict === 'function');
 
+    const validCreateScope = createScope === null
+      || (typeof createScope === 'string'
+        && createScope.length > 0
+        && createScope.length <= 255
+        && !/[\x00-\x1F\x7F]/.test(createScope));
+
     if (typeof context !== 'string' || context.length === 0
       || !((typeof targetId === 'string' && targetId.length > 0)
         || (targetId === null && validCreateMode))
       || (validCreateMode && targetId !== createMode.targetId)
+      || !validCreateScope
       || !Number.isInteger(schemaVersion) || schemaVersion <= 0
       || !eventTarget || typeof eventTarget.dispatchEvent !== 'function'
       || typeof eventFactory !== 'function'
@@ -145,6 +153,7 @@ export class AutosaveRuntime {
     this.adapter = adapter;
     this.context = context;
     this.createMode = validCreateMode ? createMode : null;
+    this.createScope = validCreateScope && createScope !== null ? createScope : null;
     this.targetId = this.createMode?.targetId || targetId;
     this.schemaVersion = schemaVersion;
     this.eventTarget = eventTarget;
@@ -1036,7 +1045,13 @@ export class AutosaveRuntime {
 
   async initializeForCanonicalAction() {
     const initializationRequest = this.createMode
-      ? Object.freeze({ context: this.context, initialization_key: this.initializationKey })
+      ? Object.freeze(this.createScope
+        ? {
+          context: this.context,
+          initialization_key: this.initializationKey,
+          create_scope: this.createScope,
+        }
+        : { context: this.context, initialization_key: this.initializationKey })
       : Object.freeze({
         context: this.context,
         target_id: this.targetId,
@@ -1304,7 +1319,9 @@ export class AutosaveRuntime {
 
     try {
       const request = this.createMode
-        ? { context: this.context, initialization_key: this.initializationKey }
+        ? (this.createScope
+          ? { context: this.context, initialization_key: this.initializationKey, create_scope: this.createScope }
+          : { context: this.context, initialization_key: this.initializationKey })
         : { context: this.context, target_id: this.targetId, initialization_key: this.initializationKey };
       const identity = await (this.createMode
         ? this.apiClient.initializeCreate(request, { signal: controller.signal })

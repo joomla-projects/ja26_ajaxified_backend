@@ -35,14 +35,57 @@ final class AutosaveLifecycle
     ) {
     }
 
+    /**
+     * Initialize one owner-bound provisional draft for a new record.
+     *
+     * Providers that implement AutosaveStaticScopeProviderInterface require a bounded
+     * candidate creation scope, canonicalize it, authorize it and anchor the canonical
+     * result onto the continuation before the first generation can be preserved. Retrying
+     * with the same canonical scope is idempotent; retrying the same initialization key
+     * with a different canonical scope fails closed instead of mutating the lineage.
+     *
+     * @param   string|null  $candidateScope  Optional bounded candidate creation scope.
+     *
+     * @return  array{
+     *     continuation_id: string,
+     *     generation_id: string,
+     *     context: string,
+     *     target_id: string,
+     *     base_revision: string,
+     *     payload_schema_version: int
+     * }
+     *
+     * @throws  AutosaveException
+     *
+     * @since   __DEPLOY_VERSION__
+     */
     public function initializeCreate(
         User $user,
         string $context,
         string $initializationKey,
-        Date $now
+        Date $now,
+        ?string $candidateScope = null
     ): array {
-        $userId   = $this->validateInvocation($user, $now);
-        $provider = $this->resolveCreateProvider($context);
+        $userId         = $this->validateInvocation($user, $now);
+        $provider       = $this->resolveCreateProvider($context);
+        $static         = $this->staticScopeProvider($provider);
+        $canonicalScope = null;
+
+        if ($static === null && $candidateScope !== null) {
+            throw new AutosaveException('scope_unsupported', 'Static creation scope is not supported for this context.');
+        }
+
+        if ($static !== null) {
+            $staticStorage = $this->staticScopeStorage();
+
+            if ($candidateScope === null) {
+                throw new AutosaveException('scope_required', 'A static creation scope is required for this context.');
+            }
+
+            $canonicalScope = $static->canonicalizeStaticCreateScope($candidateScope);
+            $this->validateCreateScope($canonicalScope);
+            $static->authorizeStaticCreateScope($user, $canonicalScope, AutosaveOperation::InitializeCreate, null);
+        }
 
         try {
             AutosaveTargetIdentity::validateInitializationKey($initializationKey);
@@ -50,14 +93,21 @@ final class AutosaveLifecycle
             throw new AutosaveException('invalid_initialization_key', 'The Autosave initialization key is invalid.');
         }
         $this->validateCreateContractVersion($provider->getCreateContractVersion());
-        $provider->authorizeCreate($user, AutosaveOperation::InitializeCreate, null);
+
+        if ($static !== null) {
+            $this->validateCreateContractVersion($static->getStaticScopeContractVersion());
+        }
+
+        if ($static === null) {
+            $provider->authorizeCreate($user, AutosaveOperation::InitializeCreate, null);
+        }
 
         if ($this->siteSecret === '') {
             throw new \RuntimeException('The Autosave provisional target secret is unavailable.');
         }
 
         $targetId      = AutosaveTargetIdentity::provisional($userId, $context, $initializationKey, $this->siteSecret);
-        $baseRevision  = $this->getCreateBaseRevision($context, $provider);
+        $baseRevision  = $this->getCreateBaseRevision($context, $provider, $this->scopeContractVersion($static));
         $schemaVersion = $provider->getPayloadSchemaVersion();
         $identities    = $this->storage->initialize(
             $userId,
@@ -67,6 +117,22 @@ final class AutosaveLifecycle
             $initializationKey,
             $now
         );
+
+        if ($static !== null && $canonicalScope !== null) {
+            $previous = $staticStorage->bindContinuationStaticScope(
+                $userId,
+                $identities['continuation_id'],
+                $canonicalScope,
+                $now
+            );
+
+            if ($previous !== null && !hash_equals($previous, $canonicalScope)) {
+                throw new AutosaveException(
+                    'scope_conflict',
+                    'The initialization key is already bound to a different creation scope.'
+                );
+            }
+        }
 
         return [
             'continuation_id'        => $identities['continuation_id'],
@@ -160,14 +226,14 @@ final class AutosaveLifecycle
         $provider   = $this->resolver->resolve($generation['context']);
 
         if (AutosaveTargetIdentity::isProvisional($generation['target_id'])) {
-            $createProvider    = $this->requireCreateGeneration($provider, $generation);
+            $this->requireCreateGeneration($provider, $generation);
 
             if ($provider->getPayloadSchemaVersion() !== $schemaVersion) {
                 throw new AutosaveException('unsupported_schema_version', 'The Autosave payload schema version is not supported.');
             }
 
             $normalizedPayload = $provider->normalizePayload($payload, $schemaVersion);
-            $createProvider->authorizeCreate($user, AutosaveOperation::Preserve, $normalizedPayload);
+            $this->authorizeProvisional($user, $provider, $generation['continuation_id'], AutosaveOperation::Preserve, $normalizedPayload);
         } else {
             $provider->authorize($user, $generation['target_id'], AutosaveOperation::Preserve);
 
@@ -225,7 +291,11 @@ final class AutosaveLifecycle
 
         if (AutosaveTargetIdentity::isProvisional($targetId)) {
             $createProvider = $this->requireCreateProvider($provider);
-            $createProvider->authorizeCreate($user, AutosaveOperation::Detect, null);
+            $static         = $this->staticScopeProvider($createProvider);
+
+            if ($static === null) {
+                $createProvider->authorizeCreate($user, AutosaveOperation::Detect, null);
+            }
         } elseif (AutosaveTargetIdentity::isProvisionalNamespace($targetId)) {
             throw new AutosaveException('invalid_target', 'The Autosave target is invalid.');
         } else {
@@ -244,8 +314,12 @@ final class AutosaveLifecycle
             return null;
         }
 
+        if (isset($createProvider, $static)) {
+            $this->authorizeProvisional($user, $provider, $generation['continuation_id'], AutosaveOperation::Detect, null);
+        }
+
         $currentRevision = isset($createProvider)
-            ? $this->getCreateBaseRevision($context, $createProvider)
+            ? $this->getCreateBaseRevision($context, $createProvider, $this->scopeContractVersion($this->staticScopeProvider($createProvider)))
             : $provider->getBaseRevision($canonicalTarget);
 
         return [
@@ -293,9 +367,13 @@ final class AutosaveLifecycle
         $provider   = $this->resolver->resolve($generation['context']);
 
         if (AutosaveTargetIdentity::isProvisional($generation['target_id'])) {
-            $createProvider = $this->requireCreateGeneration($provider, $generation);
-            $createProvider->authorizeCreate($user, AutosaveOperation::Read, $generation['payload']);
-            $currentRevision = $this->getCreateBaseRevision($generation['context'], $createProvider);
+            $createProvider  = $this->requireCreateGeneration($provider, $generation);
+            $this->authorizeProvisional($user, $provider, $generation['continuation_id'], AutosaveOperation::Read, $generation['payload']);
+            $currentRevision = $this->getCreateBaseRevision(
+                $generation['context'],
+                $createProvider,
+                $this->scopeContractVersion($this->staticScopeProvider($createProvider))
+            );
         } else {
             $provider->authorize($user, $generation['target_id'], AutosaveOperation::Read);
             $currentRevision = $provider->getBaseRevision($generation['target_id']);
@@ -343,7 +421,11 @@ final class AutosaveLifecycle
 
         if (AutosaveTargetIdentity::isProvisional($targetId)) {
             $createProvider      = $this->requireCreateProvider($provider);
-            $currentBaseRevision = $this->getCreateBaseRevision($context, $createProvider);
+            $currentBaseRevision = $this->getCreateBaseRevision(
+                $context,
+                $createProvider,
+                $this->scopeContractVersion($this->staticScopeProvider($createProvider))
+            );
 
             if (!hash_equals($currentBaseRevision, $expectedBaseRevision)) {
                 throw new AutosaveException('base_revision_conflict', 'The create contract changed before preparation.');
@@ -354,7 +436,7 @@ final class AutosaveLifecycle
             }
 
             $normalizedPayload = $provider->normalizePayload($payload, $schemaVersion);
-            $createProvider->authorizeCreate($user, AutosaveOperation::PrepareCanonicalAction, $normalizedPayload);
+            $this->authorizeProvisional($user, $provider, $continuationId, AutosaveOperation::PrepareCanonicalAction, $normalizedPayload);
 
             return $this->storage->prepareCanonicalAction(
                 $userId,
@@ -447,7 +529,11 @@ final class AutosaveLifecycle
 
         if (AutosaveTargetIdentity::isProvisional($targetId)) {
             $createProvider = $this->requireCreateProvider($provider);
-            $createProvider->authorizeCreate($user, AutosaveOperation::QueryCanonicalAction, null);
+            $static         = $this->staticScopeProvider($createProvider);
+
+            if ($static === null) {
+                $createProvider->authorizeCreate($user, AutosaveOperation::QueryCanonicalAction, null);
+            }
         } elseif (AutosaveTargetIdentity::isProvisionalNamespace($targetId)) {
             throw new AutosaveException('invalid_target', 'The Autosave target is invalid.');
         } else {
@@ -455,13 +541,19 @@ final class AutosaveLifecycle
             $provider->authorize($user, $canonicalTarget, AutosaveOperation::QueryCanonicalAction);
         }
 
-        return $this->storage->inspectCanonicalAction(
+        $outcome = $this->storage->inspectCanonicalAction(
             $userId,
             $operationId,
             $context,
             $canonicalTarget,
             $now
         );
+
+        if (isset($createProvider, $static)) {
+            $this->authorizeProvisional($user, $provider, $outcome['continuation_id'], AutosaveOperation::QueryCanonicalAction, null);
+        }
+
+        return $outcome;
     }
 
     /**
@@ -518,10 +610,24 @@ final class AutosaveLifecycle
             $operationId,
             $context,
             $intent,
-            $this->getCreateBaseRevision($context, $provider),
+            $this->getCreateBaseRevision($context, $provider, $this->scopeContractVersion($this->staticScopeProvider($provider))),
             $now
         );
-        $provider->authorizeCreate($user, AutosaveOperation::PrepareCanonicalAction, $verified['payload']);
+
+        if ($this->staticScopeProvider($provider) !== null) {
+            $staticStorage = $this->staticScopeStorage();
+            $action        = $this->storage->inspectCanonicalAction(
+                $userId,
+                $operationId,
+                $context,
+                AutosaveTargetIdentity::requireProvisional((string) $verified['target_id']),
+                $now
+            );
+            $this->authorizeProvisional($user, $provider, $action['continuation_id'], AutosaveOperation::PrepareCanonicalAction, $verified['payload']);
+        } else {
+            $provider->authorizeCreate($user, AutosaveOperation::PrepareCanonicalAction, $verified['payload']);
+        }
+
         unset($verified['payload']);
 
         return $verified;
@@ -547,6 +653,28 @@ final class AutosaveLifecycle
             ? AutosaveTargetIdentity::requireProvisional($targetId)
             : $provider->canonicalizeTargetId($targetId);
         $canonicalFinal  = $provider->canonicalizeTargetId($finalTargetId);
+
+        if (AutosaveTargetIdentity::isProvisional($canonicalTarget)) {
+            $static = $this->staticScopeProvider($this->requireCreateProvider($provider));
+
+            if ($static !== null) {
+                $scopeStorage = $this->staticScopeStorage();
+                $action       = $this->storage->inspectCanonicalAction(
+                    $userId,
+                    $operationId,
+                    $context,
+                    $canonicalTarget,
+                    $now
+                );
+                $scope = $scopeStorage->getContinuationStaticScope($userId, $action['continuation_id']);
+
+                if ($scope === null) {
+                    throw new AutosaveException('scope_required', 'The static creation scope is not bound.');
+                }
+
+                $static->verifyFinalTargetStaticScope($canonicalFinal, $scope);
+            }
+        }
 
         return $this->storage->finalizeCanonicalActionSuccess(
             $userId,
@@ -647,7 +775,16 @@ final class AutosaveLifecycle
         AutosaveTargetIdentity::requireProvisional($generation['target_id']);
         $createProvider = $this->requireCreateProvider($provider);
 
-        if (!hash_equals($generation['base_revision'], $this->getCreateBaseRevision($generation['context'], $createProvider))) {
+        if (
+            !hash_equals(
+                $generation['base_revision'],
+                $this->getCreateBaseRevision(
+                    $generation['context'],
+                    $createProvider,
+                    $this->scopeContractVersion($this->staticScopeProvider($createProvider))
+                )
+            )
+        ) {
             throw new AutosaveException('create_contract_conflict', 'The new-record Autosave contract changed.');
         }
 
@@ -661,15 +798,101 @@ final class AutosaveLifecycle
         }
     }
 
+    /**
+     * Resolve the optional immutable static scope capability of a create provider.
+     */
+    private function staticScopeProvider(
+        AutosaveCreateProviderInterface&AutosaveProviderInterface $provider
+    ): ?AutosaveStaticScopeProviderInterface {
+        return $provider instanceof AutosaveStaticScopeProviderInterface ? $provider : null;
+    }
+
+    /**
+     * Require the optional persistence capability for immutable static scope.
+     */
+    private function staticScopeStorage(): AutosaveStaticScopeStorageInterface
+    {
+        if (!$this->storage instanceof AutosaveStaticScopeStorageInterface) {
+            throw new AutosaveException('static_scope_unsupported', 'Static creation scope is unavailable.');
+        }
+
+        return $this->storage;
+    }
+
+    /**
+     * Authorize one provisional operation against the anchored static scope when the
+     * provider requires one, otherwise preserve the plain create authorization path.
+     */
+    private function authorizeProvisional(
+        User $user,
+        AutosaveProviderInterface $provider,
+        string $continuationId,
+        AutosaveOperation $operation,
+        ?array $normalizedPayload
+    ): void {
+        $createProvider = $this->requireCreateProvider($provider);
+        $static         = $this->staticScopeProvider($createProvider);
+
+        if ($static === null) {
+            $createProvider->authorizeCreate($user, $operation, $normalizedPayload);
+
+            return;
+        }
+
+        $staticStorage = $this->staticScopeStorage();
+        $scope         = $staticStorage->getContinuationStaticScope((int) $user->id, $continuationId);
+
+        if ($scope === null) {
+            throw new AutosaveException('scope_required', 'The static creation scope is not bound.');
+        }
+
+        $static->authorizeStaticCreateScope($user, $scope, $operation, $normalizedPayload);
+    }
+
+    /**
+     * Structural guard for one canonical scope before it can be anchored.
+     */
+    private function validateCreateScope(string $canonicalScope): void
+    {
+        if (
+            $canonicalScope === ''
+            || \strlen($canonicalScope) > 255
+            || preg_match('//u', $canonicalScope) !== 1
+            || preg_match('/[\x00-\x1F\x7F]/', $canonicalScope) === 1
+        ) {
+            throw new AutosaveException('invalid_scope', 'The Autosave static creation scope is invalid.');
+        }
+    }
+
+    private function scopeContractVersion(?AutosaveStaticScopeProviderInterface $static): ?string
+    {
+        if ($static === null) {
+            return null;
+        }
+
+        $version = $static->getStaticScopeContractVersion();
+        $this->validateCreateContractVersion($version);
+
+        return $version;
+    }
+
     private function getCreateBaseRevision(
         string $context,
-        AutosaveCreateProviderInterface&AutosaveProviderInterface $provider
+        AutosaveCreateProviderInterface&AutosaveProviderInterface $provider,
+        ?string $staticScopeVersion = null
     ): string {
-        $contract = json_encode(
-            ['context' => $context, 'schema' => $provider->getPayloadSchemaVersion(), 'create' => $provider->getCreateContractVersion()],
-            JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES
-        );
+        $contract = [
+            'context' => $context,
+            'schema'  => $provider->getPayloadSchemaVersion(),
+            'create'  => $provider->getCreateContractVersion(),
+        ];
 
-        return 'autosave:create:v1:' . hash('sha256', "joomla.autosave.create-revision.v1\0" . $contract);
+        if ($staticScopeVersion !== null) {
+            $contract['scope'] = $staticScopeVersion;
+        }
+
+        $encoded = json_encode($contract, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+
+        return 'autosave:create:v1:' . hash('sha256', "joomla.autosave.create-revision.v1\0" . $encoded);
     }
 }

@@ -60,14 +60,27 @@ final class AutosaveController
 
     private function initializeCreate(array $request, User $user, Date $now): array
     {
-        $this->requireExactKeys($request, ['context', 'initialization_key']);
         $this->requireStrings($request, ['context', 'initialization_key']);
+
+        if (\array_key_exists('create_scope', $request)) {
+            $this->requireExactKeys($request, ['context', 'initialization_key', 'create_scope']);
+
+            if (!\is_string($request['create_scope']) || $request['create_scope'] === '') {
+                throw new \InvalidArgumentException('The Autosave request is invalid.');
+            }
+
+            $candidateScope = $request['create_scope'];
+        } else {
+            $this->requireExactKeys($request, ['context', 'initialization_key']);
+            $candidateScope = null;
+        }
 
         return $this->lifecycle->initializeCreate(
             $user,
             $request['context'],
             $request['initialization_key'],
-            $now
+            $now,
+            $candidateScope
         );
     }
 

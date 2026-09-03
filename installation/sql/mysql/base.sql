@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS `#__autosave_continuations` (
   `context` varchar(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `target_id` varbinary(764) NOT NULL,
   `initialization_key` varbinary(764) NOT NULL,
+  `create_scope` varbinary(1020),
   `created_at` datetime NOT NULL,
   `last_activity_at` datetime NOT NULL,
   PRIMARY KEY (`id`),

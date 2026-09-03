@@ -10,9 +10,11 @@
 
 namespace Joomla\Component\Categories\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
+use Joomla\CMS\Autosave\AutosaveStaticScopeProviderInterface;
 use Joomla\CMS\User\User;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Database\ParameterType;
@@ -22,7 +24,10 @@ use Joomla\String\StringHelper;
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class CategoryAutosaveProvider implements AutosaveProviderInterface
+final class CategoryAutosaveProvider implements
+    AutosaveProviderInterface,
+    AutosaveCreateProviderInterface,
+    AutosaveStaticScopeProviderInterface
 {
     private const LIMITS = [
         'title'        => 255,
@@ -32,6 +37,8 @@ final class CategoryAutosaveProvider implements AutosaveProviderInterface
         'metadesc'     => 300,
         'metakey'      => 1024,
     ];
+    private const MAXIMUM_ID = '2147483647';
+    private const ROOT_ID    = 1;
 
     public function __construct(private readonly DatabaseInterface $db)
     {
@@ -42,16 +49,98 @@ final class CategoryAutosaveProvider implements AutosaveProviderInterface
         return 'com_categories.category';
     }
 
+    public function getCreateContractVersion(): string
+    {
+        return 'category-create-v1';
+    }
+
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        // A Category can only be authorized against its anchored owning extension. The
+        // lifecycle routes every provisional operation of this provider through
+        // authorizeStaticCreateScope(); reaching this method means no anchored scope is
+        // available, so it fails closed instead of guessing an extension.
+        throw new AutosaveException('scope_required', 'A Category requires an anchored owning extension.');
+    }
+
+    public function getStaticScopeContractVersion(): string
+    {
+        return 'category-scope-v1';
+    }
+
+    public function canonicalizeStaticCreateScope(mixed $candidateScope): string
+    {
+        if (!\is_string($candidateScope)) {
+            throw $this->invalidScope();
+        }
+
+        // The owning extension is a plain component name. The bare com_categories default
+        // is the "nonsense situation" the native views refuse to render.
+        if (preg_match('/^com_[a-z][a-z0-9_]{0,48}$/D', $candidateScope) !== 1 || $candidateScope === 'com_categories') {
+            throw $this->invalidScope();
+        }
+
+        return $candidateScope;
+    }
+
+    public function authorizeStaticCreateScope(User $user, string $canonicalScope, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        // Mirrors CategoryController::allowAdd(): creation is allowed on the extension
+        // root asset or when the user may create in any category of that extension. The
+        // extension is the anchored scope, never the browser request. Every provisional
+        // operation re-runs this check so a revoked permission fails closed.
+        if (
+            !$user->authorise('core.create', $canonicalScope)
+            && \count($user->getAuthorisedCategories($canonicalScope, 'core.create')) === 0
+        ) {
+            throw new AutosaveException('forbidden', 'A Category cannot be created in this extension.');
+        }
+
+        // Authored parent relations must stay inside the anchored tree: the global ROOT
+        // row is a legal parent for every extension, any other parent must be an existing
+        // Category of the anchored extension. This runs after normalization and before any
+        // storage mutation on every generation, so a parent moved to another extension or
+        // deleted mid-lineage fails closed.
+        if ($normalizedPayload === null) {
+            return;
+        }
+
+        if (!\is_array($normalizedPayload) || !\array_key_exists('parent_id', $normalizedPayload)) {
+            throw $this->invalidPayload();
+        }
+
+        $parentId = (int) $normalizedPayload['parent_id'];
+
+        if ($parentId === self::ROOT_ID) {
+            return;
+        }
+
+        $parent = $this->load((string) $parentId);
+
+        if ($parent === null || $parent->extension !== $canonicalScope) {
+            throw $this->invalidPayload();
+        }
+    }
+
+    public function verifyFinalTargetStaticScope(string $finalTargetId, string $canonicalScope): void
+    {
+        $record = $this->load($this->canonicalizeTargetId($finalTargetId));
+
+        if ($record === null || $record->extension !== $canonicalScope) {
+            throw new AutosaveException('scope_mismatch', 'The saved Category does not belong to the anchored extension.');
+        }
+    }
+
     public function getPayloadSchemaVersion(): int
     {
-        return 1;
+        return 2;
     }
 
     public function canonicalizeTargetId(string $targetId): string
     {
         if (
             preg_match('/^[1-9][0-9]{0,9}$/D', $targetId) !== 1
-            || (\strlen($targetId) === 10 && strcmp($targetId, '2147483647') > 0)
+            || (\strlen($targetId) === 10 && strcmp($targetId, self::MAXIMUM_ID) > 0)
         ) {
             throw new AutosaveException('invalid_target', 'The Category target is invalid.');
         }
@@ -102,10 +191,11 @@ final class CategoryAutosaveProvider implements AutosaveProviderInterface
 
     public function normalizePayload(mixed $payload, int $schemaVersion): array
     {
-        $required = array_fill_keys(array_keys(self::LIMITS), true);
+        $required              = array_fill_keys(array_keys(self::LIMITS), true);
+        $required['parent_id'] = true;
 
         if (
-            $schemaVersion !== 1 || !\is_array($payload) || array_is_list($payload)
+            $schemaVersion !== 2 || !\is_array($payload) || array_is_list($payload)
             || array_diff_key($payload, $required) || array_diff_key($required, $payload)
         ) {
             throw $this->invalidPayload();
@@ -120,11 +210,22 @@ final class CategoryAutosaveProvider implements AutosaveProviderInterface
             }
         }
 
+        // parent_id is a bounded integer: the global ROOT row (1) or an existing Category.
+        if (
+            !\is_int($payload['parent_id'])
+            || $payload['parent_id'] < self::ROOT_ID
+            || $payload['parent_id'] > (int) self::MAXIMUM_ID
+        ) {
+            throw $this->invalidPayload();
+        }
+
         $normalized = [];
 
-        foreach (array_keys($required) as $key) {
+        foreach (array_keys(self::LIMITS) as $key) {
             $normalized[$key] = $payload[$key];
         }
+
+        $normalized['parent_id'] = $payload['parent_id'];
 
         return $normalized;
     }
@@ -148,5 +249,10 @@ final class CategoryAutosaveProvider implements AutosaveProviderInterface
     private function invalidPayload(): AutosaveException
     {
         return new AutosaveException('invalid_payload', 'The Category draft payload is invalid.');
+    }
+
+    private function invalidScope(): AutosaveException
+    {
+        return new AutosaveException('invalid_scope', 'The Category creation scope is invalid.');
     }
 }
