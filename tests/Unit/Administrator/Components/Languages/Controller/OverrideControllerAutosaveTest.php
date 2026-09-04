@@ -4,6 +4,7 @@ namespace Joomla\Tests\Unit\Administrator\Components\Languages\Controller;
 
 use Joomla\CMS\Application\CMSApplicationInterface;
 use Joomla\CMS\Autosave\AutosaveCanonicalActionServiceInterface;
+use Joomla\CMS\Autosave\AutosaveCompositeCanonicalIdentityInterface;
 use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\MVC\Controller\BaseController;
 use Joomla\CMS\User\User;
@@ -19,6 +20,7 @@ class OverrideControllerAutosaveTest extends UnitTestCase
         $reflection = new \ReflectionClass(OverrideController::class);
 
         $this->assertContains(AutosaveFormControllerTrait::class, $reflection->getTraitNames());
+        $this->assertTrue($reflection->implementsInterface(AutosaveCompositeCanonicalIdentityInterface::class));
         $this->assertSame('com_languages.override', $reflection->getConstant('AUTOSAVE_CONTEXT'));
         $this->assertSame(
             ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new'],

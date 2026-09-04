@@ -10,7 +10,8 @@ class HtmlViewAutosaveTest extends UnitTestCase
     {
         $source = file_get_contents(JPATH_ADMINISTRATOR . '/components/com_finder/src/View/Filter/HtmlView.php');
         $this->assertIsString($source);
-        $this->assertStringContainsString("\$this->getLayout() !== 'edit' || (int) \$this->item->filter_id <= 0", $source);
+        $this->assertStringContainsString("\$this->getLayout() !== 'edit'", $source);
+        $this->assertStringContainsString('authorizeCreate', $source);
         foreach (['title', 'alias', 'created', 'created_by', 'created_by_alias', 'state', 'w1', 'd1', 'w2', 'd2'] as $field) {
             $this->assertStringContainsString("'{$field}'", $source);
         }

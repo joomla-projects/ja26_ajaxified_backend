@@ -102,22 +102,34 @@ trait AutosaveFormControllerTrait
             return $nativeSave();
         }
 
-        // Match FormController's route and table identities without allowing
-        // its integer default/filtering to collapse missing or malformed input
-        // into a genuine create request.
-        $routeIdentity  = $this->classifyAutosaveNumericIdentity($this->input->get($urlVar ?: 'id', null, 'raw'));
-        $routeId        = $routeIdentity['id'];
-        $targetId       = $routeIdentity['state'] === 'positive' ? (string) $routeId : '';
-        $submitted      = $this->input->post->get('jform', [], 'array');
-        $primaryKey     = $this->resolveAutosavePrimaryKey($key);
-        $submittedValue = \is_array($submitted) && $primaryKey !== null && \array_key_exists($primaryKey, $submitted)
-            ? $submitted[$primaryKey]
-            : null;
-        $submittedIdentity = $this->classifyAutosaveNumericIdentity($submittedValue);
-        $identityMatches   = $primaryKey !== null
-            && $this->autosaveCanonicalIdentitiesMatch($routeIdentity, $submittedIdentity);
-        $service        = $this->app->bootComponent('com_autosave');
-        $now            = new Date('now', 'UTC');
+        // Controllers with a composite/component-owned identity resolve their own
+        // route target through resolveAutosaveCanonicalTarget(): a canonical
+        // composite identity for an existing record, or an empty string for a
+        // genuine new record. Numeric components keep the strict route/submitted
+        // identity gate below unchanged.
+        if ($this instanceof AutosaveCompositeCanonicalIdentityInterface) {
+            $targetId        = $this->resolveAutosaveCanonicalTarget($urlVar ?: 'id');
+            $createEligible  = $targetId === '';
+            $identityMatches = true;
+        } else {
+            // Match FormController's route and table identities without allowing
+            // its integer default/filtering to collapse missing or malformed input
+            // into a genuine create request.
+            $routeIdentity     = $this->classifyAutosaveNumericIdentity($this->input->get($urlVar ?: 'id', null, 'raw'));
+            $routeId           = $routeIdentity['id'];
+            $targetId          = $routeIdentity['state'] === 'positive' ? (string) $routeId : '';
+            $createEligible    = $routeIdentity['state'] === 'zero';
+            $submitted         = $this->input->post->get('jform', [], 'array');
+            $primaryKey        = $this->resolveAutosavePrimaryKey($key);
+            $submittedValue    = \is_array($submitted) && $primaryKey !== null && \array_key_exists($primaryKey, $submitted)
+                ? $submitted[$primaryKey]
+                : null;
+            $submittedIdentity = $this->classifyAutosaveNumericIdentity($submittedValue);
+            $identityMatches   = $primaryKey !== null
+                && $this->autosaveCanonicalIdentitiesMatch($routeIdentity, $submittedIdentity);
+        }
+        $service = $this->app->bootComponent('com_autosave');
+        $now     = new Date('now', 'UTC');
         $this->app->getLanguage()->load('com_autosave', JPATH_ADMINISTRATOR);
 
         if (
@@ -127,7 +139,7 @@ trait AutosaveFormControllerTrait
             || $intent !== $expectedIntent
             || !$identityMatches
             || !$service instanceof AutosaveCanonicalActionServiceInterface
-            || ($routeIdentity['state'] === 'zero' && !$service instanceof AutosaveCreateCanonicalActionServiceInterface)
+            || ($createEligible && !$service instanceof AutosaveCreateCanonicalActionServiceInterface)
         ) {
             $this->setMessage(Text::_('COM_AUTOSAVE_CANONICAL_ACTION_INVALID'), 'error');
 
@@ -139,7 +151,7 @@ trait AutosaveFormControllerTrait
         }
 
         try {
-            if ($routeIdentity['state'] === 'zero') {
+            if ($createEligible) {
                 $verified = $service->verifyCreateCanonicalAction(
                     $this->app->getIdentity(),
                     $operationId,

@@ -15,7 +15,7 @@ class ContactAutosaveProviderTest extends UnitTestCase
     {
         $provider = new ContactAutosaveProvider($this->databaseReturning($this->contact()));
         $this->assertSame('com_contact.contact', $provider->getContext());
-        $this->assertSame(1, $provider->getPayloadSchemaVersion());
+        $this->assertSame(2, $provider->getPayloadSchemaVersion());
         $this->assertSame('2147483647', $provider->canonicalizeTargetId('2147483647'));
         $this->assertTrue($provider->targetExists('42'));
 
@@ -37,7 +37,7 @@ class ContactAutosaveProviderTest extends UnitTestCase
         $payload['publish_up'] = 'Tomorrow';
         $payload['image']      = 'images/contact.jpg#joomlaImage://local-images/contact.jpg';
 
-        $this->assertSame($payload, $provider->normalizePayload($payload, 1));
+        $this->assertSame($payload, $provider->normalizePayload($payload, 2));
     }
 
     public function testRejectsMissingExtraDynamicServerMalformedAndOverBoundValuesWithoutEchoingPii(): void
@@ -57,7 +57,7 @@ class ContactAutosaveProviderTest extends UnitTestCase
         ];
 
         foreach ($invalid as $candidate) {
-            $error = $this->failure(fn () => $provider->normalizePayload($candidate, 1));
+            $error = $this->failure(fn () => $provider->normalizePayload($candidate, 2));
             $this->assertSame('invalid_payload', $error->getErrorCode());
             $this->assertStringNotContainsString('secret', $error->getMessage());
             $this->assertStringNotContainsString('person@example.test', $error->getMessage());
@@ -69,11 +69,11 @@ class ContactAutosaveProviderTest extends UnitTestCase
         $provider = new ContactAutosaveProvider($this->databaseReturning());
 
         foreach (['', 'images/contact.jpg', 'https://cdn.example.test/contact.jpg'] as $image) {
-            $this->assertSame($image, $provider->normalizePayload([...$this->payload(), 'image' => $image], 1)['image']);
+            $this->assertSame($image, $provider->normalizePayload([...$this->payload(), 'image' => $image], 2)['image']);
         }
 
         foreach (['blob:temporary', 'data:image/png;base64,AA', 'file:///tmp/a', '/images/a.jpg', '//example.test/a', 'https://user@example.test/a'] as $image) {
-            $this->assertSame('invalid_payload', $this->failure(fn () => $provider->normalizePayload([...$this->payload(), 'image' => $image], 1))->getErrorCode());
+            $this->assertSame('invalid_payload', $this->failure(fn () => $provider->normalizePayload([...$this->payload(), 'image' => $image], 2))->getErrorCode());
         }
     }
 
@@ -108,12 +108,15 @@ class ContactAutosaveProviderTest extends UnitTestCase
 
     private function payload(): array
     {
-        return array_fill_keys([
+        $payload = array_fill_keys([
             'name', 'alias', 'version_note', 'misc', 'image', 'con_position', 'email_to', 'address',
             'suburb', 'state', 'postcode', 'country', 'telephone', 'mobile', 'fax', 'webpage',
             'sortname1', 'sortname2', 'sortname3', 'publish_up', 'publish_up_alt', 'publish_down',
             'publish_down_alt', 'metakey', 'metadesc',
         ], '');
+        $payload['catid'] = 3;
+
+        return $payload;
     }
 
     private function contact(array $replace = []): object

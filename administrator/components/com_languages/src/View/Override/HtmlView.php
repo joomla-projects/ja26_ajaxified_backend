@@ -10,6 +10,9 @@
 
 namespace Joomla\Component\Languages\Administrator\View\Override;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
+use Joomla\CMS\Autosave\AutosaveStaticScopeProviderInterface;
 use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -114,17 +117,36 @@ class HtmlView extends BaseHtmlView
         $app          = Factory::getApplication();
         $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
         $configurator->disable('com_languages.autosave.override');
-        if ($this->getLayout() !== 'edit' || empty($this->item->key)) {
+        if ($this->getLayout() !== 'edit') {
             return;
         }
 
         $client   = (string) $this->state->get('filter.client', 'site');
         $language = (string) $this->state->get('filter.language', 'en-GB');
+        $target   = null;
+        $scope    = null;
+
         try {
             $provider = $app->bootComponent('com_languages')->getAutosaveProvider('com_languages.override');
-            $target   = $provider->canonicalizeTargetId(OverrideAutosaveProvider::target($client, $language, (string) $this->item->key));
-            if (!$provider->targetExists($target)) {
-                return;
+
+            if (empty($this->item->key)) {
+                // Genuine new record: the immutable client/language scope is
+                // anchored before the first draft. The browser only transports
+                // the canonical scope candidate; the provider re-canonicalizes
+                // and re-authorizes it on every provisional operation.
+                if (!$provider instanceof AutosaveCreateProviderInterface || !$provider instanceof AutosaveStaticScopeProviderInterface) {
+                    return;
+                }
+
+                $scope = $provider->canonicalizeStaticCreateScope($client . '|' . $language);
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+                $provider->authorizeStaticCreateScope($app->getIdentity(), $scope, AutosaveOperation::InitializeCreate, null);
+            } else {
+                $target = $provider->canonicalizeTargetId(OverrideAutosaveProvider::target($client, $language, (string) $this->item->key));
+
+                if (!$provider->targetExists($target)) {
+                    return;
+                }
             }
         } catch (\Throwable) {
             return;
@@ -135,7 +157,7 @@ class HtmlView extends BaseHtmlView
             return;
         }
 
-        $configurator->configure($provider, $target, 'com_languages.autosave.override', 'override-form', array_map(static fn ($field) => $field->id, $fields), 'com_languages.override-autosave');
+        $configurator->configure($provider, $target, 'com_languages.autosave.override', 'override-form', array_map(static fn ($field) => $field->id, $fields), 'com_languages.override-autosave', null, $scope);
         $this->autosaveEnabled = true;
     }
     /**
