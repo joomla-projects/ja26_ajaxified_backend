@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Contact\Administrator\View\Contact;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -109,23 +111,36 @@ class HtmlView extends FormView
         $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
         $configurator->disable('com_contact.autosave.contact');
 
-        if (!\in_array($this->getLayout(), ['edit', 'modal'], true) || (int) $this->item->id <= 0) {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
 
+        $target = null;
+
         try {
             $provider = $app->bootComponent('com_contact')->getAutosaveProvider('com_contact.contact');
-            $target   = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+            $itemId   = (int) $this->item->id;
 
-            if (!$provider->targetExists($target)) {
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+
+                if (!$provider->targetExists($target)) {
+                    return;
+                }
+            } elseif ($itemId !== 0 || $this->getLayout() !== 'edit' || !$provider instanceof AutosaveCreateProviderInterface) {
                 return;
+            } else {
+                // Genuine new record: authorize the blank form now; every later
+                // provisional operation re-runs authorization against the anchored
+                // category carried by the normalized draft.
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
             }
         } catch (\Throwable) {
             return;
         }
 
         $names = [
-            'name', 'alias', 'version_note', 'misc', 'image', 'con_position', 'email_to', 'address',
+            'name', 'alias', 'catid', 'version_note', 'misc', 'image', 'con_position', 'email_to', 'address',
             'suburb', 'state', 'postcode', 'country', 'telephone', 'mobile', 'fax', 'webpage',
             'sortname1', 'sortname2', 'sortname3', 'publish_up', 'publish_down', 'metakey', 'metadesc',
         ];

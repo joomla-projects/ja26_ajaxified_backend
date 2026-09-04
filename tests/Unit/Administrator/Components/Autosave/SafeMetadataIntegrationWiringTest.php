@@ -45,7 +45,7 @@ class SafeMetadataIntegrationWiringTest extends UnitTestCase
             'stage'    => ['com_workflow', 'stage', 'com_workflow.stage', 'workflow-form', ['title', 'description']],
             'language' => ['com_languages', 'language', 'com_languages.language', 'language-form', ['title', 'title_native', 'description', 'metadesc', 'sitename']],
             'group'    => ['com_users', 'group', 'com_users.group', 'group-form', ['title']],
-            'level'    => ['com_users', 'level', 'com_users.level', 'level-form', ['title']],
+            'level'    => ['com_users', 'level', 'com_users.level', 'level-form', ['title', 'rules']],
             'note'     => ['com_users', 'note', 'com_users.note', 'note-form', ['subject', 'body']],
         ];
     }

@@ -16,14 +16,14 @@
       "name": "com_users.level-autosave",
       "type": "script",
       "uri": "com_users/level-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller"],
+      "dependencies": ["com_autosave.integration-controller", "com_autosave.create-binding"],
       "attributes": {"type": "module"}
     },
     {
       "name": "com_users.note-autosave",
       "type": "script",
       "uri": "com_users/note-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller", "editor-api"],
+      "dependencies": ["com_autosave.integration-controller", "com_autosave.create-binding", "editor-api"],
       "attributes": {"type": "module"}
     },
     {

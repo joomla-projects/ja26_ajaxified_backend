@@ -15,6 +15,8 @@ const ORDINARY_KEYS = Object.freeze([
   'sortname3', 'metakey', 'metadesc',
 ]);
 const DATE_KEYS = Object.freeze(['publish_up', 'publish_down']);
+const RELATION_KEYS = Object.freeze(['catid']);
+const PAYLOAD_KEYS = Object.freeze([...STRING_KEYS, ...RELATION_KEYS]);
 const LIMITS = Object.freeze({
   name: 255, alias: 255, version_note: 255, misc: 65535, image: 255, con_position: 255,
   email_to: 255, address: 65535, suburb: 100, state: 100, postcode: 100, country: 100,
@@ -33,6 +35,18 @@ const normalizeCanonicalId = (value) => {
   }
   return candidate;
 };
+const normalizeAutosaveTarget = (value) => (value === null
+  || (typeof value === 'string' && /^p1:[a-f0-9]{64}$/.test(value))
+  ? value
+  : normalizeCanonicalId(value));
+
+const parseCatid = (value) => {
+  if (typeof value !== 'string' || !/^[1-9][0-9]{0,9}$/.test(value) || Number(value) > 2147483647) {
+    throw new TypeError('The Contact Autosave category is invalid.');
+  }
+
+  return Number(value);
+};
 
 const isStableMediaReference = (reference) => {
   if (reference === '') return true;
@@ -48,38 +62,54 @@ const isStableMediaReference = (reference) => {
 };
 
 const validatePayload = (payload) => {
-  if (!isPlainObject(payload) || Object.keys(payload).length !== STRING_KEYS.length
-    || !STRING_KEYS.every((key) => Object.hasOwn(payload, key) && typeof payload[key] === 'string'
+  if (!isPlainObject(payload) || Object.keys(payload).length !== PAYLOAD_KEYS.length
+    || !PAYLOAD_KEYS.every((key) => Object.hasOwn(payload, key))
+    || !STRING_KEYS.every((key) => typeof payload[key] === 'string'
       && Array.from(payload[key]).length <= LIMITS[key])
+    || !Number.isInteger(payload.catid) || payload.catid < 1 || payload.catid > 2147483647
     || !isStableMediaReference(payload.image)) {
     throw new TypeError('The Contact Autosave recovery payload is invalid.');
   }
-  return Object.fromEntries(STRING_KEYS.map((key) => [key, payload[key]]));
+  return Object.fromEntries(PAYLOAD_KEYS.map((key) => [key, payload[key]]));
 };
 
 export default class ContactAutosaveAdapter {
   constructor({ descriptor, form, fields, editor, getCurrentEditor, mediaField, eventFactory = (type) => new Event(type, { bubbles: true }) }) {
     if (!isPlainObject(descriptor) || !form || !isPlainObject(fields)
-      || ![...ORDINARY_KEYS, ...DATE_KEYS, 'misc', 'image'].every((key) => fields[key])
+      || ![...ORDINARY_KEYS, ...DATE_KEYS, 'misc', 'image', 'catid'].every((key) => fields[key])
       || !editor?.getValue || !editor?.setValue || !editor?.subscribeChange
       || typeof getCurrentEditor !== 'function' || !mediaField || typeof mediaField.setValue !== 'function') {
       throw new TypeError('The Contact Autosave adapter configuration is invalid.');
     }
-    this.descriptor = Object.freeze({ context: descriptor.context, targetId: normalizeCanonicalId(descriptor.targetId), payloadSchemaVersion: descriptor.payloadSchemaVersion });
+    this.descriptor = Object.freeze({ context: descriptor.context, targetId: normalizeAutosaveTarget(descriptor.targetId), payloadSchemaVersion: descriptor.payloadSchemaVersion });
     this.form = form; this.fields = { ...fields }; this.editor = editor; this.editorId = fields.misc.id;
     this.getCurrentEditor = getCurrentEditor; this.mediaField = mediaField; this.eventFactory = eventFactory;
     this.baseline = null; this.callback = null; this.unsubscribeEditor = null; this.destroyed = false; this.suppress = 0;
-    this.listeners = Object.fromEntries([...ORDINARY_KEYS, ...DATE_KEYS, 'image'].map((key) => [key, () => this.changed()]));
+    this.listeners = Object.fromEntries([...ORDINARY_KEYS, ...DATE_KEYS, 'image', 'catid'].map((key) => [key, () => this.changed()]));
     this.editorListener = () => this.changed();
   }
 
   getDescriptor() { return this.descriptor; }
-  initializeBaseline() { this.assertCurrent(); this.baseline = this.snapshot(); return this; }
+  initializeBaseline() {
+    this.assertCurrent();
+
+    try {
+      this.baseline = this.snapshot();
+    } catch {
+      // A new Contact form may not yet hold a numeric category selection (empty,
+      // the routed default of zero, or a transient fancy-select value). Keep the
+      // runtime armed and let the first valid change establish the baseline
+      // instead of failing the bootstrap.
+      this.baseline = null;
+    }
+
+    return this;
+  }
 
   subscribe(callback) {
     if (typeof callback !== 'function' || this.callback || this.destroyed) throw new TypeError('The Contact Autosave subscription is invalid.');
     this.callback = callback;
-    [...ORDINARY_KEYS, ...DATE_KEYS, 'image'].forEach((key) => {
+    [...ORDINARY_KEYS, ...DATE_KEYS, 'image', 'catid'].forEach((key) => {
       this.fields[key].addEventListener('input', this.listeners[key]);
       this.fields[key].addEventListener('change', this.listeners[key]);
     });
@@ -95,7 +125,7 @@ export default class ContactAutosaveAdapter {
     try {
       this.write(next);
       const applied = this.snapshot();
-      if (!STRING_KEYS.every((key) => applied[key] === next[key])) throw new Error('The Contact recovery payload could not be applied.');
+      if (!PAYLOAD_KEYS.every((key) => applied[key] === next[key])) throw new Error('The Contact recovery payload could not be applied.');
       this.baseline = applied;
     } catch (error) {
       try { this.write(previous); this.baseline = previous; } catch (rollbackError) { Object.defineProperty(error, 'rollbackError', { value: rollbackError }); }
@@ -106,6 +136,7 @@ export default class ContactAutosaveAdapter {
   snapshot() {
     const payload = Object.fromEntries(ORDINARY_KEYS.map((key) => [key, this.fields[key].value]));
     payload.misc = this.editor.getValue(); payload.image = this.fields.image.value;
+    payload.catid = parseCatid(this.fields.catid.value);
     DATE_KEYS.forEach((key) => { payload[key] = this.fields[key].value; payload[`${key}_alt`] = this.fields[key].getAttribute('data-alt-value') || ''; });
     return validatePayload(payload);
   }
@@ -113,6 +144,7 @@ export default class ContactAutosaveAdapter {
   write(payload) {
     ORDINARY_KEYS.forEach((key) => this.writeControl(this.fields[key], payload[key]));
     this.editor.setValue(payload.misc);
+    this.writeControl(this.fields.catid, String(payload.catid));
     DATE_KEYS.forEach((key) => { this.fields[key].setAttribute('data-alt-value', payload[`${key}_alt`]); this.writeControl(this.fields[key], payload[key]); });
     this.mediaField.setValue(payload.image);
   }
@@ -122,13 +154,13 @@ export default class ContactAutosaveAdapter {
   changed() {
     if (this.destroyed || this.suppress || !this.callback || !this.isCurrent()) return;
     let current; try { current = this.snapshot(); } catch { return; }
-    if (STRING_KEYS.every((key) => current[key] === this.baseline?.[key])) return;
+    if (PAYLOAD_KEYS.every((key) => current[key] === this.baseline?.[key])) return;
     this.baseline = current; this.callback();
   }
 
   isCurrent() {
     return !this.destroyed && this.form?.isConnected && this.fields
-      && [...ORDINARY_KEYS, ...DATE_KEYS, 'misc', 'image'].every((key) => this.fields[key]?.isConnected && this.form.contains(this.fields[key]))
+      && [...ORDINARY_KEYS, ...DATE_KEYS, 'misc', 'image', 'catid'].every((key) => this.fields[key]?.isConnected && this.form.contains(this.fields[key]))
       && this.mediaField.isConnected && this.mediaField.contains(this.fields.image)
       && this.getCurrentEditor(this.editorId) === this.editor;
   }
@@ -136,7 +168,7 @@ export default class ContactAutosaveAdapter {
   assertCurrent() { if (!this.isCurrent()) throw new Error('The Contact form dependencies are stale.'); }
 
   unsubscribe() {
-    [...ORDINARY_KEYS, ...DATE_KEYS, 'image'].forEach((key) => {
+    [...ORDINARY_KEYS, ...DATE_KEYS, 'image', 'catid'].forEach((key) => {
       this.fields[key].removeEventListener('input', this.listeners[key]);
       this.fields[key].removeEventListener('change', this.listeners[key]);
     });
@@ -149,4 +181,7 @@ export default class ContactAutosaveAdapter {
   }
 }
 
-export { DATE_KEYS, LIMITS, ORDINARY_KEYS, STRING_KEYS, isStableMediaReference, normalizeCanonicalId, validatePayload };
+export {
+  DATE_KEYS, LIMITS, ORDINARY_KEYS, PAYLOAD_KEYS, RELATION_KEYS, STRING_KEYS,
+  isStableMediaReference, normalizeAutosaveTarget, normalizeCanonicalId, parseCatid, validatePayload,
+};
