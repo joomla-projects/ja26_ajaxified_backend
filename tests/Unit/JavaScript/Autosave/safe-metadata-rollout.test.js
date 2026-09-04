@@ -59,7 +59,6 @@ const contexts = [
   { Controller: StageController, key: 'com_workflow.autosave.stage', context: 'com_workflow.stage', formId: 'workflow-form', fields: ['title', 'description'] },
   { Controller: LanguageController, key: 'com_languages.autosave.language', context: 'com_languages.language', formId: 'language-form', fields: ['title', 'title_native', 'description', 'metadesc', 'sitename'] },
   { Controller: GroupController, key: 'com_users.autosave.group', context: 'com_users.group', formId: 'group-form', fields: ['title'] },
-  { Controller: LevelController, key: 'com_users.autosave.level', context: 'com_users.level', formId: 'level-form', fields: ['title'] },
   { Controller: NoteController, key: 'com_users.autosave.note', context: 'com_users.note', formId: 'note-form', fields: ['subject', 'body'], editor: true },
 ];
 
@@ -106,7 +105,7 @@ test('component controllers accept only literal context-specific configuration',
   assert.equal(validateStageConfiguration(configuration('com_workflow.stage', ['title', 'description'])).context, 'com_workflow.stage');
   assert.equal(validateLanguageConfiguration(configuration('com_languages.language', ['title', 'title_native', 'description', 'metadesc', 'sitename'])).context, 'com_languages.language');
   assert.equal(validateGroupConfiguration(configuration('com_users.group', ['title'])).context, 'com_users.group');
-  assert.equal(validateLevelConfiguration(configuration('com_users.level', ['title'])).context, 'com_users.level');
+  assert.equal(validateLevelConfiguration(configuration('com_users.level', ['title', 'rules'])).context, 'com_users.level');
   assert.equal(validateNoteConfiguration(configuration('com_users.note', ['subject', 'body'])).context, 'com_users.note');
   assert.throws(() => validateGroupConfiguration(configuration('com_users.level', ['title'])), TypeError);
   assert.equal(validateNoteConfiguration({ enabled: false }), null);

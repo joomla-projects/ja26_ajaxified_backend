@@ -5,11 +5,12 @@
 
 import AutosaveIntegrationController, { defaultOptionsReader, isPlainObject, resolveAutosaveUiMount } from 'com_autosave.integration-controller';
 import { JoomlaEditor } from 'editor-api';
+import AutosaveCreateBinding from 'com_autosave.create-binding';
 import ContactAutosaveAdapter, { normalizeCanonicalId } from './contact-autosave-adapter.es6.js';
 
 const OPTIONS_KEY = 'com_contact.autosave.contact';
 const FIELD_KEYS = Object.freeze([
-  'name', 'alias', 'version_note', 'misc', 'image', 'con_position', 'email_to', 'address',
+  'name', 'alias', 'catid', 'version_note', 'misc', 'image', 'con_position', 'email_to', 'address',
   'suburb', 'state', 'postcode', 'country', 'telephone', 'mobile', 'fax', 'webpage',
   'sortname1', 'sortname2', 'sortname3', 'publish_up', 'publish_down', 'metakey', 'metadesc',
 ]);
@@ -30,14 +31,23 @@ const validateConfiguration = (value) => {
     || !FIELD_KEYS.every((key) => typeof value.fieldIds[key] === 'string' && value.fieldIds[key])) {
     throw new TypeError('The Contact Autosave page configuration is invalid.');
   }
-  return Object.freeze({ ...value, targetId: normalizeCanonicalId(value.targetId), fieldIds: Object.freeze({ ...value.fieldIds }) });
+  const mode = value.mode === 'create' ? 'create' : 'existing';
+  const targetId = mode === 'create' ? null : normalizeCanonicalId(value.targetId);
+  if ((mode === 'create' && value.targetId !== null) || (mode === 'existing' && value.targetId === null)) {
+    throw new TypeError('The Contact Autosave target mode is invalid.');
+  }
+  return Object.freeze({ ...value, mode, targetId, fieldIds: Object.freeze({ ...value.fieldIds }) });
 };
 
 export default class ContactAutosaveController extends AutosaveIntegrationController {
-  constructor({ documentSource = globalThis.document, optionsReader = defaultOptionsReader, editorRegistry = JoomlaEditor, adapterFactory = (options) => new ContactAutosaveAdapter(options), ...options } = {}) {
+  constructor({ documentSource = globalThis.document, optionsReader = defaultOptionsReader, editorRegistry = JoomlaEditor, adapterFactory = (options) => new ContactAutosaveAdapter(options), createBindingFactory = (options) => new AutosaveCreateBinding(options), ...options } = {}) {
+    let createBinding = null;
     const resolve = () => {
       const config = validateConfiguration(optionsReader(OPTIONS_KEY, null));
-      if (!config) return null;
+      if (!config) { createBinding = null; return null; }
+      if (config.mode === 'create' && !createBinding) createBinding = createBindingFactory({ context: config.context });
+      else if (config.mode === 'existing' && createBinding) createBinding = null;
+      const createMode = createBinding?.descriptor() || null;
       const form = documentSource.getElementById(config.formId);
       const fields = Object.fromEntries(FIELD_KEYS.map((key) => [key, documentSource.getElementById(config.fieldIds[key])]));
       if (!form?.isConnected || !FIELD_KEYS.every((key) => fields[key]?.isConnected && form.contains(fields[key]))) return null;
@@ -46,8 +56,11 @@ export default class ContactAutosaveController extends AutosaveIntegrationContro
       if (!editor?.supportsChangeObservation?.() || typeof editor.subscribeChange !== 'function'
         || !mediaField?.isConnected || !form.contains(mediaField) || typeof mediaField.setValue !== 'function') return null;
       return {
-        descriptor: { context: config.context, targetId: config.targetId, payloadSchemaVersion: config.payloadSchemaVersion },
-        form, identityParts: [editor, mediaField, ...FIELD_KEYS.map((key) => fields[key])], taskPolicy: TASK_POLICY,
+        descriptor: { context: config.context, targetId: createMode?.targetId || config.targetId, payloadSchemaVersion: config.payloadSchemaVersion },
+        createMode,
+        form,
+        identityParts: [createMode?.formInstanceId || config.targetId, editor, mediaField, ...FIELD_KEYS.map((key) => fields[key])],
+        taskPolicy: TASK_POLICY,
         statusMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-status-ui]'),
         recoveryMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-recovery-ui]'),
         presentationConfiguration: { locale: config.locale || '', timeZone: config.timeZone || '' },

@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Contact\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
@@ -23,11 +24,18 @@ use Joomla\String\StringHelper;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Privacy-minimized Autosave contract for existing Contact records.
+ * Privacy-minimized Autosave contract for Contact records.
+ *
+ * New-record (create-mode) drafts add only the authored category relation to the
+ * existing text allow-list. The linked user, publication/access state, tags,
+ * params/metadata and identity bookkeeping stay native-only: those values are
+ * either derived server-side, re-primed from routing state, or gated behind the
+ * com_users core.manage control that is not present for every editor, so they
+ * never ride a draft (mirroring the pre-existing PII minimization).
  *
  * @since  __DEPLOY_VERSION__
  */
-final class ContactAutosaveProvider implements AutosaveProviderInterface
+final class ContactAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     private const LIMITS = [
         'name'             => 255,
@@ -66,9 +74,41 @@ final class ContactAutosaveProvider implements AutosaveProviderInterface
         return 'com_contact.contact';
     }
 
+    public function getCreateContractVersion(): string
+    {
+        return 'contact-create-v1';
+    }
+
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        if ($normalizedPayload === null) {
+            // Mirrors ContactController::allowAdd() without a category choice yet:
+            // a global component create right or any creatable category is enough
+            // to open the blank form and later anchor the draft to a category.
+            if (
+                !$user->authorise('core.create', 'com_contact')
+                && \count($user->getAuthorisedCategories('com_contact', 'core.create')) === 0
+            ) {
+                throw new AutosaveException('forbidden', 'A Contact cannot be created by this user.');
+            }
+
+            return;
+        }
+
+        $catid = $normalizedPayload['catid'] ?? null;
+
+        if (!\is_int($catid) || $catid <= 0 || $catid > 2147483647 || !$this->categoryExists($catid)) {
+            throw $this->invalidPayload();
+        }
+
+        if (!$user->authorise('core.create', 'com_contact.category.' . $catid)) {
+            throw new AutosaveException('forbidden', 'A Contact cannot be created in this category.');
+        }
+    }
+
     public function getPayloadSchemaVersion(): int
     {
-        return 1;
+        return 2;
     }
 
     public function canonicalizeTargetId(string $targetId): string
@@ -128,10 +168,11 @@ final class ContactAutosaveProvider implements AutosaveProviderInterface
 
     public function normalizePayload(mixed $payload, int $schemaVersion): array
     {
-        $required = array_fill_keys(array_keys(self::LIMITS), true);
+        $required          = array_fill_keys(array_keys(self::LIMITS), true);
+        $required['catid'] = true;
 
         if (
-            $schemaVersion !== 1 || !\is_array($payload) || array_is_list($payload)
+            $schemaVersion !== 2 || !\is_array($payload) || array_is_list($payload)
             || array_diff_key($payload, $required) || array_diff_key($required, $payload)
         ) {
             throw $this->invalidPayload();
@@ -146,6 +187,10 @@ final class ContactAutosaveProvider implements AutosaveProviderInterface
             }
         }
 
+        if (!\is_int($payload['catid']) || $payload['catid'] < 1 || $payload['catid'] > 2147483647) {
+            throw $this->invalidPayload();
+        }
+
         if (!$this->isStableMediaReference($payload['image'])) {
             throw $this->invalidPayload();
         }
@@ -155,6 +200,8 @@ final class ContactAutosaveProvider implements AutosaveProviderInterface
         foreach (array_keys(self::LIMITS) as $key) {
             $normalized[$key] = $payload[$key];
         }
+
+        $normalized['catid'] = $payload['catid'];
 
         return $normalized;
     }
@@ -184,6 +231,18 @@ final class ContactAutosaveProvider implements AutosaveProviderInterface
             && !isset($parts['user'])
             && !isset($parts['pass'])
             && isset($parts['host']);
+    }
+
+    private function categoryExists(int $catid): bool
+    {
+        $query = $this->db->createQuery()
+            ->select('COUNT(*)')
+            ->from($this->db->quoteName('#__categories'))
+            ->where($this->db->quoteName('id') . ' = :catid')
+            ->bind(':catid', $catid, ParameterType::INTEGER)
+            ->where($this->db->quoteName('extension') . ' = ' . $this->db->quote('com_contact'));
+
+        return (int) $this->db->setQuery($query)->loadResult() === 1;
     }
 
     private function load(string $targetId): ?object

@@ -9,6 +9,7 @@
 
 namespace Joomla\Component\Users\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
@@ -21,7 +22,7 @@ use Joomla\String\StringHelper;
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class NoteAutosaveProvider implements AutosaveProviderInterface
+final class NoteAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
 {
     public function __construct(private readonly DatabaseInterface $db)
     {
@@ -29,6 +30,26 @@ final class NoteAutosaveProvider implements AutosaveProviderInterface
     public function getContext(): string
     {
         return 'com_users.note';
+    }
+    public function getCreateContractVersion(): string
+    {
+        return 'user-note-create-v1';
+    }
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        // Mirrors the native create gate (NoteController uses the default
+        // FormController::allowAdd()): component-wide core.create on com_users or
+        // any com_users category the operator may create notes in. A Note draft
+        // carries only the authored subject/body - the required target user and
+        // category relations never enter a draft (their widgets are ACL-gated and
+        // the model re-primes them from the routed request state), so no
+        // per-relation payload authorization is possible or needed here.
+        if (
+            !$user->authorise('core.create', 'com_users')
+            && \count($user->getAuthorisedCategories('com_users', 'core.create')) === 0
+        ) {
+            throw new AutosaveException('forbidden', 'A User Note cannot be created by this user.');
+        }
     }
     public function getPayloadSchemaVersion(): int
     {

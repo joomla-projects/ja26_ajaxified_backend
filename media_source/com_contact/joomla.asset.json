@@ -12,6 +12,7 @@
       "dependencies": [
         "core",
         "com_autosave.integration-controller",
+        "com_autosave.create-binding",
         "editor-api",
         "webcomponent.field-media"
       ],
