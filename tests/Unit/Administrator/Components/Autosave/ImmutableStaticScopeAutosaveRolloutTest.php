@@ -175,19 +175,23 @@ class ImmutableStaticScopeAutosaveRolloutTest extends UnitTestCase
         return new CategoryAutosaveProvider($this->database(['extension' => $extension]));
     }
 
-    public function testLanguageOverrideRemainsDeferredPendingCompositeCanonicalIntegration(): void
+    public function testLanguageOverrideNowExposesCompositeCreateAndScope(): void
     {
-        // com_languages.override stays without a PR34 scope/create contract. Its records are
-        // key-shaped with 'both'-client file duplication, and the shared canonical-save trait
-        // classifies route identities as numeric only, so a create-mode pilot cannot reach the
-        // authoritative native save through the existing shared integration without
-        // Override-specific canonical work (see the PR34 architecture report).
+        // PR36 resolves the composite/file-backed Override create path: the provider
+        // ships a create contract plus the immutable client/language scope, the view
+        // authorizes genuine new records, and the controller opts into the shared
+        // non-numeric canonical identity gate.
         $providerSource = file_get_contents(JPATH_ADMINISTRATOR . '/components/com_languages/src/Autosave/OverrideAutosaveProvider.php');
         $viewSource     = file_get_contents(JPATH_ADMINISTRATOR . '/components/com_languages/src/View/Override/HtmlView.php');
+        $controllerFile = JPATH_ADMINISTRATOR . '/components/com_languages/src/Controller/OverrideController.php';
 
-        $this->assertStringNotContainsString('AutosaveCreateProviderInterface', $providerSource);
-        $this->assertStringNotContainsString('AutosaveStaticScopeProviderInterface', $providerSource);
-        $this->assertStringNotContainsString('authorizeCreate', $viewSource);
+        $this->assertStringContainsString('AutosaveCreateProviderInterface', $providerSource);
+        $this->assertStringContainsString('AutosaveStaticScopeProviderInterface', $providerSource);
+        $this->assertStringContainsString('override-create-v1', $providerSource);
+        $this->assertStringContainsString('override-scope-v1', $providerSource);
+        $this->assertStringContainsString('authorizeCreate', $viewSource);
+        $this->assertStringContainsString('canonicalizeStaticCreateScope', $viewSource);
+        $this->assertStringContainsString('AutosaveCompositeCanonicalIdentityInterface', file_get_contents($controllerFile));
     }
 
     public function testCategoryExistingRecordBehaviorIsUnchanged(): void

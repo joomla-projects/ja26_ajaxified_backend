@@ -16,7 +16,7 @@ class UserMetadataAutosaveProvidersTest extends UnitTestCase
         $providers = [new GroupAutosaveProvider($this->database()), new LevelAutosaveProvider($this->database()), new NoteAutosaveProvider($this->database())];
         $this->assertSame(['com_users.group', 'com_users.level', 'com_users.note'], array_map(fn ($p) => $p->getContext(), $providers));
         $this->assertSame(['title' => ''], $providers[0]->normalizePayload(['title' => ''], 1));
-        $this->assertSame(['title' => ''], $providers[1]->normalizePayload(['title' => ''], 1));
+        $this->assertSame(['title' => '', 'rules' => []], $providers[1]->normalizePayload(['title' => '', 'rules' => []], 2));
         $this->assertSame(['subject' => '', 'body' => ''], $providers[2]->normalizePayload(['body' => '', 'subject' => ''], 1));
         foreach ($providers as $provider) {
             foreach (['0', '-1', '01', ' 1', '4294967296'] as $id) {
@@ -24,7 +24,9 @@ class UserMetadataAutosaveProvidersTest extends UnitTestCase
             }
         }
         $this->assertFailure('invalid_payload', fn () => $providers[0]->normalizePayload(['title' => '', 'rules' => []], 1));
-        $this->assertFailure('invalid_payload', fn () => $providers[1]->normalizePayload(['title' => str_repeat('x', 101)], 1));
+        $this->assertFailure('invalid_payload', fn () => $providers[1]->normalizePayload(['title' => str_repeat('x', 101), 'rules' => []], 2));
+        $this->assertFailure('invalid_payload', fn () => $providers[1]->normalizePayload(['title' => '', 'rules' => ['1']], 2));
+        $this->assertFailure('unsupported_schema_version', fn () => $providers[1]->normalizePayload(['title' => '', 'rules' => []], 1));
         $this->assertFailure('invalid_payload', fn () => $providers[2]->normalizePayload(['subject' => '', 'body' => '', 'user_id' => 1], 1));
         $this->assertFailure('invalid_payload', fn () => $providers[2]->normalizePayload(['subject' => "\xC3\x28", 'body' => ''], 1));
     }

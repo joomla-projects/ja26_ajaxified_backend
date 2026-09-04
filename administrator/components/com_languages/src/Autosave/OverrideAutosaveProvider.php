@@ -10,9 +10,11 @@
 
 namespace Joomla\Component\Languages\Administrator\Autosave;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveProviderInterface;
+use Joomla\CMS\Autosave\AutosaveStaticScopeProviderInterface;
 use Joomla\CMS\Autosave\AutosaveTargetIdentity;
 use Joomla\CMS\Language\LanguageHelper;
 use Joomla\CMS\User\User;
@@ -23,7 +25,10 @@ use Joomla\String\StringHelper;
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class OverrideAutosaveProvider implements AutosaveProviderInterface
+final class OverrideAutosaveProvider implements
+    AutosaveProviderInterface,
+    AutosaveCreateProviderInterface,
+    AutosaveStaticScopeProviderInterface
 {
     private const TYPE        = 'languages.override';
     private const KEY_LIMIT   = 110;
@@ -48,6 +53,73 @@ final class OverrideAutosaveProvider implements AutosaveProviderInterface
     public function getPayloadSchemaVersion(): int
     {
         return 1;
+    }
+    public function getCreateContractVersion(): string
+    {
+        return 'override-create-v1';
+    }
+
+    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        // Mirrors the native create gate for Language Overrides: a component-wide
+        // core.create on com_languages. The target client/language live in the
+        // anchored immutable scope, never in the draft payload, so no per-relation
+        // payload authorization is possible or needed here.
+        if (!$user->authorise('core.create', 'com_languages')) {
+            throw new AutosaveException('forbidden', 'A Language Override cannot be created by this user.');
+        }
+    }
+
+    public function getStaticScopeContractVersion(): string
+    {
+        return 'override-scope-v1';
+    }
+
+    public function canonicalizeStaticCreateScope(mixed $candidateScope): string
+    {
+        if (!\is_string($candidateScope)) {
+            throw $this->invalidScope();
+        }
+
+        $parts = explode('|', $candidateScope, 2);
+
+        if (\count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
+            throw $this->invalidScope();
+        }
+
+        [$client, $language] = $parts;
+
+        if (
+            !\in_array($client, ['site', 'administrator'], true)
+            || \strlen($language) > 32
+            || preg_match('/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/D', $language) !== 1
+        ) {
+            throw $this->invalidScope();
+        }
+
+        return $client . '|' . $language;
+    }
+
+    public function authorizeStaticCreateScope(User $user, string $canonicalScope, AutosaveOperation $operation, ?array $normalizedPayload): void
+    {
+        // The anchored scope is re-authorized for every provisional operation so a
+        // permission revocation after P1 fails closed. Canonicalizing also rejects
+        // a malformed stored scope before any authorization is granted.
+        $this->canonicalizeStaticCreateScope($canonicalScope);
+
+        if (!$user->authorise('core.create', 'com_languages')) {
+            throw new AutosaveException('forbidden', 'A Language Override cannot be created by this user.');
+        }
+    }
+
+    public function verifyFinalTargetStaticScope(string $finalTargetId, string $canonicalScope): void
+    {
+        // A malformed or foreign composite target fails through canonicalizeTargetId.
+        [$client, $language] = $this->parts($this->canonicalizeTargetId($finalTargetId));
+
+        if ($client . '|' . $language !== $this->canonicalizeStaticCreateScope($canonicalScope)) {
+            throw new AutosaveException('scope_mismatch', 'The saved Language Override does not belong to the anchored client and language.');
+        }
     }
 
     public static function target(string $client, string $language, string $key): string
@@ -139,5 +211,9 @@ final class OverrideAutosaveProvider implements AutosaveProviderInterface
     private function invalidTarget(): AutosaveException
     {
         return new AutosaveException('invalid_target', 'The Language Override target is invalid.');
+    }
+    private function invalidScope(): AutosaveException
+    {
+        return new AutosaveException('invalid_scope', 'The Language Override creation scope is invalid.');
     }
 }

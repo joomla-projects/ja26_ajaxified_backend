@@ -11,6 +11,7 @@
 namespace Joomla\Component\Languages\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSWebApplicationInterface;
+use Joomla\CMS\Autosave\AutosaveCompositeCanonicalIdentityInterface;
 use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
@@ -26,7 +27,7 @@ use Joomla\Component\Languages\Administrator\Autosave\OverrideAutosaveProvider;
  *
  * @since  2.5
  */
-class OverrideController extends FormController
+class OverrideController extends FormController implements AutosaveCompositeCanonicalIdentityInterface
 {
     use AutosaveFormControllerTrait;
 

@@ -9,17 +9,18 @@ class HtmlViewAutosaveTest extends UnitTestCase
     public function testExistingEditAndModalActivateWhileIdZeroAndOtherLayoutsFallBack(): void
     {
         $source = $this->source();
-        $this->assertStringContainsString("!\\in_array(\$this->getLayout(), ['edit', 'modal'], true) || (int) \$this->item->id <= 0", $source);
+        $this->assertStringContainsString("!\\in_array(\$this->getLayout(), ['edit', 'modal'], true)", $source);
+        $this->assertStringContainsString('authorizeCreate', $source);
         $this->assertStringContainsString("getAutosaveProvider('com_contact.contact')", $source);
     }
 
     public function testExactFormFieldsContextAndAssetAreLiteral(): void
     {
         $source = $this->source();
-        foreach (['name', 'email_to', 'telephone', 'mobile', 'address', 'misc', 'image', 'publish_up', 'publish_down', 'metadesc'] as $field) {
+        foreach (['name', 'catid', 'email_to', 'telephone', 'mobile', 'address', 'misc', 'image', 'publish_up', 'publish_down', 'metadesc'] as $field) {
             $this->assertStringContainsString("'{$field}'", $source);
         }
-        foreach (['user_id', 'catid', 'params', 'associations', 'com_fields'] as $excluded) {
+        foreach (['user_id', 'params', 'associations', 'com_fields'] as $excluded) {
             $this->assertStringNotContainsString("'{$excluded}'", substr($source, strpos($source, '$names = ['), strpos($source, '];', strpos($source, '$names = [')) - strpos($source, '$names = [')));
         }
         $this->assertStringContainsString("'com_contact.autosave.contact'", $source);
