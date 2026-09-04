@@ -10,6 +10,9 @@
 
 namespace Joomla\Component\Fields\Administrator\View\Field;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveDynamicCreateDescriptorProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
 use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -97,21 +100,52 @@ class HtmlView extends BaseHtmlView
         $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
         $configurator->disable('com_fields.autosave.field');
 
-        if ($this->getLayout() !== 'edit' || (int) $this->item->id <= 0) {
+        if ($this->getLayout() !== 'edit') {
             return;
         }
+
+        $target       = null;
+        $createScope  = null;
+        $schema       = null;
+        $itemId       = (int) $this->item->id;
 
         try {
             $provider = $app->bootComponent('com_fields')->getAutosaveProvider('com_fields.field');
             if (!$provider instanceof FieldAutosaveProvider) {
                 return;
             }
-            $target = $provider->canonicalizeTargetId((string) (int) $this->item->id);
-            if (!$provider->targetExists($target)) {
+
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+                if (!$provider->targetExists($target)) {
+                    return;
+                }
+
+                $schema = $provider->getDynamicSchemaForForm($target, $this->form);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
                 return;
+            } elseif ($provider instanceof AutosaveDynamicCreateDescriptorProviderInterface) {
+                // The candidate context and field type are server-owned form values.
+                // They are canonicalized and authorized once at initialization; the
+                // browser never resubmits authoritative creation state afterwards.
+                $type    = (string) $this->form->getValue('type');
+                $context = (string) $this->state->get('field.context', '') ?: (string) $this->form->getValue('context');
+
+                if ($type === '' || $context === '') {
+                    return;
+                }
+
+                $createScope = $provider->canonicalizeStaticCreateScope($context . '|' . $type);
+                $provider->authorizeStaticCreateScope($app->getIdentity(), $createScope, AutosaveOperation::InitializeCreate, null);
+                $schema = $provider->getDynamicSchemaForType($type);
+            } else {
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
             }
-            $schema = $provider->getDynamicSchemaForForm($target, $this->form);
         } catch (\Throwable) {
+            return;
+        }
+
+        if ($schema === null) {
             return;
         }
 
@@ -131,7 +165,8 @@ class HtmlView extends BaseHtmlView
             'item-form',
             $ids,
             'com_fields.field-autosave',
-            ['fields' => $schema->fields(), 'fingerprint' => $schema->fingerprint()]
+            ['fields' => $schema->fields(), 'fingerprint' => $schema->fingerprint()],
+            $createScope
         );
         $this->autosaveEnabled = true;
     }

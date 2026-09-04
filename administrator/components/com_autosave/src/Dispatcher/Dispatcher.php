@@ -56,6 +56,7 @@ final class Dispatcher extends BaseDispatcher
         'static_scope_unsupported'        => 422,
         'scope_conflict'                  => 409,
         'scope_mismatch'                  => 409,
+        'descriptor_stale'                => 409,
         'create_contract_conflict'        => 409,
         'target_not_found'                => 404,
         'draft_not_found'                 => 404,

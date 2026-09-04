@@ -9,7 +9,10 @@
       "name": "com_fields.field-autosave",
       "type": "script",
       "uri": "com_fields/field-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller"],
+      "dependencies": [
+        "com_autosave.integration-controller",
+        "com_autosave.create-binding"
+      ],
       "attributes": {"type": "module"}
     },
     {
