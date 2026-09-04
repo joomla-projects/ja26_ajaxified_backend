@@ -232,7 +232,7 @@ final class AutosaveLifecycle
                 throw new AutosaveException('unsupported_schema_version', 'The Autosave payload schema version is not supported.');
             }
 
-            $normalizedPayload = $provider->normalizePayload($payload, $schemaVersion);
+            $normalizedPayload = $this->normalizeProvisionalPayload($provider, $userId, $generation['continuation_id'], $payload, $schemaVersion);
             $this->authorizeProvisional($user, $provider, $generation['continuation_id'], AutosaveOperation::Preserve, $normalizedPayload);
         } else {
             $provider->authorize($user, $generation['target_id'], AutosaveOperation::Preserve);
@@ -435,7 +435,7 @@ final class AutosaveLifecycle
                 throw new AutosaveException('unsupported_schema_version', 'The Autosave payload schema version is not supported.');
             }
 
-            $normalizedPayload = $provider->normalizePayload($payload, $schemaVersion);
+            $normalizedPayload = $this->normalizeProvisionalPayload($provider, $userId, $continuationId, $payload, $schemaVersion);
             $this->authorizeProvisional($user, $provider, $continuationId, AutosaveOperation::PrepareCanonicalAction, $normalizedPayload);
 
             return $this->storage->prepareCanonicalAction(
@@ -509,6 +509,39 @@ final class AutosaveLifecycle
         }
 
         return $provider->normalizePayload($payload, $schemaVersion);
+    }
+
+    /**
+     * Normalize one provisional payload, recovering the anchored descriptor first.
+     *
+     * Providers implementing AutosaveDynamicCreateDescriptorProviderInterface anchor
+     * a canonical creation descriptor instead of a plain static scope. Its dynamic
+     * schema is reconstructed server-side from the recovered descriptor, so the
+     * exact payload can only be validated after the descriptor is available. All
+     * other create providers keep the ordinary scope-free normalization.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    private function normalizeProvisionalPayload(
+        AutosaveProviderInterface $provider,
+        int $userId,
+        string $continuationId,
+        mixed $payload,
+        int $schemaVersion
+    ): array {
+        $createProvider = $this->requireCreateProvider($provider);
+
+        if (!$createProvider instanceof AutosaveDynamicCreateDescriptorProviderInterface) {
+            return $provider->normalizePayload($payload, $schemaVersion);
+        }
+
+        $descriptor = $this->staticScopeStorage()->getContinuationStaticScope($userId, $continuationId);
+
+        if ($descriptor === null) {
+            throw new AutosaveException('scope_required', 'The dynamic creation descriptor is not bound.');
+        }
+
+        return $createProvider->normalizeCreatePayload($descriptor, $payload, $schemaVersion);
     }
 
     /**
