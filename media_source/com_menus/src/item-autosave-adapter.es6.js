@@ -9,7 +9,14 @@ const validateSchema = (schema) => {
     const path = field.path.join('\0'); if (paths.has(path)) throw new TypeError('Duplicate Menu Item schema field.'); paths.add(path);
     return Object.freeze({ ...field, path: Object.freeze([...field.path]), values: field.values ? Object.freeze([...field.values]) : undefined });
   });
-  return Object.freeze({ fingerprint: schema.fingerprint, fields: Object.freeze(fields) });
+  const support = validateSupport(schema.support || { status: 'supported', reasons: [], parameterless: schema.fields.length === 0 });
+  return Object.freeze({ fingerprint: schema.fingerprint, fields: Object.freeze(fields), support });
+};
+const validateSupport = (support) => {
+  if (!plain(support) || !['supported', 'partial', 'unsupported'].includes(support.status)
+    || !Array.isArray(support.reasons) || support.reasons.some((reason) => typeof reason !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(reason))
+    || typeof support.parameterless !== 'boolean') throw new TypeError('Invalid Menu Item support status.');
+  return Object.freeze({ status: support.status, reasons: Object.freeze([...new Set(support.reasons)]), parameterless: support.parameterless });
 };
 const dispatch = (control, makeEvent) => { control.dispatchEvent(makeEvent('input')); control.dispatchEvent(makeEvent('change')); };
 

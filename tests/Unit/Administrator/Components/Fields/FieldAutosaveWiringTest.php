@@ -17,7 +17,7 @@ class FieldAutosaveWiringTest extends UnitTestCase
         $view = file_get_contents(JPATH_ADMINISTRATOR . '/components/com_fields/src/View/Field/HtmlView.php');
         $this->assertStringContainsString("disable('com_fields.autosave.field')", $view);
         $this->assertStringContainsString("'item-form'", $view);
-        $this->assertStringContainsString("['fields' => \$schema->fields(), 'fingerprint' => \$schema->fingerprint()]", $view);
+        $this->assertStringContainsString("['fields' => \$schema->fields(), 'fingerprint' => \$schema->fingerprint(), 'support' => \$schema->support()]", $view);
         $this->assertStringContainsString("'com_fields.field-autosave'", $view);
         $template = file_get_contents(JPATH_ADMINISTRATOR . '/components/com_fields/tmpl/field/edit.php');
         $this->assertStringContainsString('joomla.autosave.status', $template);

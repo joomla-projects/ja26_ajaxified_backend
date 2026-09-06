@@ -168,6 +168,9 @@ const createMount = () => {
   const recoveryTime = element(document, 'data-autosave-recovery-time');
   const busy = element(document, 'data-autosave-busy');
   const localEdits = element(document, 'data-autosave-recovery-local-edits');
+  const supportNodes = Object.fromEntries(['partial', 'unsupported'].map(
+    (support) => [support, element(document, 'data-autosave-support', support)],
+  ));
 
   status.append(...STATUSES.map((state) => element(document, 'data-autosave-state', state)));
   alert.append(...[
@@ -193,7 +196,7 @@ const createMount = () => {
   buttons.discard.setAttribute('data-autosave-confirm-message', 'Discard the draft?');
   recovery.append(buttons.restore, buttons['keep-current'], buttons.discard);
   recoveryTimeContainer.append(recoveryTime);
-  statusMount.append(status, buttons.retry);
+  statusMount.append(status, supportNodes.partial, supportNodes.unsupported, buttons.retry);
   recoveryMount.append(alert, recovery);
   mount.append(statusMount, recoveryMount);
 
@@ -210,6 +213,7 @@ const createMount = () => {
     recoveryTimeContainer,
     status,
     statusMount,
+    supportNodes,
   };
 };
 
@@ -297,6 +301,7 @@ const createFixture = ({
   state = defaultState(),
   confirmDiscard = async () => true,
   formatTimestamp = () => ({ dateTime: '2026-08-04T10:30:00Z', text: '4 Aug 2026, 10:30' }),
+  supportStatus = 'supported',
 } = {}) => {
   const dom = createMount();
   const eventTarget = new EventTarget();
@@ -308,6 +313,7 @@ const createFixture = ({
     recoveryMount: dom.recoveryMount,
     runtime,
     statusMount: dom.statusMount,
+    supportStatus,
   });
 
   return {
@@ -317,6 +323,21 @@ const createFixture = ({
     runtime,
   };
 };
+
+test('dynamic recovery support is explicit without replacing runtime status', () => {
+  const partial = createFixture({ supportStatus: 'partial' });
+  assert.equal(partial.supportNodes.partial.hidden, false);
+  assert.equal(partial.supportNodes.unsupported.hidden, true);
+  assert.equal(partial.mount.querySelector('[data-autosave-state="clean"]').hidden, false);
+
+  const unsupported = createFixture({ supportStatus: 'unsupported' });
+  assert.equal(unsupported.supportNodes.partial.hidden, true);
+  assert.equal(unsupported.supportNodes.unsupported.hidden, false);
+
+  const supported = createFixture();
+  assert.equal(supported.supportNodes.partial.hidden, true);
+  assert.equal(supported.supportNodes.unsupported.hidden, true);
+});
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -559,7 +580,9 @@ test('generic layouts preserve placement, accessibility, contrast and timestamp 
   assert.match(statusLayout, /aria-live="polite"/);
   assert.match(statusLayout, /aria-atomic="true"/);
   assert.doesNotMatch(statusLayout, /<time|data-autosave-time|alert-warning/);
-  assert.match(language, /^COM_AUTOSAVE_STATUS_PRESERVED="Draft saved\."$/m);
+  assert.match(language, /^COM_AUTOSAVE_STATUS_PRESERVED="Supported draft fields saved\."$/m);
+  assert.match(language, /^COM_AUTOSAVE_SUPPORT_PARTIAL=/m);
+  assert.match(language, /^COM_AUTOSAVE_SUPPORT_UNSUPPORTED=/m);
   assert.doesNotMatch(language, /^COM_AUTOSAVE_TIME_AT=/m);
   assert.match(recoveryLayout, /class="mb-3" data-joomla-autosave-recovery-ui/);
   assert.match(recoveryLayout, /class="alert alert-warning mb-0"/);
