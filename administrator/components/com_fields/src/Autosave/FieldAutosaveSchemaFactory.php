@@ -26,13 +26,13 @@ final class FieldAutosaveSchemaFactory
     public function forType(string $type): AutosaveDynamicSchema
     {
         if (!\in_array($type, self::SUPPORTED_FIELD_TYPES, true)) {
-            return new AutosaveDynamicSchema([]);
+            return new AutosaveDynamicSchema([], AutosaveDynamicSchema::SUPPORT_UNSUPPORTED, ['unsupported_field_type']);
         }
 
         $path = JPATH_PLUGINS . '/fields/' . $type . '/params/' . $type . '.xml';
 
         if (!is_file($path)) {
-            return new AutosaveDynamicSchema([]);
+            return new AutosaveDynamicSchema([], AutosaveDynamicSchema::SUPPORT_UNSUPPORTED, ['descriptor_unavailable']);
         }
 
         // Match the native Field form control so browser-facing field IDs remain
@@ -46,21 +46,36 @@ final class FieldAutosaveSchemaFactory
     public function fromForm(Form $form, string $type): AutosaveDynamicSchema
     {
         if (!\in_array($type, self::SUPPORTED_FIELD_TYPES, true)) {
-            return new AutosaveDynamicSchema([]);
+            return new AutosaveDynamicSchema([], AutosaveDynamicSchema::SUPPORT_UNSUPPORTED, ['unsupported_field_type']);
         }
 
         $descriptors = [];
+        $candidates  = 0;
+        $omitted     = false;
 
         foreach ($form->getFieldsets('fieldparams') as $fieldset) {
             foreach ($form->getFieldset($fieldset->name) as $field) {
+                $candidates++;
                 $descriptor = $this->descriptor($field, $type);
                 if ($descriptor !== null) {
                     $descriptors[] = $descriptor;
+                } else {
+                    $omitted = true;
                 }
             }
         }
 
-        return new AutosaveDynamicSchema($descriptors);
+        if ($candidates === 0) {
+            return new AutosaveDynamicSchema([], AutosaveDynamicSchema::SUPPORT_SUPPORTED, ['parameterless'], true);
+        }
+
+        return new AutosaveDynamicSchema(
+            $descriptors,
+            $omitted
+                ? ($descriptors === [] ? AutosaveDynamicSchema::SUPPORT_UNSUPPORTED : AutosaveDynamicSchema::SUPPORT_PARTIAL)
+                : AutosaveDynamicSchema::SUPPORT_SUPPORTED,
+            $omitted ? ['unsupported_control'] : []
+        );
     }
 
     private function descriptor(object $field, string $type): ?array

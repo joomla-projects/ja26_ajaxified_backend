@@ -122,15 +122,24 @@ final class AutosaveViewConfigurator
         if (
             $dynamicSchema !== null
             && (
-                array_diff_key($dynamicSchema, ['fields' => true, 'fingerprint' => true])
+                array_diff_key($dynamicSchema, ['fields' => true, 'fingerprint' => true, 'support' => true])
                 || array_diff_key(['fields' => true, 'fingerprint' => true], $dynamicSchema)
                 || !\is_array($dynamicSchema['fields'])
                 || \count($dynamicSchema['fields']) > AutosaveDynamicSchema::MAXIMUM_FIELDS
                 || !\is_string($dynamicSchema['fingerprint'])
                 || preg_match('/^[a-f0-9]{64}$/D', $dynamicSchema['fingerprint']) !== 1
+                || (isset($dynamicSchema['support']) && !$this->validDynamicSupport($dynamicSchema['support']))
             )
         ) {
             throw new \InvalidArgumentException('The Autosave dynamic schema configuration is invalid.');
+        }
+
+        if ($dynamicSchema !== null && !isset($dynamicSchema['support'])) {
+            $dynamicSchema['support'] = [
+                'status'        => 'supported',
+                'reasons'       => [],
+                'parameterless' => $dynamicSchema['fields'] === [],
+            ];
         }
 
         $endpoints = [];
@@ -185,5 +194,17 @@ final class AutosaveViewConfigurator
         $assets = $this->document->getWebAssetManager();
         $assets->getRegistry()->addExtensionRegistryFile('com_autosave');
         $assets->useScript($asset);
+    }
+
+    private function validDynamicSupport(mixed $support): bool
+    {
+        return \is_array($support)
+            && !array_diff_key($support, ['status' => true, 'reasons' => true, 'parameterless' => true])
+            && !array_diff_key(['status' => true, 'reasons' => true, 'parameterless' => true], $support)
+            && \in_array($support['status'], ['supported', 'partial', 'unsupported'], true)
+            && \is_array($support['reasons'])
+            && array_is_list($support['reasons'])
+            && array_filter($support['reasons'], static fn ($reason) => !\is_string($reason) || preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $reason) !== 1) === []
+            && \is_bool($support['parameterless']);
     }
 }

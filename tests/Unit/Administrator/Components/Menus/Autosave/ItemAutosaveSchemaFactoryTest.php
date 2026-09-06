@@ -73,6 +73,7 @@ class ItemAutosaveSchemaFactoryTest extends UnitTestCase
         $schema = (new ItemAutosaveSchemaFactory())->fromForm($form);
 
         $this->assertSame(['safe_enum', 'safe_text'], array_column(array_column($schema->fields(), 'path'), 1));
+        $this->assertSame(['status' => 'partial', 'reasons' => ['unsupported_control'], 'parameterless' => false], $schema->support());
     }
 
     public function testFieldLimitDoesNotProduceAnOrderDependentRoutedSubset(): void
@@ -86,7 +87,20 @@ class ItemAutosaveSchemaFactoryTest extends UnitTestCase
         $form = new Form('com_menus.item', ['control' => 'jform']);
         $form->load('<form><fields name="params"><fieldset name="basic">' . $fields . '</fieldset></fields></form>');
 
-        $this->assertSame([], (new ItemAutosaveSchemaFactory())->fromForm($form)->fields());
+        $schema = (new ItemAutosaveSchemaFactory())->fromForm($form);
+        $this->assertSame([], $schema->fields());
+        $this->assertSame(['status' => 'unsupported', 'reasons' => ['schema_too_large'], 'parameterless' => false], $schema->support());
+    }
+
+    public function testParameterlessRouteIsNotReportedAsUnsupported(): void
+    {
+        $form = new Form('com_menus.item', ['control' => 'jform']);
+        $form->load('<form><fields name="params"><fieldset name="basic" /></fields></form>');
+
+        $this->assertSame(
+            ['status' => 'supported', 'reasons' => ['parameterless'], 'parameterless' => true],
+            (new ItemAutosaveSchemaFactory())->fromForm($form)->support()
+        );
     }
 
     private function form(string $file): Form

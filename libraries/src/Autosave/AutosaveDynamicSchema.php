@@ -22,6 +22,10 @@ use Joomla\String\StringHelper;
  */
 final class AutosaveDynamicSchema
 {
+    public const SUPPORT_SUPPORTED   = 'supported';
+    public const SUPPORT_PARTIAL     = 'partial';
+    public const SUPPORT_UNSUPPORTED = 'unsupported';
+
     public const MAXIMUM_FIELDS       = 32;
     public const MAXIMUM_PATH_DEPTH   = 2;
     public const MAXIMUM_SEGMENT_SIZE = 48;
@@ -33,8 +37,20 @@ final class AutosaveDynamicSchema
     private array $fields;
 
     /** @param list<array<string, mixed>> $fields */
-    public function __construct(array $fields)
-    {
+    public function __construct(
+        array $fields,
+        private readonly string $supportStatus = self::SUPPORT_SUPPORTED,
+        private readonly array $supportReasons = [],
+        private readonly bool $parameterless = false
+    ) {
+        if (
+            !\in_array($supportStatus, [self::SUPPORT_SUPPORTED, self::SUPPORT_PARTIAL, self::SUPPORT_UNSUPPORTED], true)
+            || array_filter($supportReasons, static fn ($reason) => !\is_string($reason) || preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $reason) !== 1) !== []
+            || ($parameterless && ($fields !== [] || $supportStatus !== self::SUPPORT_SUPPORTED))
+        ) {
+            throw new \InvalidArgumentException('The Autosave dynamic schema support status is invalid.');
+        }
+
         if (\count($fields) > self::MAXIMUM_FIELDS) {
             throw new \InvalidArgumentException('The Autosave dynamic schema contains too many fields.');
         }
@@ -62,6 +78,16 @@ final class AutosaveDynamicSchema
     public function fields(): array
     {
         return $this->fields;
+    }
+
+    /** Return browser-safe recovery capability metadata. */
+    public function support(): array
+    {
+        return [
+            'status'        => $this->supportStatus,
+            'reasons'       => array_values(array_unique($this->supportReasons)),
+            'parameterless' => $this->parameterless,
+        ];
     }
 
     public function fingerprint(): string

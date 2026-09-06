@@ -94,7 +94,8 @@ const sameRuntimeResolution = (pair, resolution) => pair
   && sameIdentityParts(pair.identityParts, resolution.identityParts);
 
 const samePresentationConfiguration = (first, second) => first.locale === second.locale
-  && first.timeZone === second.timeZone;
+  && first.timeZone === second.timeZone
+  && first.supportStatus === second.supportStatus;
 const isProvisionalTarget = (targetId) => typeof targetId === 'string'
   && /^p1:[a-f0-9]{64}$/.test(targetId);
 
@@ -117,6 +118,8 @@ const validateIntegrationResolution = (resolution) => {
     || !isPlainObject(resolution.presentationConfiguration)
     || typeof resolution.presentationConfiguration.locale !== 'string'
     || typeof resolution.presentationConfiguration.timeZone !== 'string'
+    || (resolution.presentationConfiguration.supportStatus !== undefined
+      && !['supported', 'partial', 'unsupported'].includes(resolution.presentationConfiguration.supportStatus))
     || (resolution.pairProperties !== undefined && !isPlainObject(resolution.pairProperties))
     || (resolution.createScope !== undefined
       && !(typeof resolution.createScope === 'string'
@@ -493,6 +496,7 @@ export default class AutosaveIntegrationController {
         recoveryMount,
         locale: configuration.locale,
         timeZone: configuration.timeZone,
+        supportStatus: configuration.supportStatus || 'supported',
       });
     } catch (error) {
       presenter = null;

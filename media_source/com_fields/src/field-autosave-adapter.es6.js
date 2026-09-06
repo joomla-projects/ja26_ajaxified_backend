@@ -17,7 +17,14 @@ const validateSchema = (schema) => {
     if (field.kind === 'rows' && (!plain(field.columns) || !Object.keys(field.columns).length || Object.keys(field.columns).some((keyName) => dangerous.has(keyName)))) throw new TypeError('Invalid Custom Field row schema.');
     return Object.freeze({ ...field, path: Object.freeze([...field.path]), values: field.values ? Object.freeze([...field.values]) : undefined, columns: field.columns ? Object.freeze({ ...field.columns }) : undefined });
   });
-  return Object.freeze({ fingerprint: schema.fingerprint, fields: Object.freeze(fields) });
+  const support = validateSupport(schema.support || { status: 'supported', reasons: [], parameterless: schema.fields.length === 0 });
+  return Object.freeze({ fingerprint: schema.fingerprint, fields: Object.freeze(fields), support });
+};
+const validateSupport = (support) => {
+  if (!plain(support) || !['supported', 'partial', 'unsupported'].includes(support.status)
+    || !Array.isArray(support.reasons) || support.reasons.some((reason) => typeof reason !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(reason))
+    || typeof support.parameterless !== 'boolean') throw new TypeError('Invalid Custom Field Autosave support status.');
+  return Object.freeze({ status: support.status, reasons: Object.freeze([...new Set(support.reasons)]), parameterless: support.parameterless });
 };
 const boolValue = (controls) => controls.some((control) => control.checked && control.value === '1');
 const dispatch = (control, eventFactory) => { control.dispatchEvent(eventFactory('input')); control.dispatchEvent(eventFactory('change')); };

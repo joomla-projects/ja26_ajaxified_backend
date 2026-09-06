@@ -176,6 +176,10 @@ const resolveStatusUi = (mount) => {
         queryRequired(mount, `[data-autosave-state="${status}"]`),
       ])),
       retryButton: queryRequired(mount, '[data-autosave-action="retry"]'),
+      supportNodes: new Map(['partial', 'unsupported'].map((status) => [
+        status,
+        mount.querySelector(`[data-autosave-support="${status}"]`),
+      ]).filter(([, node]) => node)),
     };
   } catch (error) {
     return null;
@@ -236,6 +240,7 @@ export class AutosavePresenter {
     recoveryMount = null,
     locale,
     timeZone,
+    supportStatus = 'supported',
     confirmDiscard = getDialogConfirmation,
     formatTimestamp = createAutosaveDateFormatter(locale, timeZone),
   }) {
@@ -252,6 +257,10 @@ export class AutosavePresenter {
       throw new TypeError('The Autosave presenter configuration is invalid.');
     }
 
+    if (!['supported', 'partial', 'unsupported'].includes(supportStatus)) {
+      throw new TypeError('The Autosave support status is invalid.');
+    }
+
     const statusUi = resolveStatusUi(statusMount);
     const recoveryUi = resolveRecoveryUi(recoveryMount);
 
@@ -265,6 +274,7 @@ export class AutosavePresenter {
     this.recoveryUi = recoveryUi;
     this.confirmDiscard = confirmDiscard;
     this.formatTimestamp = formatTimestamp;
+    this.supportStatus = supportStatus;
     this.destroyed = false;
     this.generation = 0;
     this.activeAction = null;
@@ -319,6 +329,7 @@ export class AutosavePresenter {
       const retryable = status === 'paused' && state.error?.retryable === true;
       this.statusUi.retryButton.hidden = !retryable;
       this.statusUi.retryButton.disabled = !retryable || recoveryBusy || this.confirmationPending;
+      this.statusUi.supportNodes.forEach((node, name) => setHidden(node, name !== this.supportStatus));
     }
 
     if (this.recoveryUi) {

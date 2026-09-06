@@ -41,7 +41,7 @@ export default class FieldAutosaveController extends AutosaveIntegrationControll
       if (all.some((control) => !control?.isConnected || !form.contains(control))) return null;
       return { descriptor: { context: config.context, targetId: createMode?.targetId || config.targetId, payloadSchemaVersion: config.payloadSchemaVersion }, createMode, form, identityParts: [createMode?.formInstanceId || config.targetId, ...all], taskPolicy: TASK_POLICY,
         statusMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-status-ui]'), recoveryMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-recovery-ui]'),
-        presentationConfiguration: { locale: config.locale || '', timeZone: config.timeZone || '' }, pairProperties: { staticFields, dynamicFields, schema: config.dynamicSchema }, createScope: config.mode === 'create' ? config.createScope || null : undefined };
+        presentationConfiguration: { locale: config.locale || '', timeZone: config.timeZone || '', supportStatus: config.dynamicSchema.support.status }, pairProperties: { staticFields, dynamicFields, schema: config.dynamicSchema }, createScope: config.mode === 'create' ? config.createScope || null : undefined };
     };
     super({ ...options, documentSource, optionsReader, integrationResolver: resolve, adapterFactory: (resolution) => adapterFactory({ descriptor: resolution.descriptor, form: resolution.form, ...resolution.pairProperties }).initializeBaseline() });
   }

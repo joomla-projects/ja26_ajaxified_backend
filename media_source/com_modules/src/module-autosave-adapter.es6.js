@@ -15,7 +15,14 @@ const validateSchema = (schema) => {
     if (field.kind === 'strings' && (!Number.isInteger(field.maxItems) || field.maxItems < 1 || field.maxItems > 50)) throw new TypeError('Invalid Module collection bound.');
     return Object.freeze({ ...field, path: Object.freeze([...field.path]), values: field.values ? Object.freeze([...field.values]) : undefined });
   });
-  return Object.freeze({ fingerprint: schema.fingerprint, fields: Object.freeze(fields) });
+  const support = validateSupport(schema.support || { status: 'supported', reasons: [], parameterless: schema.fields.length === 0 });
+  return Object.freeze({ fingerprint: schema.fingerprint, fields: Object.freeze(fields), support });
+};
+const validateSupport = (support) => {
+  if (!plain(support) || !['supported', 'partial', 'unsupported'].includes(support.status)
+    || !Array.isArray(support.reasons) || support.reasons.some((reason) => typeof reason !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(reason))
+    || typeof support.parameterless !== 'boolean') throw new TypeError('Invalid Module support status.');
+  return Object.freeze({ status: support.status, reasons: Object.freeze([...new Set(support.reasons)]), parameterless: support.parameterless });
 };
 const dynamicValue = (field, controls) => field.kind === 'boolean' ? controls[0].checked : field.kind === 'strings' ? [...controls[0].selectedOptions].map((option) => option.value) : field.kind === 'enum' && controls.length > 1 ? controls.find((control) => control.checked)?.value ?? '' : controls[0].value;
 const validDynamicValue = (field, value) => {

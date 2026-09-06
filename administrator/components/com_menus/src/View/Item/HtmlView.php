@@ -244,7 +244,7 @@ class HtmlView extends BaseHtmlView
             'item-form',
             $ids,
             'com_menus.item-autosave',
-            ['fields' => $schema->fields(), 'fingerprint' => $schema->fingerprint()],
+            ['fields' => $schema->fields(), 'fingerprint' => $schema->fingerprint(), 'support' => $schema->support()],
             $createScope
         );
         $this->autosaveEnabled = true;

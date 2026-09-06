@@ -50,4 +50,38 @@ class AutosaveDynamicSchemaTest extends UnitTestCase
             }
         }
     }
+
+    public function testSupportStatusDistinguishesParameterlessPartialAndUnsupportedSchemas(): void
+    {
+        $parameterless = new AutosaveDynamicSchema([], AutosaveDynamicSchema::SUPPORT_SUPPORTED, ['parameterless'], true);
+        $partial       = new AutosaveDynamicSchema(
+            [['path' => ['params', 'title'], 'id' => 'title', 'kind' => 'string', 'maxLength' => 255]],
+            AutosaveDynamicSchema::SUPPORT_PARTIAL,
+            ['unsupported_control']
+        );
+        $unsupported = new AutosaveDynamicSchema([], AutosaveDynamicSchema::SUPPORT_UNSUPPORTED, ['schema_too_large']);
+
+        $this->assertSame(['status' => 'supported', 'reasons' => ['parameterless'], 'parameterless' => true], $parameterless->support());
+        $this->assertSame(['status' => 'partial', 'reasons' => ['unsupported_control'], 'parameterless' => false], $partial->support());
+        $this->assertSame(['status' => 'unsupported', 'reasons' => ['schema_too_large'], 'parameterless' => false], $unsupported->support());
+        $this->assertSame($parameterless->fingerprint(), $unsupported->fingerprint());
+    }
+
+    public function testSupportStatusRejectsContradictoryOrUnsafeMetadata(): void
+    {
+        foreach (
+            [
+            [[], 'unknown', [], false],
+            [[], AutosaveDynamicSchema::SUPPORT_PARTIAL, ['Unsafe Detail'], false],
+            [[['path' => ['params', 'x'], 'id' => 'x', 'kind' => 'boolean']], AutosaveDynamicSchema::SUPPORT_SUPPORTED, ['parameterless'], true],
+            ] as $arguments
+        ) {
+            try {
+                new AutosaveDynamicSchema(...$arguments);
+                $this->fail('Expected invalid support metadata.');
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
 }

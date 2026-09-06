@@ -21,14 +21,33 @@ final class ModuleAutosaveSchemaFactory
 {
     public function fromForm(Form $form): AutosaveDynamicSchema
     {
-        return new AutosaveDynamicSchema($this->descriptors($form, 'params'));
+        [$descriptors, $candidates, $omitted, $tooLarge] = $this->descriptors($form, 'params');
+
+        if ($tooLarge) {
+            return new AutosaveDynamicSchema([], AutosaveDynamicSchema::SUPPORT_UNSUPPORTED, ['schema_too_large']);
+        }
+
+        if ($candidates === 0) {
+            return new AutosaveDynamicSchema([], AutosaveDynamicSchema::SUPPORT_SUPPORTED, ['parameterless'], true);
+        }
+
+        return new AutosaveDynamicSchema(
+            $descriptors,
+            $omitted
+                ? ($descriptors === [] ? AutosaveDynamicSchema::SUPPORT_UNSUPPORTED : AutosaveDynamicSchema::SUPPORT_PARTIAL)
+                : AutosaveDynamicSchema::SUPPORT_SUPPORTED,
+            $omitted ? ['unsupported_control'] : []
+        );
     }
 
     private function descriptors(Form $form, string $group): array
     {
         $descriptors = [];
+        $candidates  = 0;
+        $omitted     = false;
 
         foreach ($form->getXml()->xpath('//fields[@name="' . $group . '"]//field') ?: [] as $field) {
+            $candidates++;
             $name = (string) $field['name'];
             $type = strtolower((string) $field['type']);
 
@@ -36,6 +55,7 @@ final class ModuleAutosaveSchemaFactory
                 $name === ''
                 || preg_match('/(?:password|passwd|secret|token|credential|api[_-]?key|private[_-]?key|(?:^|[_-])(?:file|upload)(?:$|[_-]))/i', $name)
             ) {
+                $omitted = true;
                 continue;
             }
 
@@ -54,22 +74,24 @@ final class ModuleAutosaveSchemaFactory
                 $limit         = (int) ($field['maxlength'] ?? 0);
                 $descriptor    = $base + ['kind' => 'string', 'maxLength' => $limit > 0 ? min($limit, AutosaveDynamicSchema::MAXIMUM_STRING_SIZE) : AutosaveDynamicSchema::MAXIMUM_STRING_SIZE];
             } else {
+                $omitted = true;
                 continue;
             }
 
             try {
                 new AutosaveDynamicSchema([$descriptor]);
             } catch (\InvalidArgumentException) {
+                $omitted = true;
                 continue;
             }
 
             $descriptors[] = $descriptor;
 
             if (\count($descriptors) > AutosaveDynamicSchema::MAXIMUM_FIELDS) {
-                return [];
+                return [[], $candidates, true, true];
             }
         }
 
-        return $descriptors;
+        return [$descriptors, $candidates, $omitted, false];
     }
 }

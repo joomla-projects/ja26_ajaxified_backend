@@ -22,31 +22,46 @@ final class ItemAutosaveSchemaFactory
     public function fromForm(Form $form): AutosaveDynamicSchema
     {
         $descriptors = [];
+        $omitted     = false;
+        $candidates  = 0;
 
         // Inspect the finalized authoritative XML before constructing FormField
         // objects. Routed forms can contain unsupported plugin-backed widgets;
         // instantiating those merely for discovery can abort Autosave activation.
         foreach ($form->getXml()->xpath('//fields[@name="params"]//field') ?: [] as $field) {
+            $candidates++;
             $descriptor = $this->descriptor($field);
 
             if ($descriptor === null) {
+                $omitted = true;
                 continue;
             }
 
             try {
                 new AutosaveDynamicSchema([$descriptor]);
             } catch (\InvalidArgumentException) {
+                $omitted = true;
                 continue;
             }
 
             $descriptors[] = $descriptor;
 
             if (\count($descriptors) > AutosaveDynamicSchema::MAXIMUM_FIELDS) {
-                return new AutosaveDynamicSchema([]);
+                return new AutosaveDynamicSchema([], AutosaveDynamicSchema::SUPPORT_UNSUPPORTED, ['schema_too_large']);
             }
         }
 
-        return new AutosaveDynamicSchema($descriptors);
+        if ($candidates === 0) {
+            return new AutosaveDynamicSchema([], AutosaveDynamicSchema::SUPPORT_SUPPORTED, ['parameterless'], true);
+        }
+
+        return new AutosaveDynamicSchema(
+            $descriptors,
+            $omitted
+                ? ($descriptors === [] ? AutosaveDynamicSchema::SUPPORT_UNSUPPORTED : AutosaveDynamicSchema::SUPPORT_PARTIAL)
+                : AutosaveDynamicSchema::SUPPORT_SUPPORTED,
+            $omitted ? ['unsupported_control'] : []
+        );
     }
 
     private function descriptor(\SimpleXMLElement $field): ?array
