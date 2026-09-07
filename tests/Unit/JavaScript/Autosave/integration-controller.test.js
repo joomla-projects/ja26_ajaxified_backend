@@ -95,6 +95,10 @@ test('generic runtime identity includes form, descriptor, transport and componen
     ...resolution,
     identityParts: [{}],
   }), false);
+  assert.equal(sameRuntimeResolution({ ...pair, createScope: 'descriptor:list' }, {
+    ...resolution,
+    createScope: 'descriptor:radio',
+  }), false);
   assert.equal(sameRuntimeResolution(pair, {
     ...resolution,
     runtime: validateRuntimeConfiguration({

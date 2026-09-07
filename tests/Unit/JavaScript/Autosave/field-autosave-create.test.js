@@ -138,10 +138,11 @@ const createFixture = ({
   boundTarget = null,
 } = {}) => {
   const documentSource = new FakeDocument();
-  const form = { isConnected: true, id: 'item-form', contains: (node) => all.includes(node), querySelectorAll: (selector) => {
+  const form = new EventTarget();
+  Object.assign(form, { isConnected: true, id: 'item-form', contains: (node) => all.includes(node), querySelectorAll: (selector) => {
     const name = selector.match(/name="([^"]+)/)?.[1];
     return all.filter((node) => node.name !== undefined && (selector.includes('^=') ? node.name.startsWith(name) : node.name === name));
-  } };
+  } });
   const strings = Object.fromEntries(['title', 'name', 'label', 'description', 'default_value', 'note'].map((key) => [key, new FakeElement(FIELD_IDS[key], '')]));
   const radios = Object.fromEntries(['required', 'only_use_in_subform'].map((key) => [
     key,
@@ -172,6 +173,7 @@ const createFixture = ({
     'csrf.token': 'csrf-token',
   };
   let bindingCalls = 0;
+  const bindingOptions = [];
   const runtimes = [];
   const clients = [];
   const presenters = [];
@@ -179,11 +181,17 @@ const createFixture = ({
   const controller = new FieldAutosaveController({
     documentSource,
     optionsReader: (key, fallback) => options[key] ?? fallback,
-    createBindingFactory: () => {
+    createBindingFactory: (configuration) => {
       bindingCalls += 1;
+      bindingOptions.push(configuration);
 
       return {
-        descriptor: () => Object.freeze({ ...createBindingDescriptor, targetId: boundTarget }),
+        descriptor: () => Object.freeze({
+          ...createBindingDescriptor,
+          formInstanceId: configuration.lineageKey === CREATE_SCOPE ? createBindingDescriptor.formInstanceId : `${configuration.lineageKey}:form`,
+          initializationKey: configuration.lineageKey === CREATE_SCOPE ? createBindingDescriptor.initializationKey : `${configuration.lineageKey}:form`,
+          targetId: configuration.lineageKey === CREATE_SCOPE ? boundTarget : null,
+        }),
         release: createBindingDescriptor.release,
         context: 'com_fields.field',
       };
@@ -217,6 +225,7 @@ const createFixture = ({
 
   return {
     bindingCalls: () => bindingCalls,
+    bindingOptions,
     clients,
     controller,
     coordinators,
@@ -287,6 +296,32 @@ test('repeated navigation events never duplicate the new Custom Field runtime', 
   assert.equal(fixture.bindingCalls(), 1);
   assert.equal(fixture.runtimes[0].startCalls, 1);
   assert.equal(fixture.runtimes[0].destroyCalls, 0);
+});
+
+test('a create descriptor change replaces both binding and runtime even when controls survive', async () => {
+  const bound = `p1:${'c'.repeat(64)}`;
+  const fixture = createFixture({ mode: 'create', createScope: CREATE_SCOPE, boundTarget: bound });
+  fixture.controller.start();
+  await fixture.controller.reconcile();
+
+  const nextFingerprint = 'b'.repeat(64);
+  const nextScope = `fd1:com_content.article:radio:${nextFingerprint}`;
+  fixture.options[OPTIONS_KEY] = {
+    ...fixture.options[OPTIONS_KEY],
+    createScope: nextScope,
+    dynamicSchema: { ...DYNAMIC_SCHEMA, fingerprint: nextFingerprint },
+  };
+  await fixture.controller.reconcile();
+
+  assert.equal(fixture.bindingCalls(), 2);
+  assert.deepEqual(fixture.bindingOptions, [
+    { context: 'com_fields.field', lineageKey: CREATE_SCOPE },
+    { context: 'com_fields.field', lineageKey: nextScope },
+  ]);
+  assert.equal(fixture.runtimes.length, 2);
+  assert.equal(fixture.runtimes[0].destroyCalls, 1);
+  assert.equal(fixture.runtimes[1].options.targetId, null);
+  assert.equal(fixture.runtimes[1].options.createScope, nextScope);
 });
 
 test('a restored P1 binding routes the runtime target through the create binding', async () => {

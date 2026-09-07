@@ -58,6 +58,8 @@ class HtmlView extends BaseHtmlView
      */
     protected $state;
 
+    public bool $autosavePartial = false;
+
     /**
      * Execute and display a template script.
      *
@@ -121,7 +123,8 @@ class HtmlView extends BaseHtmlView
                     return;
                 }
 
-                $schema = $provider->getDynamicSchemaForForm($target, $this->form);
+                $schema                = $provider->getDynamicSchemaForForm($target, $this->form);
+                $this->autosavePartial = !$provider->fullyRepresentsDynamicForm((string) $this->item->type, $this->form);
             } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
                 return;
             } elseif ($provider instanceof AutosaveDynamicCreateDescriptorProviderInterface) {
@@ -138,6 +141,7 @@ class HtmlView extends BaseHtmlView
                 $createScope = $provider->canonicalizeStaticCreateScope($context . '|' . $type);
                 $provider->authorizeStaticCreateScope($app->getIdentity(), $createScope, AutosaveOperation::InitializeCreate, null);
                 $schema = $provider->getDynamicSchemaForType($type);
+                $this->autosavePartial = !$provider->fullyRepresentsDynamicForm($type, $this->form);
             } else {
                 $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
             }

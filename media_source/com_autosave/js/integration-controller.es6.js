@@ -89,6 +89,7 @@ const sameRuntimeResolution = (pair, resolution) => pair
   && pair.context === resolution.descriptor.context
   && pair.targetId === resolution.descriptor.targetId
   && pair.payloadSchemaVersion === resolution.descriptor.payloadSchemaVersion
+  && (pair.createScope || null) === (resolution.createScope || null)
   && pair.runtimeConfiguration.csrf === resolution.runtime.csrf
   && sameEndpoints(pair.runtimeConfiguration.endpoints, resolution.runtime.endpoints)
   && sameIdentityParts(pair.identityParts, resolution.identityParts);
@@ -372,6 +373,7 @@ export default class AutosaveIntegrationController {
       context: resolution.descriptor.context,
       targetId: resolution.descriptor.targetId,
       payloadSchemaVersion: resolution.descriptor.payloadSchemaVersion,
+      createScope: resolution.createScope || null,
       runtimeConfiguration: resolution.runtime,
       ...(resolution.pairProperties || {}),
     };

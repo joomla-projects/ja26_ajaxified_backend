@@ -21,6 +21,7 @@ const isPlainObject = (value) => value !== null
 export default class AutosaveCreateBinding {
   constructor({
     context,
+    lineageKey = context,
     historySource = globalThis.history,
     storage,
     lockManager = globalThis.navigator?.locks,
@@ -29,11 +30,18 @@ export default class AutosaveCreateBinding {
       : null,
     identityFactory = defaultIdentityFactory,
   }) {
-    if (typeof context !== 'string' || context.length === 0 || typeof identityFactory !== 'function') {
+    if (typeof context !== 'string' || context.length === 0
+      || typeof lineageKey !== 'string' || lineageKey.length === 0 || lineageKey.length > 255
+      || /[\x00-\x1F\x7F]/.test(lineageKey)
+      || typeof identityFactory !== 'function') {
       throw new TypeError('The Autosave create binding configuration is invalid.');
     }
 
     this.context = context;
+    // A create lineage may be narrower than its API context (for example an
+    // immutable server-owned creation descriptor). Keep that browser identity
+    // separate without changing the authoritative context sent to the server.
+    this.lineageKey = lineageKey;
     this.history = historySource;
     if (storage === undefined) {
       try {
@@ -74,7 +82,7 @@ export default class AutosaveCreateBinding {
   resolveFormInstance() {
     const current = isPlainObject(this.history?.state) ? this.history.state : {};
     const forms = isPlainObject(current[HISTORY_KEY]) ? current[HISTORY_KEY] : {};
-    const existing = forms[this.context];
+    const existing = forms[this.lineageKey];
 
     if (typeof existing === 'string' && ID_PATTERN.test(existing)) {
       return existing;
@@ -88,7 +96,7 @@ export default class AutosaveCreateBinding {
 
     this.history?.replaceState?.({
       ...current,
-      [HISTORY_KEY]: { ...forms, [this.context]: identity },
+      [HISTORY_KEY]: { ...forms, [this.lineageKey]: identity },
     }, '');
 
     return identity;
@@ -216,7 +224,7 @@ export default class AutosaveCreateBinding {
 
     this.history?.replaceState?.({
       ...current,
-      [HISTORY_KEY]: { ...forms, [this.context]: identity },
+      [HISTORY_KEY]: { ...forms, [this.lineageKey]: identity },
     }, '');
     this.formInstanceId = identity;
     this.initializationKey = identity;
@@ -281,4 +289,3 @@ export default class AutosaveCreateBinding {
 }
 
 export { HISTORY_KEY, P1_PATTERN, STORAGE_PREFIX };
-
