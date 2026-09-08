@@ -25,11 +25,11 @@ class FieldAutosaveProviderTest extends UnitTestCase
         Factory::$application = $application;
 
         try {
-            $factory  = new FieldAutosaveSchemaFactory();
-            $text     = $factory->forType('text');
-            $calendar = $factory->forType('calendar');
-            $list     = $factory->forType('list');
-            $radio    = $factory->forType('radio');
+            $factory    = new FieldAutosaveSchemaFactory();
+            $text       = $factory->forType('text');
+            $calendar   = $factory->forType('calendar');
+            $list       = $factory->forType('list');
+            $radio      = $factory->forType('radio');
             $checkboxes = $factory->forType('checkboxes');
 
             $this->assertSame(['filter', 'maxlength'], array_map(static fn (array $field): string => $field['path'][1], $text->fields()));
@@ -45,15 +45,15 @@ class FieldAutosaveProviderTest extends UnitTestCase
                 );
             }
             $support = [
-                'calendar' => true, 'checkboxes' => true, 'color' => true, 'editor' => false,
-                'imagelist' => true, 'integer' => true, 'list' => true, 'note' => false,
-                'number' => true, 'radio' => true, 'sql' => false, 'subform' => false,
-                'text' => true, 'textarea' => true, 'url' => true, 'user' => true,
+                'calendar'      => true, 'checkboxes' => true, 'color' => true, 'editor' => false,
+                'imagelist'     => true, 'integer' => true, 'list' => true, 'note' => false,
+                'number'        => true, 'radio' => true, 'sql' => false, 'subform' => false,
+                'text'          => true, 'textarea' => true, 'url' => true, 'user' => true,
                 'usergrouplist' => true, 'audio' => false, 'document' => false,
-                'media' => false, 'video' => false,
+                'media'         => false, 'video' => false,
             ];
             foreach ($support as $type => $complete) {
-                $plugin = \in_array($type, ['audio', 'document', 'media', 'video'], true) ? 'media' : $type;
+                $plugin       = \in_array($type, ['audio', 'document', 'media', 'video'], true) ? 'media' : $type;
                 $renderedForm = new Form('com_fields.field', ['control' => 'jform']);
                 $renderedForm->load(file_get_contents(JPATH_ADMINISTRATOR . '/components/com_fields/forms/field.xml'));
                 $path = JPATH_PLUGINS . '/fields/' . $plugin . '/params/' . $type . '.xml';

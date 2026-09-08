@@ -140,7 +140,7 @@ class HtmlView extends BaseHtmlView
 
                 $createScope = $provider->canonicalizeStaticCreateScope($context . '|' . $type);
                 $provider->authorizeStaticCreateScope($app->getIdentity(), $createScope, AutosaveOperation::InitializeCreate, null);
-                $schema = $provider->getDynamicSchemaForType($type);
+                $schema                = $provider->getDynamicSchemaForType($type);
                 $this->autosavePartial = !$provider->fullyRepresentsDynamicForm($type, $this->form);
             } else {
                 $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
