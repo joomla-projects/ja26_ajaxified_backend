@@ -216,6 +216,18 @@
 		<fieldset name="basic">
 			<fieldset name="formoptions" label="COM_FIELDS_FIELD_FORMOPTIONS_HEADING">
 				<field
+					name="show_in_admin_list_filter"
+					type="radio"
+					layout="joomla.form.field.radio.switcher"
+					label="COM_FIELDS_FIELD_SHOW_IN_ADMIN_LIST_FILTER_LABEL"
+					description="COM_FIELDS_FIELD_SHOW_IN_ADMIN_LIST_FILTER_DESC"
+					default="0"
+					>
+					<option value="0">JNO</option>
+					<option value="1">JYES</option>
+				</field>
+
+				<field
 					name="hint"
 					type="text"
 					label="COM_FIELDS_FIELD_PLACEHOLDER_LABEL"
