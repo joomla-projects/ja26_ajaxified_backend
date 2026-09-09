@@ -10,13 +10,16 @@
 
 namespace Joomla\Component\Fields\Administrator\Service;
 
+use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Event\CustomFields\GetFilterOptionsEvent;
 use Joomla\CMS\Factory;
+use Joomla\CMS\Fields\FieldsServiceInterface;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\User\User;
 use Joomla\Component\Fields\Administrator\Filter\PreparedFieldsFilter;
+use Joomla\Component\Fields\Administrator\Helper\FieldsHelper;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Database\ParameterType;
 use Joomla\Database\QueryInterface;
@@ -87,6 +90,25 @@ final class FieldsFilterService
 
         if (\count($candidates) > self::MAX_FIELDS) {
             $issues[] = ['code' => 'too_many_fields'];
+        }
+
+        $parts            = FieldsHelper::extract($context);
+        $component        = $parts ? Factory::getApplication()->bootComponent($parts[0]) : null;
+        $supportedSection = $component instanceof FieldsServiceInterface
+                    ? $component->validateSection($parts[1])
+                    : null;
+
+        if (
+            $supportedSection === null
+            || !ComponentHelper::getParams($parts[0])->get('custom_fields_enable', 1)
+        ) {
+            foreach ($candidates as $fieldId => $values) {
+                if (array_filter($values, static fn ($value) => $value !== '') !== []) {
+                    $issues[] = ['code' => 'ineligible_field', 'field_id' => $fieldId];
+                }
+            }
+
+            return new PreparedFieldsFilter($context, [], [], $issues, $explicit && $issues !== []);
         }
 
         $model = $this->mvcFactory->createModel('Fields', 'Administrator', ['ignore_request' => true]);

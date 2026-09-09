@@ -3,7 +3,13 @@
 namespace Joomla\Tests\Unit\Administrator\Components\Content\Model;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Application\CMSApplicationInterface;
+use Joomla\CMS\Component\ComponentHelper;
+use Joomla\CMS\Component\ComponentRecord;
+use Joomla\CMS\Dispatcher\DispatcherInterface as ComponentDispatcherInterface;
+use Joomla\CMS\Extension\ComponentInterface;
 use Joomla\CMS\Factory;
+use Joomla\CMS\Fields\FieldsServiceInterface;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\ModelInterface;
 use Joomla\CMS\Plugin\PluginHelper;
@@ -21,6 +27,7 @@ class ArticlesCustomFieldsFilterStateTest extends UnitTestCase
 {
     private mixed $previousApplication;
     private mixed $previousPlugins;
+    private mixed $previousComponents;
 
     protected function setUp(): void
     {
@@ -30,6 +37,9 @@ class ArticlesCustomFieldsFilterStateTest extends UnitTestCase
         $plugins->setAccessible(true);
         $this->previousPlugins = $plugins->getValue();
         $plugins->setValue(null, []);
+        $components               = new \ReflectionProperty(ComponentHelper::class, 'components');
+        $components->setAccessible(true);
+        $this->previousComponents = $components->getValue();
     }
 
     protected function tearDown(): void
@@ -38,6 +48,9 @@ class ArticlesCustomFieldsFilterStateTest extends UnitTestCase
         $plugins              = new \ReflectionProperty(PluginHelper::class, 'plugins');
         $plugins->setAccessible(true);
         $plugins->setValue(null, $this->previousPlugins);
+        $components = new \ReflectionProperty(ComponentHelper::class, 'components');
+        $components->setAccessible(true);
+        $components->setValue(null, $this->previousComponents);
         parent::tearDown();
     }
 
@@ -134,16 +147,84 @@ class ArticlesCustomFieldsFilterStateTest extends UnitTestCase
         $this->assertCount(1, $messages);
     }
 
+    public function testDisabledCustomFieldsCleanRememberedSelectionsAndPreserveNativeState(): void
+    {
+        $session  = ['com_content.articles.filter' => ['customfield_7' => ['01'], 'state' => '1']];
+        $messages = [];
+
+        $model = $this->createModel(new Input(), $session, false, $messages, false);
+
+        $this->assertSame(['state' => '1'], $model->getActiveFilters());
+        $this->assertSame(['state' => '1'], $session['com_content.articles.filter']);
+        $this->assertCount(1, $messages);
+        $this->assertSame('warning', $messages[0][1]);
+    }
+
+    public function testDisabledCustomFieldsRejectExplicitSelectionsButAcceptAnEmptySelection(): void
+    {
+        $session  = ['com_content.articles.filter' => ['state' => '1']];
+        $messages = [];
+        $model    = $this->createModel(
+            new Input(['filter' => ['customfield_7' => ['01'], 'state' => '0']]),
+            $session,
+            false,
+            $messages,
+            false,
+        );
+
+        $model->getActiveFilters();
+        $this->assertSame(['state' => '1'], $session['com_content.articles.filter']);
+        $this->assertSame('error', $messages[0][1]);
+
+        $session  = ['com_content.articles.filter' => ['state' => '1']];
+        $messages = [];
+        $model    = $this->createModel(
+            new Input(['filter' => ['customfield_7' => [''], 'state' => '0']]),
+            $session,
+            false,
+            $messages,
+            false,
+        );
+
+        $this->assertSame(['state' => '0'], $model->getActiveFilters());
+        $this->assertSame(['state' => '0'], $session['com_content.articles.filter']);
+        $this->assertSame([], $messages);
+
+        $session = [];
+        $model   = $this->createModel(new Input(), $session, true, $messages, false);
+        $model->setState('filter.customfield_7', ['01']);
+        $this->expectException(\InvalidArgumentException::class);
+        $model->getActiveFilters();
+    }
+
     private function createModel(
         Input $input,
         array &$session,
         bool $ignoreRequest = false,
         ?array &$messages = null,
+        ?bool $customFieldsEnabled = null,
     ): TestArticlesModel {
         $messages ??= [];
         $application = $this->createMock(CMSApplication::class);
         $application->method('getInput')->willReturn($input);
         $application->method('getIdentity')->willReturn(new User());
+        $fieldsComponent = new class () implements ComponentInterface, FieldsServiceInterface {
+            public function getDispatcher(CMSApplicationInterface $application): ComponentDispatcherInterface
+            {
+                throw new \LogicException('Not used by this test.');
+            }
+
+            public function validateSection($section, $item = null)
+            {
+                return $section === 'article' ? $section : null;
+            }
+
+            public function getContexts(): array
+            {
+                return ['com_content.article' => 'Article'];
+            }
+        };
+        $application->method('bootComponent')->with('com_content')->willReturn($fieldsComponent);
         $application->method('get')->willReturnCallback(static fn ($key, $default = null) => $key === 'list_limit' ? 20 : $default);
         $application->method('getUserState')->willReturnCallback(static function ($key, $default = null) use (&$session) {
             return $session[$key] ?? $default;
@@ -171,6 +252,12 @@ class ArticlesCustomFieldsFilterStateTest extends UnitTestCase
             }
         );
         Factory::$application = $application;
+
+        $component = new ComponentRecord(['option' => 'com_content', 'enabled' => 1]);
+        $component->setParams(new Registry($customFieldsEnabled === null ? [] : ['custom_fields_enable' => (int) $customFieldsEnabled]));
+        $components = new \ReflectionProperty(ComponentHelper::class, 'components');
+        $components->setAccessible(true);
+        $components->setValue(null, ['com_content' => $component]);
 
         $field = (object) [
             'id'          => 7,
@@ -209,7 +296,9 @@ class ArticlesCustomFieldsFilterStateTest extends UnitTestCase
         $dispatcher->addSubscriber(new ThirdPartyOptionFieldSubscriber());
         $service = new FieldsFilterService($factory, $this->createMock(DatabaseInterface::class), $dispatcher);
 
-        self::assertArrayHasKey(7, $service->prepare('com_content.article', [], new User(), false)->getControls());
+        if ($customFieldsEnabled !== false) {
+            self::assertArrayHasKey(7, $service->prepare('com_content.article', [], new User(), false)->getControls());
+        }
 
         return new TestArticlesModel($service, [
             'name'           => 'Articles',

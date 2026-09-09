@@ -48,7 +48,19 @@ class FieldFormRenderingTest extends UnitTestCase
             $this->assertCount(1, $definitions);
             $this->assertSame('formoptions', (string) $definitions[0]->xpath('parent::fieldset')[0]['name']);
             $this->assertSame(2, substr_count($leafMarkup, 'name="jform[params][show_in_admin_list_filter]"'));
-            $this->assertSame('0', (string) $form->getField('show_in_admin_list_filter', 'params')->value);
+            $field = $form->getField('show_in_admin_list_filter', 'params');
+            $this->assertSame('0', (string) $field->value);
+            $this->assertSame('joomla.form.field.radio.switcher', $field->layout);
+            $this->assertStringContainsString('name="jform[params][hint]"', $leafMarkup);
+
+            $dom = new \DOMDocument();
+            @$dom->loadHTML('<!doctype html><html><body>' . $field->renderField() . '</body></html>');
+            $xpath  = new \DOMXPath($dom);
+            $label  = $xpath->query('//label')->item(0);
+            $inputs = $xpath->query('//input[@name="jform[params][show_in_admin_list_filter]"]');
+            $this->assertNotNull($label);
+            $this->assertCount(2, $inputs);
+            $this->assertSame(1, $xpath->query('//*[@id="' . $label->getAttribute('for') . '"]')->length);
 
             foreach (['0', '1'] as $value) {
                 $form->bind(['params' => ['show_in_admin_list_filter' => $value]]);
