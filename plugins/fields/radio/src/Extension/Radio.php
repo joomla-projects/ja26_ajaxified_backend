@@ -11,6 +11,7 @@
 namespace Joomla\Plugin\Fields\Radio\Extension;
 
 use Joomla\CMS\Event\CustomFields\BeforePrepareFieldEvent;
+use Joomla\CMS\Event\CustomFields\GetFilterOptionsEvent;
 use Joomla\Component\Fields\Administrator\Plugin\FieldsListPlugin;
 use Joomla\Event\SubscriberInterface;
 
@@ -36,7 +37,15 @@ final class Radio extends FieldsListPlugin implements SubscriberInterface
     {
         return array_merge(parent::getSubscribedEvents(), [
             'onCustomFieldsBeforePrepareField' => 'beforePrepareField',
+            'onCustomFieldsGetFilterOptions'   => 'getFilterOptions',
         ]);
+    }
+
+    public function getFilterOptions(GetFilterOptionsEvent $event): void
+    {
+        if ($this->isTypeSupported($event->getField()->type)) {
+            $event->addResult($this->getListFilterOptions($event->getField()));
+        }
     }
 
     /**

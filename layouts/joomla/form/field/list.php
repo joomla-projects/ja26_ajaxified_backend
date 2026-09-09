@@ -85,6 +85,7 @@ if ($readonly) {
     $listoptions['option.key'] = 'value';
     $listoptions['option.text'] = 'text';
     $listoptions['list.select'] = $value;
+    $listoptions['list.strict'] = $field->getAttribute('strict') === 'true';
     $listoptions['id'] = $id;
     $listoptions['list.translate'] = false;
     $listoptions['option.attr'] = 'optionattr';
