@@ -10,6 +10,7 @@ use Joomla\CMS\Dispatcher\DispatcherInterface as ComponentDispatcherInterface;
 use Joomla\CMS\Extension\ComponentInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Fields\FieldsServiceInterface;
+use Joomla\CMS\Language\Multilanguage;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\ModelInterface;
 use Joomla\CMS\Plugin\PluginHelper;
@@ -28,28 +29,28 @@ class ArticlesCustomFieldsFilterStateTest extends UnitTestCase
     private mixed $previousApplication;
     private mixed $previousPlugins;
     private mixed $previousComponents;
+    private bool $previousMultilanguage;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->previousApplication = Factory::$application;
-        $plugins                   = new \ReflectionProperty(PluginHelper::class, 'plugins');
-        $plugins->setAccessible(true);
-        $this->previousPlugins = $plugins->getValue();
+        $this->previousApplication   = Factory::$application;
+        $this->previousMultilanguage = Multilanguage::$enabled;
+        $plugins                     = new \ReflectionProperty(PluginHelper::class, 'plugins');
+        $this->previousPlugins       = $plugins->getValue();
         $plugins->setValue(null, []);
-        $components               = new \ReflectionProperty(ComponentHelper::class, 'components');
-        $components->setAccessible(true);
-        $this->previousComponents = $components->getValue();
+        $components                  = new \ReflectionProperty(ComponentHelper::class, 'components');
+        $this->previousComponents    = $components->getValue();
+        Multilanguage::$enabled      = true;
     }
 
     protected function tearDown(): void
     {
-        Factory::$application = $this->previousApplication;
-        $plugins              = new \ReflectionProperty(PluginHelper::class, 'plugins');
-        $plugins->setAccessible(true);
+        Factory::$application   = $this->previousApplication;
+        Multilanguage::$enabled = $this->previousMultilanguage;
+        $plugins                = new \ReflectionProperty(PluginHelper::class, 'plugins');
         $plugins->setValue(null, $this->previousPlugins);
         $components = new \ReflectionProperty(ComponentHelper::class, 'components');
-        $components->setAccessible(true);
         $components->setValue(null, $this->previousComponents);
         parent::tearDown();
     }
@@ -256,7 +257,6 @@ class ArticlesCustomFieldsFilterStateTest extends UnitTestCase
         $component = new ComponentRecord(['option' => 'com_content', 'enabled' => 1]);
         $component->setParams(new Registry($customFieldsEnabled === null ? [] : ['custom_fields_enable' => (int) $customFieldsEnabled]));
         $components = new \ReflectionProperty(ComponentHelper::class, 'components');
-        $components->setAccessible(true);
         $components->setValue(null, ['com_content' => $component]);
 
         $field = (object) [

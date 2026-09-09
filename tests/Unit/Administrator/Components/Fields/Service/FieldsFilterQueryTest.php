@@ -3,6 +3,8 @@
 namespace Joomla\Tests\Unit\Administrator\Components\Fields\Service;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Component\ComponentHelper;
+use Joomla\CMS\Component\ComponentRecord;
 use Joomla\CMS\Document\HtmlDocument;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
@@ -21,6 +23,25 @@ use Joomla\Tests\Unit\UnitTestCase;
 
 class FieldsFilterQueryTest extends UnitTestCase
 {
+    private mixed $previousComponents;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $components               = new \ReflectionProperty(ComponentHelper::class, 'components');
+        $this->previousComponents = $components->getValue();
+        $components->setValue(null, [
+            'com_content' => new ComponentRecord(['option' => 'com_content', 'enabled' => 1]),
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        $components           = new \ReflectionProperty(ComponentHelper::class, 'components');
+        $components->setValue(null, $this->previousComponents);
+        parent::tearDown();
+    }
+
     public function testTwoFieldsBindIndependentValuesOnOuterQuery(): void
     {
         $db = $this->createMock(DatabaseInterface::class);

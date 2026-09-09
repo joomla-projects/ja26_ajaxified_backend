@@ -3,6 +3,8 @@
 namespace Joomla\Tests\Unit\Administrator\Components\Fields;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Component\ComponentHelper;
+use Joomla\CMS\Component\ComponentRecord;
 use Joomla\CMS\Document\HtmlDocument;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
@@ -14,6 +16,25 @@ use Joomla\Tests\Unit\UnitTestCase;
 
 class FieldFormRenderingTest extends UnitTestCase
 {
+    private mixed $previousApplication;
+    private mixed $previousComponents;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->previousApplication = Factory::$application;
+        $components                = new \ReflectionProperty(ComponentHelper::class, 'components');
+        $this->previousComponents  = $components->getValue();
+    }
+
+    protected function tearDown(): void
+    {
+        Factory::$application = $this->previousApplication;
+        $components           = new \ReflectionProperty(ComponentHelper::class, 'components');
+        $components->setValue(null, $this->previousComponents);
+        parent::tearDown();
+    }
+
     public function testAdministratorFilterSwitchIsRenderedOnceInFormOptionsAndBindsBothValues(): void
     {
         $previous    = Factory::$application;
@@ -31,6 +52,10 @@ class FieldFormRenderingTest extends UnitTestCase
         $application->method('getInput')->willReturn(new Input(['option' => 'com_fields']));
         $application->method('getTemplate')->willReturn('atum');
         $document->method('getWebAssetManager')->willReturn($assets);
+        $components = new \ReflectionProperty(ComponentHelper::class, 'components');
+        $components->setValue(null, [
+            'com_fields' => new ComponentRecord(['option' => 'com_fields', 'enabled' => 1]),
+        ]);
         Factory::$application = $application;
 
         try {

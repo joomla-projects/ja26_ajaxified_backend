@@ -32,11 +32,9 @@ class FieldsFilterEnablementTest extends UnitTestCase
         parent::setUp();
         $this->previousApplication = Factory::$application;
         $components                = new \ReflectionProperty(ComponentHelper::class, 'components');
-        $components->setAccessible(true);
-        $this->previousComponents = $components->getValue();
-        $plugins                  = new \ReflectionProperty(PluginHelper::class, 'plugins');
-        $plugins->setAccessible(true);
-        $this->previousPlugins = $plugins->getValue();
+        $this->previousComponents  = $components->getValue();
+        $plugins                   = new \ReflectionProperty(PluginHelper::class, 'plugins');
+        $this->previousPlugins     = $plugins->getValue();
         $plugins->setValue(null, []);
     }
 
@@ -44,10 +42,8 @@ class FieldsFilterEnablementTest extends UnitTestCase
     {
         Factory::$application = $this->previousApplication;
         $components           = new \ReflectionProperty(ComponentHelper::class, 'components');
-        $components->setAccessible(true);
         $components->setValue(null, $this->previousComponents);
         $plugins = new \ReflectionProperty(PluginHelper::class, 'plugins');
-        $plugins->setAccessible(true);
         $plugins->setValue(null, $this->previousPlugins);
         parent::tearDown();
     }
@@ -115,7 +111,6 @@ class FieldsFilterEnablementTest extends UnitTestCase
         $component = new ComponentRecord(['option' => 'com_fixture', 'enabled' => 1]);
         $component->setParams(new Registry($enabled === null ? [] : ['custom_fields_enable' => $enabled]));
         $components = new \ReflectionProperty(ComponentHelper::class, 'components');
-        $components->setAccessible(true);
         $components->setValue(null, ['com_fixture' => $component]);
 
         $fieldsComponent = new class () implements ComponentInterface, FieldsServiceInterface {
