@@ -20,9 +20,11 @@ use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\Component\Fields\Administrator\Autosave\FieldAutosaveProvider;
 use Joomla\Component\Fields\Administrator\Autosave\GroupAutosaveProvider;
 use Joomla\Component\Fields\Administrator\Extension\FieldsComponent;
+use Joomla\Component\Fields\Administrator\Service\FieldsFilterService;
 use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
+use Joomla\Event\DispatcherInterface;
 
 /**
  * The fields service provider.
@@ -52,6 +54,11 @@ return new class () implements ServiceProviderInterface {
 
                 $component->setMVCFactory($container->get(MVCFactoryInterface::class));
                 $component->setCategoryFactory($container->get(CategoryFactoryInterface::class));
+                $component->setFieldsFilterService(new FieldsFilterService(
+                    $container->get(MVCFactoryInterface::class),
+                    $container->get(DatabaseInterface::class),
+                    $container->get(DispatcherInterface::class),
+                ));
                 $provider = new GroupAutosaveProvider($container->get(DatabaseInterface::class));
                 $component->setAutosaveProvider($provider->getContext(), $provider);
                 $provider = new FieldAutosaveProvider($container->get(DatabaseInterface::class));

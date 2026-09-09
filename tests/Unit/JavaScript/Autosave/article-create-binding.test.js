@@ -72,6 +72,40 @@ test('same history entry restores its validated provisional binding', () => {
   assert.equal(reloaded.initializationKey, 'stable-form');
 });
 
+test('immutable create descriptors keep independent browser lineages in one history entry', () => {
+  let next = 0;
+  const history = createHistory();
+  const storage = createStorage();
+  const list = new ArticleAutosaveCreateBinding({
+    context,
+    lineageKey: 'descriptor:list',
+    historySource: history,
+    storage,
+    identityFactory: () => `form-${++next}`,
+  });
+  list.bind({ context, target_id: provisional });
+  const radio = new ArticleAutosaveCreateBinding({
+    context,
+    lineageKey: 'descriptor:radio',
+    historySource: history,
+    storage,
+    identityFactory: () => `form-${++next}`,
+  });
+  const restoredList = new ArticleAutosaveCreateBinding({
+    context,
+    lineageKey: 'descriptor:list',
+    historySource: history,
+    storage,
+    identityFactory: () => 'must-not-be-used',
+  });
+
+  assert.equal(list.formInstanceId, 'form-1');
+  assert.equal(radio.formInstanceId, 'form-2');
+  assert.equal(radio.targetId, null);
+  assert.equal(restoredList.formInstanceId, 'form-1');
+  assert.equal(restoredList.targetId, provisional);
+});
+
 test('malformed stored authority is discarded and never rebound', () => {
   const history = createHistory({ [HISTORY_KEY]: { [context]: 'stable-form' } });
   const storage = createStorage();

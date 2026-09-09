@@ -310,6 +310,11 @@ final class FieldAutosaveProvider implements
         return $this->schemaFactory->fromForm($form, (string) $record->type);
     }
 
+    public function fullyRepresentsDynamicForm(string $type, Form $form): bool
+    {
+        return $this->schemaFactory->fullyRepresentsForm($form, $type);
+    }
+
     public function getDynamicSchemaForType(string $type): AutosaveDynamicSchema
     {
         return ($this->schemaResolver)($type);

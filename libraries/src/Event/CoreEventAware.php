@@ -193,6 +193,7 @@ trait CoreEventAware
         'onAfterCheckin' => Checkin\AfterCheckinEvent::class,
         // Custom Fields
         'onCustomFieldsGetTypes'           => CustomFields\GetTypesEvent::class,
+        'onCustomFieldsGetFilterOptions'   => CustomFields\GetFilterOptionsEvent::class,
         'onCustomFieldsPrepareDom'         => CustomFields\PrepareDomEvent::class,
         'onCustomFieldsBeforePrepareField' => CustomFields\BeforePrepareFieldEvent::class,
         'onCustomFieldsPrepareField'       => CustomFields\PrepareFieldEvent::class,

@@ -26,20 +26,34 @@ export default class FieldAutosaveController extends AutosaveIntegrationControll
   constructor({ documentSource = globalThis.document, optionsReader = defaultOptionsReader, adapterFactory = (options) => new FieldAutosaveAdapter(options), createBindingFactory = (options) => new AutosaveCreateBinding(options), ...options } = {}) {
     if (typeof createBindingFactory !== 'function') throw new TypeError('The Custom Field Autosave controller configuration is invalid.');
     let createBinding = null;
+    let createBindingScope = null;
     const resolve = () => {
-      const config = validateConfiguration(optionsReader(OPTIONS_KEY, null)); if (!config) { createBinding = null; return null; }
-      if (config.mode === 'create' && !createBinding) createBinding = createBindingFactory({ context: config.context });
-      else if (config.mode === 'existing') createBinding = null;
+      const config = validateConfiguration(optionsReader(OPTIONS_KEY, null)); if (!config) { createBinding = null; createBindingScope = null; return null; }
+      if (config.mode === 'create' && (!createBinding || createBindingScope !== config.createScope)) {
+        createBinding = createBindingFactory({ context: config.context, lineageKey: config.createScope || config.context });
+        createBindingScope = config.createScope;
+      } else if (config.mode === 'existing') {
+        createBinding = null;
+        createBindingScope = null;
+      }
       const createMode = createBinding?.descriptor() || null;
       const form = documentSource.getElementById(config.formId); if (!form?.isConnected) return null;
       const staticFields = {};
       STATIC_STRINGS.forEach((key) => { staticFields[key] = documentSource.getElementById(config.fieldIds[key]); });
       STATIC_BOOLEANS.forEach((key) => { staticFields[key] = [...form.querySelectorAll(`[name="jform[${key}]"]`)]; });
       const dynamicFields = {};
-      config.dynamicSchema.fields.forEach((field) => { dynamicFields[field.path[1]] = field.kind === 'rows' ? [...form.querySelectorAll(`[name^="jform[fieldparams][${field.path[1]}]"]`)] : [...form.querySelectorAll(`[name="jform[fieldparams][${field.path[1]}]"]`)]; if (!dynamicFields[field.path[1]].length) { const control = documentSource.getElementById(field.id); if (control) dynamicFields[field.path[1]] = [control]; } });
-      const all = [...STATIC_STRINGS.map((key) => staticFields[key]), ...STATIC_BOOLEANS.flatMap((key) => staticFields[key]), ...Object.values(dynamicFields).flat()];
+      config.dynamicSchema.fields.forEach((field) => {
+        if (field.kind === 'rows') {
+          const hosts = [...form.querySelectorAll(`joomla-field-subform[name="jform[fieldparams][${field.path[1]}]"]`)];
+          dynamicFields[field.path[1]] = hosts.length === 1 ? hosts[0] : null;
+          return;
+        }
+        dynamicFields[field.path[1]] = [...form.querySelectorAll(`[name="jform[fieldparams][${field.path[1]}]"]`)];
+        if (!dynamicFields[field.path[1]].length) { const control = documentSource.getElementById(field.id); if (control) dynamicFields[field.path[1]] = [control]; }
+      });
+      const all = [...STATIC_STRINGS.map((key) => staticFields[key]), ...STATIC_BOOLEANS.flatMap((key) => staticFields[key]), ...Object.values(dynamicFields).flatMap((value) => (Array.isArray(value) ? value : [value]))];
       if (all.some((control) => !control?.isConnected || !form.contains(control))) return null;
-      return { descriptor: { context: config.context, targetId: createMode?.targetId || config.targetId, payloadSchemaVersion: config.payloadSchemaVersion }, createMode, form, identityParts: [createMode?.formInstanceId || config.targetId, ...all], taskPolicy: TASK_POLICY,
+      return { descriptor: { context: config.context, targetId: createMode?.targetId || config.targetId, payloadSchemaVersion: config.payloadSchemaVersion }, createMode, form, identityParts: [config.createScope || config.targetId, createMode?.formInstanceId || config.targetId, config.dynamicSchema.fingerprint, ...all], taskPolicy: TASK_POLICY,
         statusMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-status-ui]'), recoveryMount: resolveAutosaveUiMount(form, '[data-joomla-autosave-recovery-ui]'),
         presentationConfiguration: { locale: config.locale || '', timeZone: config.timeZone || '', supportStatus: config.dynamicSchema.support.status }, pairProperties: { staticFields, dynamicFields, schema: config.dynamicSchema }, createScope: config.mode === 'create' ? config.createScope || null : undefined };
     };

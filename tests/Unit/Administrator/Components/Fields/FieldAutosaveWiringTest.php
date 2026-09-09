@@ -23,4 +23,21 @@ class FieldAutosaveWiringTest extends UnitTestCase
         $this->assertStringContainsString('joomla.autosave.status', $template);
         $this->assertStringContainsString('joomla.autosave.recovery', $template);
     }
+
+    public function testFieldAutosaveLoadsAfterTheNativeSubformElement(): void
+    {
+        $manifest = json_decode(
+            file_get_contents(JPATH_ROOT . '/media_source/com_fields/joomla.asset.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+        $assets   = array_column($manifest['assets'], null, 'name');
+
+        $this->assertContains(
+            'webcomponent.field-subform',
+            $assets['com_fields.field-autosave']['dependencies'],
+            'Option-row autosave must not reconcile before joomla-field-subform is upgraded.'
+        );
+    }
 }

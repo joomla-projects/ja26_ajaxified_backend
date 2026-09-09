@@ -36,6 +36,11 @@ $wa->useScript('keepalive')
     <?php if ($this->autosaveEnabled) : ?>
         <?php echo LayoutHelper::render('joomla.autosave.status'); ?>
         <?php echo LayoutHelper::render('joomla.autosave.recovery'); ?>
+        <?php if ($this->autosavePartial) : ?>
+            <div class="alert alert-info py-2 small" role="note">
+                <?php echo Text::_('COM_FIELDS_AUTOSAVE_PARTIAL_NOTICE'); ?>
+            </div>
+        <?php endif; ?>
     <?php endif; ?>
 
     <?php echo LayoutHelper::render('joomla.edit.title_alias', $this); ?>

@@ -11,7 +11,8 @@
       "uri": "com_fields/field-autosave.min.js",
       "dependencies": [
         "com_autosave.integration-controller",
-        "com_autosave.create-binding"
+        "com_autosave.create-binding",
+        "webcomponent.field-subform"
       ],
       "attributes": {"type": "module"}
     },

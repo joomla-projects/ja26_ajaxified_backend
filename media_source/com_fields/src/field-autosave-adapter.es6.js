@@ -14,7 +14,10 @@ const validateSchema = (schema) => {
     const key = field.path.join('\0'); if (paths.has(key)) throw new TypeError('Duplicate Custom Field Autosave path.'); paths.add(key);
     if (field.kind === 'string' && (!Number.isInteger(field.maxLength) || field.maxLength < 1 || field.maxLength > 4096)) throw new TypeError('Invalid Custom Field string bound.');
     if (['enum', 'strings'].includes(field.kind) && (!Array.isArray(field.values) || !field.values.length || field.values.length > 64 || field.values.some((value) => typeof value !== 'string'))) throw new TypeError('Invalid Custom Field enum.');
-    if (field.kind === 'rows' && (!plain(field.columns) || !Object.keys(field.columns).length || Object.keys(field.columns).some((keyName) => dangerous.has(keyName)))) throw new TypeError('Invalid Custom Field row schema.');
+    if (field.kind === 'rows' && (!plain(field.columns) || !Object.keys(field.columns).length
+      || !Number.isInteger(field.maxItems) || field.maxItems < 1 || field.maxItems > 50
+      || Object.entries(field.columns).some(([keyName, maximum]) => dangerous.has(keyName) || !/^[A-Za-z][A-Za-z0-9_-]{0,47}$/.test(keyName)
+        || !Number.isInteger(maximum) || maximum < 1 || maximum > 4096))) throw new TypeError('Invalid Custom Field row schema.');
     return Object.freeze({ ...field, path: Object.freeze([...field.path]), values: field.values ? Object.freeze([...field.values]) : undefined, columns: field.columns ? Object.freeze({ ...field.columns }) : undefined });
   });
   const support = validateSupport(schema.support || { status: 'supported', reasons: [], parameterless: schema.fields.length === 0 });
@@ -34,11 +37,31 @@ export default class FieldAutosaveAdapter {
     if (!plain(descriptor) || !form || !plain(staticFields) || !plain(dynamicFields)) throw new TypeError('Invalid Custom Field Autosave adapter.');
     this.descriptor = Object.freeze({ ...descriptor }); this.form = form; this.staticFields = staticFields; this.dynamicFields = dynamicFields;
     this.schema = validateSchema(schema); this.eventFactory = eventFactory; this.callback = null; this.baseline = null; this.suppress = 0; this.destroyed = false; this.listener = () => this.changed();
+    this.rowListener = () => { if (!this.suppress) queueMicrotask(() => this.changed()); };
   }
   getDescriptor() { return this.descriptor; }
   initializeBaseline() { this.baseline = this.snapshot(); return this; }
-  subscribe(callback) { this.callback = callback; this.controls().forEach((control) => { control.addEventListener('input', this.listener); control.addEventListener('change', this.listener); }); return () => this.unsubscribe(); }
-  unsubscribe() { this.controls().forEach((control) => { control.removeEventListener('input', this.listener); control.removeEventListener('change', this.listener); }); this.callback = null; }
+  subscribe(callback) {
+    this.callback = callback;
+    this.form.addEventListener('input', this.listener);
+    this.form.addEventListener('change', this.listener);
+    this.rowHosts().forEach((host) => {
+      host.addEventListener('subform-row-add', this.rowListener);
+      host.addEventListener('subform-row-remove', this.rowListener);
+      host.addEventListener('subform-order-changed', this.rowListener);
+    });
+    return () => this.unsubscribe();
+  }
+  unsubscribe() {
+    this.form?.removeEventListener?.('input', this.listener);
+    this.form?.removeEventListener?.('change', this.listener);
+    this.rowHosts().forEach((host) => {
+      host.removeEventListener('subform-row-add', this.rowListener);
+      host.removeEventListener('subform-row-remove', this.rowListener);
+      host.removeEventListener('subform-order-changed', this.rowListener);
+    });
+    this.callback = null;
+  }
   capture() { this.baseline = this.snapshot(); return structuredClone(this.baseline); }
   snapshot() {
     const payload = {};
@@ -49,13 +72,22 @@ export default class FieldAutosaveAdapter {
     return payload;
   }
   readDynamic(field) {
-    const controls = this.dynamicFields[field.path[1]];
+    const controls = this.dynamicControls(field);
     if (field.kind === 'boolean') return controls[0].checked;
     if (field.kind === 'enum') return controls.length > 1 ? (controls.find((control) => control.checked)?.value ?? '') : controls[0].value;
     if (field.kind === 'strings') return Array.from(controls[0].selectedOptions || []).map((option) => option.value);
     if (field.kind === 'rows') {
-      const rows = new Map(); controls.forEach((control) => { const match = control.name.match(/\[([^\]]+)]\[([^\]]+)]$/); if (match && Object.hasOwn(field.columns, match[2])) { if (!rows.has(match[1])) rows.set(match[1], Object.create(null)); rows.get(match[1])[match[2]] = control.value; } });
-      return [...rows.values()].filter((row) => Object.keys(row).length === Object.keys(field.columns).length);
+      const rows = this.rowHost(field).getRows();
+      if (rows.length > field.maxItems) throw new TypeError('Custom Field option rows exceed their bound.');
+      return rows.map((row) => {
+        const result = {};
+        Object.entries(field.columns).forEach(([column, maximum]) => {
+          const matches = [...row.querySelectorAll('[name]')].filter((control) => control.closest('joomla-field-subform') === this.rowHost(field) && control.name.endsWith(`[${column}]`));
+          if (matches.length !== 1 || typeof matches[0].value !== 'string' || stringLength(matches[0].value) > maximum) throw new TypeError('Invalid Custom Field option row.');
+          result[column] = matches[0].value;
+        });
+        return result;
+      });
     }
     const value = controls[0].value; if (stringLength(value) > field.maxLength) throw new TypeError('Custom Field value exceeds its bound.'); return value;
   }
@@ -65,8 +97,8 @@ export default class FieldAutosaveAdapter {
     STATIC_STRINGS.forEach((key) => { this.staticFields[key].value = payload[key]; dispatch(this.staticFields[key], this.eventFactory); });
     STATIC_BOOLEANS.forEach((key) => { this.staticFields[key].forEach((control) => { control.checked = control.value === (payload[key] ? '1' : '0'); dispatch(control, this.eventFactory); }); });
     this.schema.fields.forEach((field) => {
-      const value = payload.fieldparams[field.path[1]]; const controls = this.dynamicFields[field.path[1]];
-      if (field.kind === 'rows') { const flat = value.flatMap((row) => Object.entries(row)); controls.forEach((control, index) => { if (flat[index]) { control.value = flat[index][1]; dispatch(control, this.eventFactory); } }); return; }
+      const value = payload.fieldparams[field.path[1]]; const controls = this.dynamicControls(field);
+      if (field.kind === 'rows') { this.writeRows(field, value); return; }
       if (field.kind === 'strings') { [...controls[0].options].forEach((option) => { option.selected = value.includes(option.value); }); dispatch(controls[0], this.eventFactory); return; }
       if (field.kind === 'boolean') { controls[0].checked = value; dispatch(controls[0], this.eventFactory); return; }
       if (field.kind === 'enum' && controls.length > 1) { controls.forEach((control) => { control.checked = control.value === value; dispatch(control, this.eventFactory); }); return; }
@@ -91,7 +123,40 @@ export default class FieldAutosaveAdapter {
     });
   }
   changed() { if (this.destroyed || this.suppress || !this.callback) return; const next = this.snapshot(); if (JSON.stringify(next) !== JSON.stringify(this.baseline)) { this.baseline = next; this.callback(); } }
-  controls() { return [...STATIC_STRINGS.map((key) => this.staticFields[key]), ...STATIC_BOOLEANS.flatMap((key) => this.staticFields[key]), ...Object.values(this.dynamicFields).flat()]; }
+  rowHost(field) {
+    const host = this.dynamicFields[field.path[1]];
+    if (!host || typeof host.getRows !== 'function' || typeof host.addRow !== 'function' || typeof host.removeRow !== 'function') throw new TypeError('Invalid Custom Field option host.');
+    return host;
+  }
+  rowHosts() { return this.schema.fields.filter((field) => field.kind === 'rows').map((field) => this.rowHost(field)); }
+  dynamicControls(field) {
+    if (field.kind !== 'rows') return this.dynamicFields[field.path[1]];
+    const host = this.rowHost(field);
+    return host.getRows().flatMap((row) => [...row.querySelectorAll('[name]')].filter((control) => control.closest('joomla-field-subform') === host));
+  }
+  writeRows(field, value) {
+    const host = this.rowHost(field);
+    let rows = host.getRows();
+    while (rows.length < value.length) {
+      if (!host.addRow(rows.at(-1) || null)) throw new TypeError('Custom Field option rows cannot be restored.');
+      rows = host.getRows();
+    }
+    while (rows.length > value.length) {
+      const count = rows.length;
+      host.removeRow(rows.at(-1));
+      rows = host.getRows();
+      if (rows.length >= count) throw new TypeError('Custom Field option rows cannot be restored.');
+    }
+    rows.forEach((row, index) => {
+      Object.keys(field.columns).forEach((column) => {
+        const matches = [...row.querySelectorAll('[name]')].filter((control) => control.closest('joomla-field-subform') === host && control.name.endsWith(`[${column}]`));
+        if (matches.length !== 1) throw new TypeError('Invalid Custom Field option row.');
+        matches[0].value = value[index][column];
+        dispatch(matches[0], this.eventFactory);
+      });
+    });
+  }
+  controls() { return [...STATIC_STRINGS.map((key) => this.staticFields[key]), ...STATIC_BOOLEANS.flatMap((key) => this.staticFields[key]), ...this.schema.fields.flatMap((field) => (field.kind === 'rows' ? [this.rowHost(field), ...this.dynamicControls(field)] : this.dynamicFields[field.path[1]]))]; }
   isCurrent() { return !this.destroyed && this.form?.isConnected && this.controls().every((control) => control?.isConnected && this.form.contains(control)); }
   destroy() { if (this.destroyed) return; this.unsubscribe(); this.destroyed = true; this.form = null; }
 }

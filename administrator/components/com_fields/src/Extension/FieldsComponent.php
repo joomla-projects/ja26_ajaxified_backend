@@ -15,6 +15,7 @@ use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Categories\CategoryServiceInterface;
 use Joomla\CMS\Categories\CategoryServiceTrait;
 use Joomla\CMS\Extension\MVCComponent;
+use Joomla\Component\Fields\Administrator\Service\FieldsFilterService;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -29,6 +30,19 @@ class FieldsComponent extends MVCComponent implements CategoryServiceInterface, 
 {
     use AutosaveServiceTrait;
     use CategoryServiceTrait;
+
+    /** @var FieldsFilterService */
+    private FieldsFilterService $fieldsFilterService;
+
+    public function setFieldsFilterService(FieldsFilterService $fieldsFilterService): void
+    {
+        $this->fieldsFilterService = $fieldsFilterService;
+    }
+
+    public function getFieldsFilterService(): FieldsFilterService
+    {
+        return $this->fieldsFilterService;
+    }
 
     public function getAutosaveContexts(): array
     {

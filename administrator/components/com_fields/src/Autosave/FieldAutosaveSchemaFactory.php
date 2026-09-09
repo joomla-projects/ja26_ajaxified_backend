@@ -78,6 +78,30 @@ final class FieldAutosaveSchemaFactory
         );
     }
 
+    public function fullyRepresentsForm(Form $form, string $type): bool
+    {
+        $fields = [];
+        foreach ($form->getFieldsets('fieldparams') as $fieldset) {
+            $fields = [...$fields, ...$form->getFieldset($fieldset->name)];
+        }
+
+        if ($fields === []) {
+            return true;
+        }
+
+        if (!\in_array($type, self::SUPPORTED_FIELD_TYPES, true)) {
+            return false;
+        }
+
+        foreach ($fields as $field) {
+            if ($this->descriptor($field, $type) === null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private function descriptor(object $field, string $type): ?array
     {
         $name      = (string) $field->fieldname;

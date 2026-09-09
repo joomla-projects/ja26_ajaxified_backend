@@ -25,18 +25,55 @@ class FieldAutosaveProviderTest extends UnitTestCase
         Factory::$application = $application;
 
         try {
-            $factory  = new FieldAutosaveSchemaFactory();
-            $text     = $factory->forType('text');
-            $calendar = $factory->forType('calendar');
-            $list     = $factory->forType('list');
-
-            $renderedForm = new Form('com_fields.field', ['control' => 'jform']);
-            $renderedForm->load(file_get_contents(JPATH_PLUGINS . '/fields/text/params/text.xml'), true, '/form/*');
+            $factory    = new FieldAutosaveSchemaFactory();
+            $text       = $factory->forType('text');
+            $calendar   = $factory->forType('calendar');
+            $list       = $factory->forType('list');
+            $radio      = $factory->forType('radio');
+            $checkboxes = $factory->forType('checkboxes');
 
             $this->assertSame(['filter', 'maxlength'], array_map(static fn (array $field): string => $field['path'][1], $text->fields()));
-            $this->assertSame($factory->fromForm($renderedForm, 'text')->fingerprint(), $text->fingerprint());
+            foreach (['text', 'list', 'radio', 'checkboxes'] as $type) {
+                $renderedForm = new Form('com_fields.field', ['control' => 'jform']);
+                $renderedForm->load(file_get_contents(JPATH_ADMINISTRATOR . '/components/com_fields/forms/field.xml'));
+                $renderedForm->load(file_get_contents(JPATH_PLUGINS . '/fields/' . $type . '/params/' . $type . '.xml'), true, '/form/*');
+
+                $this->assertSame(
+                    $factory->forType($type)->fingerprint(),
+                    $factory->fromForm($renderedForm, $type)->fingerprint(),
+                    'The standalone and natively extended forms must describe the same Autosave schema for ' . $type
+                );
+            }
+            $support = [
+                'calendar'      => true, 'checkboxes' => true, 'color' => true, 'editor' => false,
+                'imagelist'     => true, 'integer' => true, 'list' => true, 'note' => false,
+                'number'        => true, 'radio' => true, 'sql' => false, 'subform' => false,
+                'text'          => true, 'textarea' => true, 'url' => true, 'user' => true,
+                'usergrouplist' => true, 'audio' => false, 'document' => false,
+                'media'         => false, 'video' => false,
+            ];
+            foreach ($support as $type => $complete) {
+                $plugin       = \in_array($type, ['audio', 'document', 'media', 'video'], true) ? 'media' : $type;
+                $renderedForm = new Form('com_fields.field', ['control' => 'jform']);
+                $renderedForm->load(file_get_contents(JPATH_ADMINISTRATOR . '/components/com_fields/forms/field.xml'));
+                $path = JPATH_PLUGINS . '/fields/' . $plugin . '/params/' . $type . '.xml';
+                if (is_file($path)) {
+                    $renderedForm->load(file_get_contents($path), true, '/form/*');
+                }
+
+                $this->assertSame($complete, $factory->fullyRepresentsForm($renderedForm, $type), 'Unexpected recovery support classification for ' . $type);
+            }
             $this->assertNotSame($text->fingerprint(), $calendar->fingerprint());
             $this->assertContains('rows', array_column($list->fields(), 'kind'));
+            $this->assertSame(['header', 'multiple', 'options'], array_map(static fn (array $field): string => $field['path'][1], $list->fields()));
+            $this->assertSame(['options'], array_map(static fn (array $field): string => $field['path'][1], $radio->fields()));
+            $this->assertSame(['options'], array_map(static fn (array $field): string => $field['path'][1], $checkboxes->fields()));
+            foreach ([$list, $radio, $checkboxes] as $optionSchema) {
+                $options = array_values(array_filter($optionSchema->fields(), static fn (array $field): bool => $field['path'][1] === 'options'))[0];
+                $this->assertSame('rows', $options['kind']);
+                $this->assertSame(50, $options['maxItems']);
+                $this->assertSame(['name' => 255, 'value' => 255], $options['columns']);
+            }
             $this->assertSame([], $factory->forType('sql')->fields());
         } finally {
             Factory::$application = $previous;

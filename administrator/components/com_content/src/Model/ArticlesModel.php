@@ -12,6 +12,7 @@ namespace Joomla\Component\Content\Administrator\Model;
 
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
+use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Associations;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
@@ -19,6 +20,9 @@ use Joomla\CMS\MVC\Model\ListModel;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\Table\Category;
 use Joomla\Component\Content\Administrator\Extension\ContentComponent;
+use Joomla\Component\Fields\Administrator\Extension\FieldsComponent;
+use Joomla\Component\Fields\Administrator\Filter\PreparedFieldsFilter;
+use Joomla\Component\Fields\Administrator\Service\FieldsFilterService;
 use Joomla\Database\ParameterType;
 use Joomla\Database\QueryInterface;
 use Joomla\Registry\Registry;
@@ -35,6 +39,9 @@ use Joomla\Utilities\ArrayHelper;
  */
 class ArticlesModel extends ListModel
 {
+    /** @var PreparedFieldsFilter|null */
+    private ?PreparedFieldsFilter $preparedFieldsFilter = null;
+
     /**
      * Constructor.
      *
@@ -107,7 +114,25 @@ class ArticlesModel extends ListModel
             $form->removeField('stage', 'filter');
         }
 
+        if ($form) {
+            $this->getFieldsFilterService()->bindForm($form, $this->getPreparedFieldsFilter());
+        }
+
         return $form;
+    }
+
+    /**
+     * Add eligible Custom Field controls before ListModel binds filter state.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    protected function preprocessForm(Form $form, $data, $group = 'content'): void
+    {
+        parent::preprocessForm($form, $data, $group);
+
+        if (str_ends_with($form->getName(), '.filter')) {
+            $this->getFieldsFilterService()->augmentForm($form, $this->getPreparedFieldsFilter());
+        }
     }
 
     /**
@@ -124,8 +149,9 @@ class ArticlesModel extends ListModel
      */
     protected function populateState($ordering = 'a.id', $direction = 'desc')
     {
-        $app   = Factory::getApplication();
-        $input = $app->getInput();
+        $app      = Factory::getApplication();
+        $input    = $app->getInput();
+        $explicit = $input->exists('filter');
 
         $forcedLanguage = $input->get('forcedLanguage', '', 'cmd');
 
@@ -138,6 +164,8 @@ class ArticlesModel extends ListModel
         if ($forcedLanguage) {
             $this->context .= '.' . $forcedLanguage;
         }
+
+        $oldFilters = (array) $app->getUserState($this->context . '.filter', []);
 
         // Required content filters for the administrator menu
         $this->getUserStateFromRequest($this->context . '.filter.category_id', 'filter_category_id');
@@ -156,6 +184,60 @@ class ArticlesModel extends ListModel
         if (!empty($forcedLanguage)) {
             $this->setState('filter.language', $forcedLanguage);
             $this->setState('filter.forcedLanguage', $forcedLanguage);
+        }
+
+        $filters                    = (array) $app->getUserState($this->context . '.filter', []);
+        $this->preparedFieldsFilter = $this->getFieldsFilterService()->prepare(
+            'com_content.article',
+            $filters,
+            $this->getCurrentUser(),
+            $explicit,
+        );
+
+        if ($this->preparedFieldsFilter->isRejected()) {
+            $app->setUserState($this->context . '.filter', $oldFilters);
+            $app->enqueueMessage(Text::_('COM_CONTENT_ERROR_CUSTOM_FIELD_FILTER_INVALID'), 'error');
+        } else {
+            $oldSelections = [];
+
+            foreach ($oldFilters as $name => $value) {
+                if (preg_match('/^customfield_([1-9][0-9]*)$/D', (string) $name, $match) && \is_array($value)) {
+                    $oldSelections[(int) $match[1]] = array_values(array_unique(array_map('strval', $value), SORT_STRING));
+                    sort($oldSelections[(int) $match[1]], SORT_STRING);
+                }
+            }
+
+            foreach (array_keys($filters) as $name) {
+                if (str_starts_with((string) $name, 'customfield_')) {
+                    unset($filters[$name]);
+                }
+            }
+
+            foreach ($this->preparedFieldsFilter->getSelections() as $fieldId => $values) {
+                $filters['customfield_' . $fieldId] = $values;
+                $this->setState('filter.customfield_' . $fieldId, $values);
+            }
+
+            $newSelections = $this->preparedFieldsFilter->getSelections();
+
+            foreach ($newSelections as &$values) {
+                sort($values, SORT_STRING);
+            }
+
+            ksort($oldSelections, SORT_NUMERIC);
+            ksort($newSelections, SORT_NUMERIC);
+
+            if ($oldSelections !== $newSelections) {
+                $input->set('limitstart', 0);
+                $this->setState('list.start', 0);
+                $app->setUserState($this->context . '.limitstart', 0);
+            }
+
+            if (!$explicit && $this->preparedFieldsFilter->getIssues()) {
+                $app->enqueueMessage(Text::_('COM_CONTENT_WARNING_CUSTOM_FIELD_FILTER_STALE'), 'warning');
+            }
+
+            $app->setUserState($this->context . '.filter', $filters);
         }
     }
 
@@ -189,6 +271,7 @@ class ArticlesModel extends ListModel
         $id .= ':' . $this->getState('filter.start_date_range');
         $id .= ':' . $this->getState('filter.end_date_range');
         $id .= ':' . $this->getState('filter.relative_date');
+        $id .= ':customfields:' . $this->getPreparedFieldsFilter()->getFingerprint();
 
         return parent::getStoreId($id);
     }
@@ -663,6 +746,13 @@ class ArticlesModel extends ListModel
                 break;
         }
 
+        $this->getFieldsFilterService()->applyToQuery(
+            $query,
+            $this->getPreparedFieldsFilter(),
+            $db->quoteName('a.id'),
+            'integer',
+        );
+
         // Add the list ordering clause.
         $orderCol  = $this->state->get('list.ordering', $defaultOrdering);
         $orderDirn = $this->state->get('list.direction', 'DESC');
@@ -679,6 +769,67 @@ class ArticlesModel extends ListModel
         $query->order($ordering);
 
         return $query;
+    }
+
+    /**
+     * Return active filters without making dynamic fields valid ordering columns.
+     *
+     * @return  array
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function getActiveFilters()
+    {
+        // The view may request active filters before any other model data.
+        // Prepare first so ListModel never reads an uninitialised state object.
+        $prepared = $this->getPreparedFieldsFilter();
+
+        return array_merge(parent::getActiveFilters(), $prepared->getActiveFilters());
+    }
+
+    private function getPreparedFieldsFilter(): PreparedFieldsFilter
+    {
+        if ($this->preparedFieldsFilter !== null) {
+            return $this->preparedFieldsFilter;
+        }
+
+        $this->getState();
+
+        if ($this->preparedFieldsFilter === null) {
+            $filters = [];
+
+            foreach ($this->state->toArray() as $name => $value) {
+                if (str_starts_with($name, 'filter.customfield_')) {
+                    $filters[substr($name, 7)] = $value;
+                }
+            }
+
+            $prepared = $this->getFieldsFilterService()->prepare(
+                'com_content.article',
+                $filters,
+                $this->getCurrentUser(),
+                false,
+            );
+
+            if ($prepared->getIssues()) {
+                throw new \InvalidArgumentException('Invalid programmatic Custom Field filter state.');
+            }
+
+            $this->preparedFieldsFilter = $prepared;
+        }
+
+        return $this->preparedFieldsFilter;
+    }
+
+    protected function getFieldsFilterService(): FieldsFilterService
+    {
+        $component = Factory::getApplication()->bootComponent('com_fields');
+
+        if (!$component instanceof FieldsComponent) {
+            throw new \RuntimeException('The Fields component does not provide Custom Field filtering.');
+        }
+
+        return $component->getFieldsFilterService();
     }
 
     /**
