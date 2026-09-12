@@ -16,6 +16,8 @@ use Joomla\CMS\Language\Text;
 
 extract($displayData);
 
+$strict = $strict ?? false;
+
 /**
  * Layout variables
  * -----------------
@@ -93,7 +95,7 @@ if ($readonly) {
     $listoptions['option.key'] = 'value';
     $listoptions['option.text'] = 'text';
     $listoptions['list.select'] = $value;
-    $listoptions['list.strict'] = $field->getAttribute('strict') === 'true';
+    $listoptions['list.strict'] = $strict;
     $listoptions['id'] = $id;
     $listoptions['list.translate'] = false;
     $listoptions['list.attr'] = trim($attr);

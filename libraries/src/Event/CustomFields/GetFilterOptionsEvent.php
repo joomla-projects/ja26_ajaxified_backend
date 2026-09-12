@@ -9,9 +9,7 @@
 
 namespace Joomla\CMS\Event\CustomFields;
 
-use Joomla\CMS\Event\Result\ResultAware;
 use Joomla\CMS\Event\Result\ResultAwareInterface;
-use Joomla\CMS\Event\Result\ResultTypeArrayAware;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -28,9 +26,6 @@ use Joomla\CMS\Event\Result\ResultTypeArrayAware;
  */
 final class GetFilterOptionsEvent extends CustomFieldsEvent implements ResultAwareInterface
 {
-    use ResultAware;
-    use ResultTypeArrayAware;
-
     /**
      * Get the field definition.
      *
@@ -41,5 +36,60 @@ final class GetFilterOptionsEvent extends CustomFieldsEvent implements ResultAwa
     public function getField(): object
     {
         return $this->arguments['subject'];
+    }
+
+    /**
+     * Append a result to the event.
+     *
+     * @param   mixed  $data  Result data.
+     *
+     * @return  void
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function addResult($data): void
+    {
+        $this->typeCheckResult($data);
+
+        $this->arguments['result'] ??= [];
+        $this->arguments['result'][] = $data;
+    }
+
+    /**
+     * Validate result data.
+     *
+     * @param   mixed  $data  Result data.
+     *
+     * @return  void
+     *
+     * @throws  \InvalidArgumentException
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function typeCheckResult($data): void
+    {
+        if (!\is_array($data)) {
+            throw new \InvalidArgumentException(
+                \sprintf('Event %s only accepts Array results.', $this->getName())
+            );
+        }
+    }
+
+    /**
+     * Prevent replacing the result collection directly.
+     *
+     * @param   array  $value  Result value.
+     *
+     * @return  array
+     *
+     * @throws  \BadMethodCallException
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    protected function onSetResult(array $value): array
+    {
+        throw new \BadMethodCallException(
+            'You are not allowed to set the result argument directly. Use addResult() instead.'
+        );
     }
 }

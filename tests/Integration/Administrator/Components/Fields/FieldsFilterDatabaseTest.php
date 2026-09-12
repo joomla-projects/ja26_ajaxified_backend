@@ -14,35 +14,72 @@ class FieldsFilterDatabaseTest extends IntegrationTestCase implements DBTestInte
 {
     use DBTestTrait;
 
+    private const PRIMARY_FIELD_ID   = 900001;
+    private const SECONDARY_FIELD_ID = 900002;
+
     public function getSchemasToLoad(): array
     {
-        return [];
+        return ['fieldsfilter.sql'];
     }
 
     protected function setUp(): void
     {
         parent::setUp();
-        $db     = $this->getDBDriver();
-        $prefix = str_starts_with($db->getServerType(), 'pgsql') ? 'CREATE TEMP TABLE ' : 'CREATE TEMPORARY TABLE ';
 
-        $db->setQuery($prefix . $db->quoteName('#__cff_items') . ' ('
-            . $db->quoteName('id') . ' VARCHAR(64) NOT NULL, '
-            . $db->quoteName('kind') . ' VARCHAR(16) NOT NULL)')->execute();
-        $db->setQuery($prefix . $db->quoteName('#__fields_values') . ' ('
-            . $db->quoteName('field_id') . ' INTEGER NOT NULL, '
-            . $db->quoteName('item_id') . ' VARCHAR(64) NOT NULL, '
-            . $db->quoteName('value') . ' VARCHAR(255) NULL)')->execute();
+        $db = $this->getDBDriver();
+
+        $db->truncateTable('#__cff_items');
+
+        $this->clearFieldValues();
 
         foreach ([['1', 'article'], ['01', 'text'], ['abc-1', 'text'], ['2', 'article'], ['3', 'article']] as $row) {
-            $db->setQuery($db->createQuery()->insert($db->quoteName('#__cff_items'))
-                ->columns([$db->quoteName('id'), $db->quoteName('kind')])
-                ->values(implode(',', [$db->quote($row[0]), $db->quote($row[1])])))->execute();
+            $db->setQuery(
+                $db->createQuery()
+                    ->insert($db->quoteName('#__cff_items'))
+                    ->columns([$db->quoteName('id'), $db->quoteName('kind')])
+                    ->values(implode(',', [$db->quote($row[0]), $db->quote($row[1])]))
+            )->execute();
         }
 
-        foreach ([[7, '1', '0'], [7, '1', '0'], [7, '2', '01'], [7, '3', '1'], [12, '1', 'high'], [12, '2', 'low'], [7, '01', '01'], [7, 'abc-1', '1']] as $row) {
-            $db->setQuery($db->createQuery()->insert($db->quoteName('#__fields_values'))
-                ->columns([$db->quoteName('field_id'), $db->quoteName('item_id'), $db->quoteName('value')])
-                ->values(implode(',', [(int) $row[0], $db->quote($row[1]), $db->quote($row[2])])))->execute();
+        foreach ([
+            [self::PRIMARY_FIELD_ID, '1', '0'],
+            [self::PRIMARY_FIELD_ID, '1', '0'],
+            [self::PRIMARY_FIELD_ID, '2', '01'],
+            [self::PRIMARY_FIELD_ID, '3', '1'],
+            [self::SECONDARY_FIELD_ID, '1', 'high'],
+            [self::SECONDARY_FIELD_ID, '2', 'low'],
+            [self::PRIMARY_FIELD_ID, '01', '01'],
+            [self::PRIMARY_FIELD_ID, 'abc-1', '1'],
+        ] as $row) {
+            $db->setQuery(
+                $db->createQuery()
+                    ->insert($db->quoteName('#__fields_values'))
+                    ->columns([
+                        $db->quoteName('field_id'),
+                        $db->quoteName('item_id'),
+                        $db->quoteName('value'),
+                    ])
+                    ->values(
+                        implode(',', [
+                            (int) $row[0],
+                            $db->quote($row[1]),
+                            $db->quote($row[2]),
+                        ])
+                    )
+            )->execute();
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        try {
+            $this->clearFieldValues();
+        } finally {
+            try {
+                $this->getDBDriver()->truncateTable('#__cff_items');
+            } finally {
+                parent::tearDown();
+            }
         }
     }
 
@@ -55,7 +92,17 @@ class FieldsFilterDatabaseTest extends IntegrationTestCase implements DBTestInte
         $service = $this->service();
         $service->applyToQuery(
             $query,
-            new PreparedFieldsFilter('com_content.article', [7 => [], 12 => []], [7 => ['0', '01'], 12 => ['high']]),
+            new PreparedFieldsFilter(
+                'com_content.article',
+                [
+                    self::PRIMARY_FIELD_ID => [],
+                    self::SECONDARY_FIELD_ID => [],
+                ],
+                [
+                    self::PRIMARY_FIELD_ID => ['0', '01'],
+                    self::SECONDARY_FIELD_ID => ['high'],
+                ]
+            ),
             $db->quoteName('i.id'),
         );
 
@@ -73,7 +120,11 @@ class FieldsFilterDatabaseTest extends IntegrationTestCase implements DBTestInte
                 ->where($db->quoteName('i.kind') . ' = ' . $db->quote('text'));
             $service->applyToQuery(
                 $query,
-                new PreparedFieldsFilter('fixture.record', [7 => []], [7 => [$token]]),
+                new PreparedFieldsFilter(
+                    'fixture.record',
+                    [self::PRIMARY_FIELD_ID => []],
+                    [self::PRIMARY_FIELD_ID => [$token]]
+                ),
                 $db->quoteName('i.id'),
                 'string',
             );
@@ -88,5 +139,22 @@ class FieldsFilterDatabaseTest extends IntegrationTestCase implements DBTestInte
             $this->getDBDriver(),
             $this->createMock(DispatcherInterface::class),
         );
+    }
+
+    private function clearFieldValues(): void
+    {
+        $db = $this->getDBDriver();
+
+        $query = $db->createQuery()
+            ->delete($db->quoteName('#__fields_values'))
+            ->whereIn(
+                $db->quoteName('field_id'),
+                [
+                    self::PRIMARY_FIELD_ID,
+                    self::SECONDARY_FIELD_ID,
+                ]
+            );
+
+        $db->setQuery($query)->execute();
     }
 }
