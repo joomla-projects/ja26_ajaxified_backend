@@ -8,6 +8,18 @@ describe('Test administrator article Custom Field filters', () => {
     return fieldId;
   });
 
+  const selectChoice = (selector, value) => {
+    cy.get(selector)
+      .closest('joomla-field-fancy-select')
+      .find('.choices')
+      .click();
+
+    cy.get(selector)
+      .closest('joomla-field-fancy-select')
+      .find(`.choices__list--dropdown .choices__item[data-value="${value}"]`)
+      .click();
+  };
+
   beforeEach(() => {
     fieldIds = [];
 
@@ -40,11 +52,15 @@ describe('Test administrator article Custom Field filters', () => {
         },
       }),
     }).then((fieldId) => {
+      const selector = `[name="filter[customfield_${fieldId}][]"]`;
+
       cy.visit('/administrator/index.php?option=com_content&view=articles&filter=');
-      cy.get(`[name="filter[customfield_${fieldId}][]"]`).should('exist').select('india');
-      cy.get(`[name="filter[customfield_${fieldId}][]"]`).should('have.value', 'india');
+      cy.get(selector).should('exist');
+      cy.get('.js-stools-btn-filter').click();
+      selectChoice(selector, 'india');
+      cy.get(selector).find('option:selected').should('have.value', 'india');
       cy.get('.js-stools-btn-clear').click();
-      cy.get(`[name="filter[customfield_${fieldId}][]"]`).should('have.value', null);
+      cy.get(selector).find('option:selected').should('have.length', 0);
     });
   });
 
@@ -85,12 +101,14 @@ describe('Test administrator article Custom Field filters', () => {
       });
 
       cy.visit('/administrator/index.php?option=com_content&view=articles&filter=');
-      cy.get(selector).select('1');
+      cy.get('.js-stools-btn-filter').click();
+      selectChoice(selector, '1');
       shouldHaveSelected(['1']);
       cy.reload();
       shouldHaveSelected(['1']);
 
-      cy.get(selector).select(['01', '1']);
+      selectChoice(selector, '01');
+      selectChoice(selector, '1');
       shouldHaveSelected(['01', '1']);
       cy.get(selector).closest('joomla-field-fancy-select').find('.choices__item[data-value="1"] .choices__button_joomla').click();
       shouldHaveSelected(['01']);
@@ -102,7 +120,8 @@ describe('Test administrator article Custom Field filters', () => {
       cy.reload();
       shouldHaveSelected([]);
 
-      cy.get(selector).select('0');
+      cy.get('.js-stools-btn-filter').click();
+      selectChoice(selector, '0');
       shouldHaveSelected(['0']);
       cy.reload();
       shouldHaveSelected(['0']);
