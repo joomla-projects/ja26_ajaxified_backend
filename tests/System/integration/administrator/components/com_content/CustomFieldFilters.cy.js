@@ -96,8 +96,10 @@ describe('Test administrator article Custom Field filters', () => {
       }),
     }).then((fieldId) => {
       const selector = `[name="filter[customfield_${fieldId}][]"]`;
-      const shouldHaveSelected = (expected) => cy.get(selector).find('option:selected').then(($options) => {
-        expect([...$options].map((option) => option.value)).to.deep.equal(expected);
+      const shouldHaveSelected = (expected) => cy.get(selector).then(($select) => {
+        const selected = [...$select[0].selectedOptions].map((option) => option.value);
+
+        expect(selected).to.deep.equal(expected);
       });
 
       cy.visit('/administrator/index.php?option=com_content&view=articles&filter=');
