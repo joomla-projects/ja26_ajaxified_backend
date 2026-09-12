@@ -95,11 +95,11 @@ class FieldsFilterDatabaseTest extends IntegrationTestCase implements DBTestInte
             new PreparedFieldsFilter(
                 'com_content.article',
                 [
-                    self::PRIMARY_FIELD_ID => [],
+                    self::PRIMARY_FIELD_ID   => [],
                     self::SECONDARY_FIELD_ID => [],
                 ],
                 [
-                    self::PRIMARY_FIELD_ID => ['0', '01'],
+                    self::PRIMARY_FIELD_ID   => ['0', '01'],
                     self::SECONDARY_FIELD_ID => ['high'],
                 ]
             ),
