@@ -16,6 +16,8 @@ use Joomla\CMS\Language\Text;
 
 extract($displayData);
 
+$strict = $strict ?? false;
+
 /**
  * Layout variables
  * -----------------
@@ -89,9 +91,16 @@ if ($readonly) {
     }
 } else // Create a regular list.
 {
-    $html[] = HTMLHelper::_('select.genericlist', $options, $name, trim($attr), 'value', 'text', $value, $id);
+    $listoptions = [];
+    $listoptions['option.key'] = 'value';
+    $listoptions['option.text'] = 'text';
+    $listoptions['list.select'] = $value;
+    $listoptions['list.strict'] = $strict;
+    $listoptions['id'] = $id;
+    $listoptions['list.translate'] = false;
+    $listoptions['list.attr'] = trim($attr);
+    $html[] = HTMLHelper::_('select.genericlist', $options, $name, $listoptions);
 }
-
 Text::script('JGLOBAL_SELECT_NO_RESULTS_MATCH');
 Text::script('JGLOBAL_SELECT_PRESS_TO_SELECT');
 
