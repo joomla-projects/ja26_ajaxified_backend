@@ -1,10 +1,34 @@
 describe('Test administrator article Custom Field filters', () => {
+  let articleId;
+  let fieldIds;
+
+  const createFilterField = (field) => cy.db_createField(field).then((fieldId) => {
+    fieldIds.push(fieldId);
+
+    return fieldId;
+  });
+
   beforeEach(() => {
+    fieldIds = [];
+
     cy.doAdministratorLogin();
+
+    cy.db_createArticle({ title: 'Custom Field Filter Test Article' }).then((article) => {
+      articleId = article.id;
+    });
+  });
+
+  afterEach(() => {
+    if (fieldIds.length) {
+      cy.task('queryDB', `DELETE FROM #__fields WHERE id IN (${fieldIds.join(',')})`);
+    }
+
+    cy.task('queryDB', `DELETE FROM #__workflow_associations WHERE item_id = ${articleId} AND extension = 'com_content.article'`);
+    cy.task('queryDB', `DELETE FROM #__content WHERE id = ${articleId}`);
   });
 
   it('renders enabled option fields as native SearchTools controls and clears them', () => {
-    cy.db_createField({
+    createFilterField({
       title: 'Filter region',
       context: 'com_content.article',
       type: 'list',
@@ -25,12 +49,16 @@ describe('Test administrator article Custom Field filters', () => {
   });
 
   it('rejects a forged option without returning an unfiltered successful list', () => {
-    cy.db_createField({
+    createFilterField({
       title: 'Filter priority',
       context: 'com_content.article',
       type: 'radio',
       params: JSON.stringify({ show_in_admin_list_filter: 1 }),
-      fieldparams: JSON.stringify({ options: { options0: { name: 'High', value: 'high' } } }),
+      fieldparams: JSON.stringify({
+        options: {
+          options0: { name: 'High', value: 'high' },
+        },
+      }),
     }).then((fieldId) => {
       cy.visit(`/administrator/index.php?option=com_content&view=articles&filter[customfield_${fieldId}][]=forged`);
       cy.checkForSystemMessage('The submitted Custom Field filters are invalid.');
@@ -38,7 +66,7 @@ describe('Test administrator article Custom Field filters', () => {
   });
 
   it('keeps numeric-looking option tokens distinct through removal and refresh', () => {
-    cy.db_createField({
+    createFilterField({
       title: 'Filter code',
       context: 'com_content.article',
       type: 'list',
