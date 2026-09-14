@@ -13,6 +13,7 @@ namespace Joomla\Component\Fields\Administrator\Extension;
 use Joomla\CMS\Categories\CategoryServiceInterface;
 use Joomla\CMS\Categories\CategoryServiceTrait;
 use Joomla\CMS\Extension\MVCComponent;
+use Joomla\Component\Fields\Administrator\Service\FieldsFilterService;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -26,6 +27,40 @@ use Joomla\CMS\Extension\MVCComponent;
 class FieldsComponent extends MVCComponent implements CategoryServiceInterface
 {
     use CategoryServiceTrait;
+
+    /**
+     * Administrator list-filter service.
+     *
+     * @var    FieldsFilterService
+     * @since  __DEPLOY_VERSION__
+     */
+    private FieldsFilterService $fieldsFilterService;
+
+    /**
+     * Set the administrator Custom Field list-filter service.
+     *
+     * @param   FieldsFilterService  $fieldsFilterService  Filter service.
+     *
+     * @return  void
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function setFieldsFilterService(FieldsFilterService $fieldsFilterService): void
+    {
+        $this->fieldsFilterService = $fieldsFilterService;
+    }
+
+    /**
+     * Get the administrator Custom Field list-filter service.
+     *
+     * @return  FieldsFilterService
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function getFieldsFilterService(): FieldsFilterService
+    {
+        return $this->fieldsFilterService;
+    }
 
     /**
      * Returns the table for the count items functions for the given section.

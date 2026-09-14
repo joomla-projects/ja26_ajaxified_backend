@@ -16,6 +16,9 @@ use Joomla\CMS\Language\Text;
 
 extract($displayData);
 
+$strict = $strict ?? false;
+$groups = $groups ?? true;
+
 /**
  * Layout variables
  * -----------------
@@ -43,6 +46,8 @@ extract($displayData);
  * @var   string   $validate        Validation rules to apply.
  * @var   string   $value           Value attribute of the field.
  * @var   array    $options         Options available for this field.
+ * @var   boolean  $strict          Use strict string selection matching.
+ * @var   boolean  $groups          Interpret legacy optgroup sentinel values.
  * @var   string   $dataAttribute   Miscellaneous data attributes preprocessed for HTML output
  * @var   array    $dataAttributes  Miscellaneous data attribute for eg, data-*
  */
@@ -71,9 +76,21 @@ if ($required) {
     $attr2 .= ' required';
 }
 
+$listoptions = [
+    'option.key'      => 'value',
+    'option.text'     => 'text',
+    'option.attr'     => 'optionattr',
+    'list.select'     => $value,
+    'list.strict'     => $strict,
+    'list.translate'  => false,
+    'groups'          => $groups,
+    'id'              => $id,
+    'list.attr'       => trim($attr),
+];
+
 // Create a read-only list (no name) with hidden input(s) to store the value(s).
 if ($readonly) {
-    $html[] = HTMLHelper::_('select.genericlist', $options, '', trim($attr), 'value', 'text', $value, $id);
+    $html[] = HTMLHelper::_('select.genericlist', $options, '', $listoptions);
 
     // E.g. form field type tag sends $this->value as array
     if ($multiple && is_array($value)) {
@@ -89,9 +106,8 @@ if ($readonly) {
     }
 } else // Create a regular list.
 {
-    $html[] = HTMLHelper::_('select.genericlist', $options, $name, trim($attr), 'value', 'text', $value, $id);
+    $html[] = HTMLHelper::_('select.genericlist', $options, $name, $listoptions);
 }
-
 Text::script('JGLOBAL_SELECT_NO_RESULTS_MATCH');
 Text::script('JGLOBAL_SELECT_PRESS_TO_SELECT');
 

@@ -25,6 +25,32 @@ use Joomla\CMS\Language\Text;
 class FieldsListPlugin extends FieldsPlugin
 {
     /**
+     * Build the declarative option result used by administrator list filters.
+     *
+     * @param   object  $field  Field definition.
+     *
+     * @return  array
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    protected function getListFilterOptions(object $field): array
+    {
+        $options = [];
+        $params  = clone $this->params;
+        $params->merge($field->fieldparams);
+
+        // Keep the declared rows intact. The display helper intentionally keys
+        // options by value, which would hide duplicate tokens before the filter
+        // service can reject an ambiguous declaration.
+        foreach ($params->get('options', []) as $option) {
+            $option    = (object) $option;
+            $options[] = ['value' => (string) $option->value, 'text' => Text::_((string) $option->name)];
+        }
+
+        return ['options' => $options];
+    }
+
+    /**
      * Transforms the field into a DOM XML element and appends it as a child on the given parent.
      *
      * @param   \stdClass    $field   The field.

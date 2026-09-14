@@ -462,6 +462,8 @@ abstract class Select
      *                                true for backwards compatibility.
      *                               -list.select: either the value of one selected option or an array
      *                                of selected options. Default: none.
+     *                               -list.strict: Boolean. Use strict string comparison when matching
+     *                                an array of selected values. Default: false.
      *                               -list.translate: Boolean. If set, text and labels are translated via
      *                                Text::_(). Default is false.
      *                               -option.id: The property in each option array to use as the
@@ -496,7 +498,7 @@ abstract class Select
         $options = array_merge(
             HTMLHelper::$formatOptions,
             static::$optionDefaults['option'],
-            ['format.depth' => 0, 'groups' => true, 'list.select' => null, 'list.translate' => false]
+            ['format.depth' => 0, 'groups' => true, 'list.select' => null, 'list.strict' => false, 'list.translate' => false]
         );
 
         if (\is_array($optKey)) {
@@ -626,7 +628,7 @@ abstract class Select
                     foreach ($options['list.select'] as $val) {
                         $key2 = \is_object($val) ? $val->{$options['option.key']} : $val;
 
-                        if ($key == $key2) {
+                        if ($options['list.strict'] ? $key === (string) $key2 : $key == $key2) {
                             $extra .= ' selected="selected"';
                             break;
                         }
