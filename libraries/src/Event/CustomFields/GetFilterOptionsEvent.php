@@ -32,6 +32,24 @@ final class GetFilterOptionsEvent extends CustomFieldsEvent implements ResultAwa
     use ResultTypeArrayAware;
 
     /**
+     * Validate provider result data.
+     *
+     * @param   mixed  $data  Result data.
+     *
+     * @return  void
+     *
+     * @throws  \InvalidArgumentException
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function typeCheckResult($data): void
+    {
+        if (!\is_array($data)) {
+            throw new \InvalidArgumentException(\sprintf('Event %s only accepts Array results.', $this->getName()));
+        }
+    }
+
+    /**
      * Reject direct replacement of the accumulated result.
      *
      * @param   array  $value  Replacement result.
