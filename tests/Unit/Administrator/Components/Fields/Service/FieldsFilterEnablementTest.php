@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * @package     Joomla.UnitTest
+ * @subpackage  Fields
+ *
+ * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ */
+
 namespace Joomla\Tests\Unit\Administrator\Components\Fields\Service;
 
 use Joomla\CMS\Application\CMSApplication;
@@ -106,7 +114,32 @@ class FieldsFilterEnablementTest extends UnitTestCase
         $this->assertSame([], $prepared->getSelections());
     }
 
-    private function createService(?int $enabled): array
+    public function testOptionDeclarationsRejectDuplicateTokensWithoutNormalizingDistinctStrings(): void
+    {
+        [$service] = $this->createService(1, [
+            ['value' => 'same', 'text' => 'First'],
+            ['value' => 'same', 'text' => 'Second'],
+        ]);
+        $this->assertSame([], $service->prepare('com_fixture.record', [], new User(), false)->getControls());
+
+        $options = [
+            ['value' => '0', 'text' => 'Zero'],
+            ['value' => '00', 'text' => 'Double zero'],
+            ['value' => '01', 'text' => 'Leading zero'],
+            ['value' => '1', 'text' => 'One'],
+            ['value' => '1e0', 'text' => 'Exponent-looking'],
+            ['value' => ' spaced ', 'text' => 'Whitespace'],
+            ['value' => '日本', 'text' => 'Unicode'],
+        ];
+        [$service] = $this->createService(1, $options);
+
+        $this->assertSame(
+            $options,
+            $service->prepare('com_fixture.record', [], new User(), false)->getControls()[7]['options'],
+        );
+    }
+
+    private function createService(?int $enabled, ?array $options = null): array
     {
         $component = new ComponentRecord(['option' => 'com_fixture', 'enabled' => 1]);
         $component->setParams(new Registry($enabled === null ? [] : ['custom_fields_enable' => $enabled]));
@@ -141,6 +174,11 @@ class FieldsFilterEnablementTest extends UnitTestCase
             'description' => '',
             'params'      => new Registry(['show_in_admin_list_filter' => 1]),
         ];
+
+        if ($options !== null) {
+            $field->filterOptions = $options;
+        }
+
         $discoveryCount = (object) ['value' => 0];
         $fieldsModel    = new class ($field, $discoveryCount) implements ModelInterface {
             public function __construct(private object $field, private object $discoveryCount)

@@ -1,5 +1,5 @@
 describe('Test administrator article Custom Field filters', () => {
-  let articleId;
+  let articleIds;
   let fieldIds;
 
   const createFilterField = (field) => cy.db_createField(field).then((fieldId) => {
@@ -21,22 +21,26 @@ describe('Test administrator article Custom Field filters', () => {
   };
 
   beforeEach(() => {
+    articleIds = [];
     fieldIds = [];
 
     cy.doAdministratorLogin();
 
     cy.db_createArticle({ title: 'Custom Field Filter Test Article' }).then((article) => {
-      articleId = article.id;
+      articleIds.push(article.id);
     });
   });
 
   afterEach(() => {
     if (fieldIds.length) {
+      cy.task('queryDB', `DELETE FROM #__fields_values WHERE field_id IN (${fieldIds.join(',')})`);
       cy.task('queryDB', `DELETE FROM #__fields WHERE id IN (${fieldIds.join(',')})`);
     }
 
-    cy.task('queryDB', `DELETE FROM #__workflow_associations WHERE item_id = ${articleId} AND extension = 'com_content.article'`);
-    cy.task('queryDB', `DELETE FROM #__content WHERE id = ${articleId}`);
+    if (articleIds.length) {
+      cy.task('queryDB', `DELETE FROM #__workflow_associations WHERE item_id IN (${articleIds.join(',')}) AND extension = 'com_content.article'`);
+      cy.task('queryDB', `DELETE FROM #__content WHERE id IN (${articleIds.join(',')})`);
+    }
   });
 
   it('renders enabled option fields as native SearchTools controls and clears them', () => {
@@ -54,13 +58,21 @@ describe('Test administrator article Custom Field filters', () => {
     }).then((fieldId) => {
       const selector = `[name="filter[customfield_${fieldId}][]"]`;
 
-      cy.visit('/administrator/index.php?option=com_content&view=articles&filter=');
-      cy.get(selector).should('exist');
-      cy.get('.js-stools-btn-filter').click();
-      selectChoice(selector, 'india');
-      cy.get(selector).find('option:selected').should('have.value', 'india');
-      cy.get('.js-stools-btn-clear').click();
-      cy.get(selector).find('option:selected').should('have.length', 0);
+      cy.db_createFieldValue({ field_id: fieldId, item_id: articleIds[0], value: 'india' });
+      cy.db_createArticle({ title: 'Custom Field Filter Nonmatching Article' }).then((article) => {
+        articleIds.push(article.id);
+        return cy.db_createFieldValue({ field_id: fieldId, item_id: article.id, value: 'japan' });
+      }).then(() => {
+        cy.visit('/administrator/index.php?option=com_content&view=articles&filter=');
+        cy.get(selector).should('exist');
+        cy.get('.js-stools-btn-filter').click();
+        selectChoice(selector, 'india');
+        cy.get(selector).find('option:selected').should('have.value', 'india');
+        cy.contains('Custom Field Filter Test Article').should('exist');
+        cy.contains('Custom Field Filter Nonmatching Article').should('not.exist');
+        cy.get('.js-stools-btn-clear').click();
+        cy.get(selector).find('option:selected').should('have.length', 0);
+      });
     });
   });
 
@@ -76,8 +88,16 @@ describe('Test administrator article Custom Field filters', () => {
         },
       }),
     }).then((fieldId) => {
-      cy.visit(`/administrator/index.php?option=com_content&view=articles&filter[customfield_${fieldId}][]=forged`);
-      cy.checkForSystemMessage('The submitted Custom Field filters are invalid.');
+      cy.db_createFieldValue({ field_id: fieldId, item_id: articleIds[0], value: 'high' });
+      cy.db_createArticle({ title: 'Custom Field Filter Rejection Decoy' }).then((article) => {
+        articleIds.push(article.id);
+        return cy.db_createFieldValue({ field_id: fieldId, item_id: article.id, value: 'high' });
+      }).then(() => {
+        cy.visit(`/administrator/index.php?option=com_content&view=articles&filter[customfield_${fieldId}][]=forged`);
+        cy.checkForSystemMessage('The submitted Custom Field filters are invalid.');
+        cy.contains('Custom Field Filter Test Article').should('not.exist');
+        cy.contains('Custom Field Filter Rejection Decoy').should('not.exist');
+      });
     });
   });
 

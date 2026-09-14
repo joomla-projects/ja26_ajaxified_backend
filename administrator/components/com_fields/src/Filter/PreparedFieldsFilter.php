@@ -39,31 +39,73 @@ final class PreparedFieldsFilter
     ) {
     }
 
+    /**
+     * Get eligible control metadata keyed by field ID.
+     *
+     * @return  array
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public function getControls(): array
     {
         return $this->controls;
     }
 
+    /**
+     * Get canonical selections keyed by field ID.
+     *
+     * @return  array
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public function getSelections(): array
     {
         return $this->selections;
     }
 
+    /**
+     * Get structured preparation issues.
+     *
+     * @return  array
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public function getIssues(): array
     {
         return $this->issues;
     }
 
+    /**
+     * Whether explicit invalid input must fail closed.
+     *
+     * @return  bool
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public function isRejected(): bool
     {
         return $this->rejected;
     }
 
+    /**
+     * Whether canonical selections will add query predicates.
+     *
+     * @return  bool
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public function isActive(): bool
     {
         return $this->selections !== [];
     }
 
+    /**
+     * Get an order-independent cache fingerprint for query-affecting state.
+     *
+     * @return  string
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public function getFingerprint(): string
     {
         $selections = $this->selections;
@@ -76,6 +118,13 @@ final class PreparedFieldsFilter
         return hash('sha256', json_encode([$this->context, $selections, $this->rejected], JSON_THROW_ON_ERROR));
     }
 
+    /**
+     * Get active filters using their dynamic form names.
+     *
+     * @return  array
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public function getActiveFilters(): array
     {
         $active = [];

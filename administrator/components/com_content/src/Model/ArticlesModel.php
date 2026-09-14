@@ -19,6 +19,7 @@ use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\ListModel;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\Table\Category;
+use Joomla\CMS\User\User;
 use Joomla\Component\Content\Administrator\Extension\ContentComponent;
 use Joomla\Component\Fields\Administrator\Extension\FieldsComponent;
 use Joomla\Component\Fields\Administrator\Filter\PreparedFieldsFilter;
@@ -39,8 +40,21 @@ use Joomla\Utilities\ArrayHelper;
  */
 class ArticlesModel extends ListModel
 {
-    /** @var PreparedFieldsFilter|null */
+    /**
+     * Prepared Custom Field controls and selections.
+     *
+     * @var    PreparedFieldsFilter|null
+     * @since  __DEPLOY_VERSION__
+     */
     private ?PreparedFieldsFilter $preparedFieldsFilter = null;
+
+    /**
+     * Whether canonical Custom Field state is being synchronized.
+     *
+     * @var    bool
+     * @since  __DEPLOY_VERSION__
+     */
+    private bool $synchronizingFieldsFilterState = false;
 
     /**
      * Constructor.
@@ -92,6 +106,48 @@ class ArticlesModel extends ListModel
         }
 
         parent::__construct($config, $factory);
+    }
+
+    /**
+     * Set model state and invalidate prepared Custom Field filters when their input changes.
+     *
+     * @param   string  $property  The state property name.
+     * @param   mixed   $value     The state value.
+     *
+     * @return  mixed  The previous state value.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function setState($property, $value = null)
+    {
+        $previous = parent::setState($property, $value);
+
+        if (
+            !$this->synchronizingFieldsFilterState
+            && str_starts_with((string) $property, 'filter.customfield_')
+            && $previous !== $value
+        ) {
+            $this->preparedFieldsFilter = null;
+        }
+
+        return $previous;
+    }
+
+    /**
+     * Set the current user and invalidate user-dependent Custom Field discovery.
+     *
+     * @param   User  $currentUser  The current user.
+     *
+     * @return  void
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function setCurrentUser(User $currentUser): void
+    {
+        parent::setCurrentUser($currentUser);
+
+        $this->preparedFieldsFilter = null;
+        $this->_forms               = [];
     }
 
     /**
@@ -202,8 +258,7 @@ class ArticlesModel extends ListModel
 
             foreach ($oldFilters as $name => $value) {
                 if (preg_match('/^customfield_([1-9][0-9]*)$/D', (string) $name, $match) && \is_array($value)) {
-                    $oldSelections[(int) $match[1]] = array_values(array_unique(array_map('strval', $value), SORT_STRING));
-                    sort($oldSelections[(int) $match[1]], SORT_STRING);
+                    $oldSelections[(int) $match[1]] = $this->canonicalizeRememberedSelection($value);
                 }
             }
 
@@ -213,9 +268,21 @@ class ArticlesModel extends ListModel
                 }
             }
 
-            foreach ($this->preparedFieldsFilter->getSelections() as $fieldId => $values) {
-                $filters['customfield_' . $fieldId] = $values;
-                $this->setState('filter.customfield_' . $fieldId, $values);
+            $this->synchronizingFieldsFilterState = true;
+
+            try {
+                foreach (array_keys($this->state->toArray()) as $name) {
+                    if (str_starts_with($name, 'filter.customfield_')) {
+                        $this->state->remove($name);
+                    }
+                }
+
+                foreach ($this->preparedFieldsFilter->getSelections() as $fieldId => $values) {
+                    $filters['customfield_' . $fieldId] = $values;
+                    $this->setState('filter.customfield_' . $fieldId, $values);
+                }
+            } finally {
+                $this->synchronizingFieldsFilterState = false;
             }
 
             $newSelections = $this->preparedFieldsFilter->getSelections();
@@ -239,6 +306,44 @@ class ArticlesModel extends ListModel
 
             $app->setUserState($this->context . '.filter', $filters);
         }
+    }
+
+    /**
+     * Canonicalize a remembered Custom Field selection for change comparison.
+     *
+     * The token contract mirrors FieldsFilterService::prepare(): strings and
+     * integers are accepted, integers become decimal strings and empty strings
+     * are dropped. Every other type is ignored instead of being coerced, so
+     * malformed remembered state (nested arrays, arbitrary objects, resources)
+     * cannot emit conversion warnings or throw while the old selection is
+     * compared against the canonical selection.
+     *
+     * @param   array  $values  Remembered selection values.
+     *
+     * @return  array  Sorted, distinct canonical tokens.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    private function canonicalizeRememberedSelection(array $values): array
+    {
+        $tokens = [];
+
+        foreach ($values as $value) {
+            if (\is_int($value)) {
+                $value = (string) $value;
+            }
+
+            if (!\is_string($value) || $value === '') {
+                continue;
+            }
+
+            $tokens[] = $value;
+        }
+
+        $tokens = array_values(array_unique($tokens, SORT_STRING));
+        sort($tokens, SORT_STRING);
+
+        return $tokens;
     }
 
     /**
@@ -272,6 +377,7 @@ class ArticlesModel extends ListModel
         $id .= ':' . $this->getState('filter.end_date_range');
         $id .= ':' . $this->getState('filter.relative_date');
         $id .= ':customfields:' . $this->getPreparedFieldsFilter()->getFingerprint();
+        $id .= ':customfieldsuser:' . $this->getFieldsFilterUserFingerprint();
 
         return parent::getStoreId($id);
     }
@@ -787,6 +893,15 @@ class ArticlesModel extends ListModel
         return array_merge(parent::getActiveFilters(), $prepared->getActiveFilters());
     }
 
+    /**
+     * Get prepared filters, validating programmatic state when necessary.
+     *
+     * @return  PreparedFieldsFilter
+     *
+     * @throws  \InvalidArgumentException  When programmatic state is invalid.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     private function getPreparedFieldsFilter(): PreparedFieldsFilter
     {
         if ($this->preparedFieldsFilter !== null) {
@@ -821,6 +936,31 @@ class ArticlesModel extends ListModel
         return $this->preparedFieldsFilter;
     }
 
+    /**
+     * Build the identity portion of the Custom Field eligibility cache key.
+     *
+     * @return  string
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    private function getFieldsFilterUserFingerprint(): string
+    {
+        $user       = $this->getCurrentUser();
+        $viewLevels = $user->getAuthorisedViewLevels();
+        sort($viewLevels, SORT_NUMERIC);
+
+        return hash('sha256', json_encode([(int) $user->id, $viewLevels], JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * Get the com_fields-owned filtering service.
+     *
+     * @return  FieldsFilterService
+     *
+     * @throws  \RuntimeException  When com_fields does not expose the service.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     protected function getFieldsFilterService(): FieldsFilterService
     {
         $component = Factory::getApplication()->bootComponent('com_fields');

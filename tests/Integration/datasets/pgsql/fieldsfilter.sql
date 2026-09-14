@@ -2,7 +2,8 @@ DROP TABLE IF EXISTS "#__cff_items";
 
 CREATE TABLE "#__cff_items" (
     "id" varchar(64) NOT NULL,
-    "kind" varchar(16) NOT NULL
+    "kind" varchar(16) NOT NULL,
+    "integer_id" integer DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "#__fields_values" (

@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * @package     Joomla.UnitTest
+ * @subpackage  HTML
+ *
+ * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ */
+
 namespace Joomla\Tests\Unit\Libraries\Cms\HTML;
 
 use Joomla\CMS\HTML\Helpers\Select;
@@ -68,5 +76,31 @@ class SelectTest extends UnitTestCase
         yield 'strict integer option with string selection' => [$integers, ['1'], true, ['1']];
         yield 'strict integer option with integer selection' => [$integers, [1], true, ['1']];
         yield 'scalar remains exact independently of array strictness' => [$strings, '1', true, ['1']];
+    }
+
+    public function testLegacyGroupsRemainDefaultAndCanBeDisabledForFlatData(): void
+    {
+        $options = [
+            (object) ['value' => '<OPTGROUP>', 'text' => 'Group'],
+            (object) ['value' => 'inside', 'text' => 'Inside'],
+            (object) ['value' => '</OPTGROUP>', 'text' => 'End'],
+        ];
+
+        $legacy    = Select::options($options);
+        $flat      = Select::options($options, ['groups' => false]);
+        $legacyDom = new \DOMDocument();
+        @$legacyDom->loadHTML('<select>' . $legacy . '</select>');
+        $flatDom   = new \DOMDocument();
+        @$flatDom->loadHTML('<select>' . $flat . '</select>');
+
+        $this->assertCount(1, (new \DOMXPath($legacyDom))->query('//optgroup'));
+        $this->assertCount(0, (new \DOMXPath($flatDom))->query('//optgroup'));
+        $this->assertSame(
+            ['<OPTGROUP>', 'inside', '</OPTGROUP>'],
+            array_map(
+                static fn (\DOMElement $option): string => $option->getAttribute('value'),
+                iterator_to_array((new \DOMXPath($flatDom))->query('//option')),
+            ),
+        );
     }
 }

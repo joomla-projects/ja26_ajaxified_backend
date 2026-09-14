@@ -32,17 +32,65 @@ use Joomla\Event\DispatcherInterface;
 /**
  * Prepares and applies administrator Custom Field list filters.
  *
+ * Participating field plugins declare flat string value/text option pairs. Values
+ * remain byte-for-byte tokens: selections are ORed within one field and fields are
+ * combined with AND. Active selections are bounded by the constants below.
+ *
  * @since  __DEPLOY_VERSION__
  */
 final class FieldsFilterService
 {
+    /**
+     * Maximum fields in one active query.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public const MAX_FIELDS            = 32;
+
+    /**
+     * Maximum distinct, non-empty values selected for one field.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public const MAX_VALUES_PER_FIELD  = 100;
+
+    /**
+     * Maximum distinct, non-empty values across one active query.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public const MAX_VALUES            = 256;
+
+    /**
+     * Maximum bytes in one option token.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public const MAX_TOKEN_BYTES       = 1024;
+
+    /**
+     * Maximum option-token bytes across one active query.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public const MAX_TOKEN_BYTES_TOTAL = 65536;
+
+    /**
+     * Maximum options a participating field may declare.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public const MAX_OPTIONS_PER_FIELD = 1000;
 
+    /**
+     * Constructor.
+     *
+     * @param   MVCFactoryInterface  $mvcFactory  Fields model factory.
+     * @param   DatabaseInterface    $database    Database connection.
+     * @param   DispatcherInterface  $dispatcher  Field plugin dispatcher.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public function __construct(
         private readonly MVCFactoryInterface $mvcFactory,
         private readonly DatabaseInterface $database,
@@ -52,6 +100,10 @@ final class FieldsFilterService
 
     /**
      * Prepare eligible controls and canonical selections.
+     *
+     * Explicit invalid input is marked rejected. Non-explicit callers receive
+     * issues for invalid programmatic or remembered state; aggregate-invalid
+     * selections are cleared as a whole so no partial query can be applied.
      *
      * @param   string  $context   Fields context.
      * @param   array   $filters   Complete flat filter map.
@@ -86,10 +138,6 @@ final class FieldsFilterService
             }
 
             $candidates[(int) $match[1]] = $value;
-        }
-
-        if (\count($candidates) > self::MAX_FIELDS) {
-            $issues[] = ['code' => 'too_many_fields'];
         }
 
         $parts            = FieldsHelper::extract($context);
@@ -159,11 +207,6 @@ final class FieldsFilterService
                 continue;
             }
 
-            if (\count($values) > self::MAX_VALUES_PER_FIELD) {
-                $issues[] = ['code' => 'too_many_values', 'field_id' => $fieldId];
-                continue;
-            }
-
             $allowed = array_column($controls[$fieldId]['options'], 'value');
             $clean   = [];
 
@@ -191,6 +234,11 @@ final class FieldsFilterService
 
             $clean = array_values(array_unique($clean, SORT_STRING));
 
+            if (\count($clean) > self::MAX_VALUES_PER_FIELD) {
+                $issues[] = ['code' => 'too_many_values', 'field_id' => $fieldId];
+                continue;
+            }
+
             if ($clean !== []) {
                 $selections[$fieldId] = $clean;
                 $valueCount += \count($clean);
@@ -198,8 +246,22 @@ final class FieldsFilterService
             }
         }
 
+        $aggregateInvalid = false;
+
+        if (\count($selections) > self::MAX_FIELDS) {
+            $issues[]         = ['code' => 'too_many_fields'];
+            $aggregateInvalid = true;
+        }
+
         if ($valueCount > self::MAX_VALUES || $byteCount > self::MAX_TOKEN_BYTES_TOTAL) {
-            $issues[] = ['code' => 'request_too_large'];
+            $issues[]         = ['code' => 'request_too_large'];
+            $aggregateInvalid = true;
+        }
+
+        if ($aggregateInvalid) {
+            // Aggregate-invalid remembered state is removed as a whole. Selecting
+            // an arbitrary valid subset would apply a filter the caller did not request.
+            $selections = [];
         }
 
         ksort($controls, SORT_NUMERIC);
@@ -208,6 +270,16 @@ final class FieldsFilterService
         return new PreparedFieldsFilter($context, $controls, $selections, $issues, $explicit && $issues !== []);
     }
 
+    /**
+     * Add opted-in flat Custom Field controls to a filter form.
+     *
+     * @param   Form                  $form      Filter form.
+     * @param   PreparedFieldsFilter  $prepared  Prepared controls and selections.
+     *
+     * @return  void
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public function augmentForm(Form $form, PreparedFieldsFilter $prepared): void
     {
         $language = Factory::getApplication()->getLanguage();
@@ -232,13 +304,16 @@ final class FieldsFilterService
             $xml->addAttribute('description', htmlspecialchars($description, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'));
             $xml->addAttribute('multiple', 'true');
             $xml->addAttribute('strict', 'true');
+            $xml->addAttribute('groups', 'false');
             $xml->addAttribute('layout', 'joomla.form.field.list-fancy-select');
             $xml->addAttribute('class', 'js-select-submit-on-change');
             $xml->addAttribute('hint', \sprintf($language->_('COM_FIELDS_FILTER_SELECT_FIELD'), $label));
 
             foreach ($control['options'] as $option) {
                 $node    = $xml->addChild('option');
-                $node[0] = $this->toDisplayText($option['text']);
+                // Select::options owns option-text escaping and decodes one
+                // legacy entity layer at that final HTML sink.
+                $node[0] = $option['text'];
                 $node->addAttribute('value', $option['value']);
             }
 
@@ -246,6 +321,16 @@ final class FieldsFilterService
         }
     }
 
+    /**
+     * Bind canonical Custom Field selections to an augmented filter form.
+     *
+     * @param   Form                  $form      Filter form.
+     * @param   PreparedFieldsFilter  $prepared  Prepared controls and selections.
+     *
+     * @return  void
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public function bindForm(Form $form, PreparedFieldsFilter $prepared): void
     {
         foreach ($prepared->getControls() as $fieldId => $control) {
@@ -253,6 +338,25 @@ final class FieldsFilterService
         }
     }
 
+    /**
+     * Apply bounded Custom Field selections as correlated EXISTS predicates.
+     *
+     * The item-key expression is trusted host code, never request data. Rejected
+     * filters fail closed. The identity type controls only safe host ID comparison;
+     * option tokens are always bound strings and compared byte-exactly.
+     *
+     * @param   QueryInterface       $query              Host list query.
+     * @param   PreparedFieldsFilter $prepared           Prepared filter.
+     * @param   string               $itemKeyExpression  Trusted host item-key expression.
+     * @param   string               $identityType       Either integer or string.
+     *
+     * @return  void
+     *
+     * @throws  \InvalidArgumentException  For an unsupported identity type.
+     * @throws  \RuntimeException          For an unsupported database family.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public function applyToQuery(
         QueryInterface $query,
         PreparedFieldsFilter $prepared,
@@ -282,18 +386,29 @@ final class FieldsFilterService
             $fieldParameter  = $query->bindArray([$fieldId], ParameterType::INTEGER)[0];
             $valueParameters = $query->bindArray($values, ParameterType::STRING);
 
-            $alias    = 'cffv' . $index;
-            $subquery = $this->database->createQuery()
+            $alias           = 'cffv' . $index;
+            $valueExpression = $this->database->quoteName($alias . '.value');
+            $valueConditions = $this->getExactValueConditions($valueExpression, $valueParameters);
+            $subquery        = $this->database->createQuery()
                 ->select('1')
                 ->from($this->database->quoteName('#__fields_values', $alias))
                 ->where($this->database->quoteName($alias . '.field_id') . ' = ' . $fieldParameter)
                 ->where($this->database->quoteName($alias . '.item_id') . ' = ' . $itemKey)
-                ->where($this->database->quoteName($alias . '.value') . ' IN (' . implode(',', $valueParameters) . ')');
+                ->where('(' . implode(' OR ', $valueConditions) . ')');
 
             $query->where('EXISTS (' . $subquery . ')');
         }
     }
 
+    /**
+     * Validate a flat option declaration without collapsing duplicate tokens.
+     *
+     * @param   mixed  $options  Declared value/text rows.
+     *
+     * @return  array|null  Normalized rows, or null for an invalid declaration.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     private function normalizeOptions(mixed $options): ?array
     {
         if (!\is_array($options) || \count($options) > self::MAX_OPTIONS_PER_FIELD) {
@@ -324,20 +439,47 @@ final class FieldsFilterService
     }
 
     /**
-     * Convert translated metadata to plain display text before XML construction.
+     * Build byte-exact comparisons for bound option tokens.
      *
-     * Literal markup is removed. Entity layers are decoded before the value is
-     * escaped for its final sink, preventing both active markup and double escaping.
+     * Joomla Database 4.0 has no portable binary string-comparison expression.
+     * The supported MySQL family provides the BINARY operator, while PostgreSQL
+     * can compare UTF-8 bytea values produced by convert_to().
+     *
+     * @param   string  $expression  Trusted database column expression.
+     * @param   array   $parameters  Bound parameter placeholders.
+     *
+     * @return  string[]
+     *
+     * @throws  \RuntimeException  When the database family is unsupported.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    private function getExactValueConditions(string $expression, array $parameters): array
+    {
+        return match ($this->database->getServerType()) {
+            'mysql' => array_map(
+                static fn (string $parameter): string => 'BINARY ' . $expression . ' = BINARY ' . $parameter,
+                $parameters,
+            ),
+            'postgresql' => array_map(
+                static fn (string $parameter): string => "convert_to(" . $expression . ", 'UTF8') = convert_to(" . $parameter . ", 'UTF8')",
+                $parameters,
+            ),
+            default => throw new \RuntimeException('Custom Field filtering requires a supported database driver.'),
+        };
+    }
+
+    /**
+     * Decode one stored entity layer before Form label and attribute escaping.
+     *
+     * @param   string  $value  Stored display text.
+     *
+     * @return  string
+     *
+     * @since  __DEPLOY_VERSION__
      */
     private function toDisplayText(string $value): string
     {
-        $value = strip_tags($value);
-
-        do {
-            $previous = $value;
-            $value    = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        } while ($value !== $previous);
-
-        return $value;
+        return html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 }

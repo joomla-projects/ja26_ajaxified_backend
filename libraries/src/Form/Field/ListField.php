@@ -72,6 +72,7 @@ class ListField extends FormField
         $data['options'] = (array) $this->getOptions();
 
         $data['strict'] = $this->getAttribute('strict', 'false') === 'true';
+        $data['groups'] = $this->getAttribute('groups', 'true') !== 'false';
 
         return $this->getRenderer($this->layout)->render($data);
     }

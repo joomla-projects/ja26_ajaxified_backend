@@ -41,6 +41,15 @@ final class Radio extends FieldsListPlugin implements SubscriberInterface
         ]);
     }
 
+    /**
+     * Declare the field's flat options for administrator list filtering.
+     *
+     * @param   GetFilterOptionsEvent  $event  The filter-options event.
+     *
+     * @return  void
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     public function getFilterOptions(GetFilterOptionsEvent $event): void
     {
         if ($this->isTypeSupported($event->getField()->type)) {
