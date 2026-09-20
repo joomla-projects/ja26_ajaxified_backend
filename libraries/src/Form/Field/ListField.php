@@ -69,7 +69,9 @@ class ListField extends FormField
     {
         $data = $this->collectLayoutData();
 
-        $data['options'] = (array) $this->getOptions();
+        $strictSelection         = (string) $this->element['strictselection'];
+        $data['options']         = (array) $this->getOptions();
+        $data['strictSelection'] = $strictSelection === 'true' || $strictSelection === '1';
 
         return $this->getRenderer($this->layout)->render($data);
     }

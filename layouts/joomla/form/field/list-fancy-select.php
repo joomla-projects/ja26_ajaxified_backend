@@ -16,6 +16,8 @@ use Joomla\CMS\Language\Text;
 
 extract($displayData);
 
+$strictSelection = $strictSelection ?? false;
+
 /**
  * Layout variables
  * -----------------
@@ -45,6 +47,7 @@ extract($displayData);
  * @var   array    $options         Options available for this field.
  * @var   string   $dataAttribute   Miscellaneous data attributes preprocessed for HTML output
  * @var   array    $dataAttributes  Miscellaneous data attribute for eg, data-*
+ * @var   boolean  $strictSelection Use string-strict matching for selected values.
  */
 
 $html = [];
@@ -72,8 +75,17 @@ if ($required) {
 }
 
 // Create a read-only list (no name) with hidden input(s) to store the value(s).
+$listoptions = [
+    'option.key'  => 'value',
+    'option.text' => 'text',
+    'list.select' => $value,
+    'list.strict' => $strictSelection,
+    'id'          => $id,
+    'list.attr'   => trim($attr),
+];
+
 if ($readonly) {
-    $html[] = HTMLHelper::_('select.genericlist', $options, '', trim($attr), 'value', 'text', $value, $id);
+    $html[] = HTMLHelper::_('select.genericlist', $options, '', $listoptions);
 
     // E.g. form field type tag sends $this->value as array
     if ($multiple && is_array($value)) {
@@ -89,7 +101,7 @@ if ($readonly) {
     }
 } else // Create a regular list.
 {
-    $html[] = HTMLHelper::_('select.genericlist', $options, $name, trim($attr), 'value', 'text', $value, $id);
+    $html[] = HTMLHelper::_('select.genericlist', $options, $name, $listoptions);
 }
 
 Text::script('JGLOBAL_SELECT_NO_RESULTS_MATCH');
