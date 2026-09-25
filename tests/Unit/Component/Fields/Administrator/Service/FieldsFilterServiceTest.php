@@ -10,16 +10,16 @@
 
 namespace Joomla\Tests\Unit\Component\Fields\Administrator\Service;
 
-use Joomla\CMS\Event\CustomFields\GetFilterProviderEvent;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Component\ComponentRecord;
+use Joomla\CMS\Event\CustomFields\GetFilterProviderEvent;
 use Joomla\CMS\Fields\CustomFieldFilterProviderInterface;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\User\User;
-use Joomla\Component\Fields\Administrator\Model\FieldsModel;
 use Joomla\Component\Fields\Administrator\Filter\PreparedFieldsFilter;
+use Joomla\Component\Fields\Administrator\Model\FieldsModel;
 use Joomla\Component\Fields\Administrator\Service\FieldsFilterService;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Database\QueryInterface;
@@ -41,13 +41,13 @@ class FieldsFilterServiceTest extends UnitTestCase
     {
         parent::setUp();
 
-        $property = new \ReflectionProperty(PluginHelper::class, 'plugins');
+        $property           = new \ReflectionProperty(PluginHelper::class, 'plugins');
         $this->priorPlugins = $property->getValue();
         $property->setValue(null, []);
 
-        $property = new \ReflectionProperty(ComponentHelper::class, 'components');
+        $property              = new \ReflectionProperty(ComponentHelper::class, 'components');
         $this->priorComponents = $property->getValue();
-        $component = new ComponentRecord(['enabled' => true]);
+        $component             = new ComponentRecord(['enabled' => true]);
         $component->setParams(new Registry(['custom_fields_enable' => 1]));
         $property->setValue(null, ['com_content' => $component]);
     }
@@ -88,7 +88,7 @@ class FieldsFilterServiceTest extends UnitTestCase
         $field              = $this->createField(4, 'list', true);
         $field->group_id    = 12;
         $field->group_state = 0;
-        $prepared = $this->createService([$field], $this->createProvider())->prepare(
+        $prepared           = $this->createService([$field], $this->createProvider())->prepare(
             'com_content.article',
             $this->createStub(User::class),
             [],
@@ -135,7 +135,7 @@ class FieldsFilterServiceTest extends UnitTestCase
         $user    = $this->createStub(User::class);
         $state   = ['customfield_1' => ['a']];
 
-        $explicit = $service->prepare('com_content.article', $user, [], '', $state, $state);
+        $explicit   = $service->prepare('com_content.article', $user, [], '', $state, $state);
         $remembered = $service->prepare('com_content.article', $user, [], '', $state, []);
 
         $this->assertSame([], $explicit->getFields());
@@ -148,7 +148,7 @@ class FieldsFilterServiceTest extends UnitTestCase
 
     public function testNativeSubmissionDoesNotMakeRememberedInvalidValueExplicit(): void
     {
-        $service = $this->createService([$this->createField(1, 'list', true)], $this->createProvider());
+        $service  = $this->createService([$this->createField(1, 'list', true)], $this->createProvider());
         $prepared = $service->prepare(
             'com_content.article',
             $this->createStub(User::class),
@@ -172,21 +172,21 @@ class FieldsFilterServiceTest extends UnitTestCase
         $user    = $this->createStub(User::class);
 
         foreach (['customfield', 'customfield_search', 'customfield_invalid'] as $name) {
-            $state = [$name => ['a']];
+            $state    = [$name => ['a']];
             $prepared = $service->prepare('com_content.article', $user, [], '', $state, $state);
             $this->assertFalse($prepared->isRejected(), $name);
             $this->assertSame([], $prepared->getActive(), $name);
         }
 
         foreach (['customfield_', 'customfield_0', 'customfield_01', 'customfield_17x'] as $name) {
-            $state = [$name => ['a']];
+            $state    = [$name => ['a']];
             $prepared = $service->prepare('com_content.article', $user, [], '', $state, $state);
             $this->assertTrue($prepared->isRejected(), $name);
             $this->assertSame([], $prepared->getActive(), $name);
         }
 
         foreach (['customfield_1', 'customfield_17', 'customfield_123'] as $name) {
-            $state = [$name => ['a']];
+            $state    = [$name => ['a']];
             $prepared = $service->prepare('com_content.article', $user, [], '', $state, $state);
             $this->assertFalse($prepared->isRejected(), $name);
             $this->assertSame($state, $prepared->getActive(), $name);
@@ -197,7 +197,7 @@ class FieldsFilterServiceTest extends UnitTestCase
     {
         $service = $this->createService([], $this->createProvider());
         $user    = $this->createStub(User::class);
-        $empty = $service->prepare(
+        $empty   = $service->prepare(
             'com_content.article',
             $user,
             [],
@@ -271,7 +271,7 @@ class FieldsFilterServiceTest extends UnitTestCase
         $factory = $this->createMock(MVCFactoryInterface::class);
         $factory->method('createModel')->willReturn($model);
         $service = new FieldsFilterService($factory, new Dispatcher(), $this->createStub(DatabaseInterface::class));
-        $state = ['customfield_1' => ['a']];
+        $state   = ['customfield_1' => ['a']];
 
         $prepared = $service->prepare('com_content.article', $this->createStub(User::class), [], '', $state, $state);
 
@@ -303,14 +303,14 @@ class FieldsFilterServiceTest extends UnitTestCase
         $state  = [];
 
         for ($id = 1; $id <= 33; $id++) {
-            $fields[]                   = $this->createField($id, 'list', true);
+            $fields[]                    = $this->createField($id, 'list', true);
             $state['customfield_' . $id] = ['a'];
         }
 
-        $service = $this->createService($fields, $this->createProvider());
-        $user = $this->createStub(User::class);
-        $acceptedState = array_slice($state, 0, 32, true);
-        $accepted = $service->prepare(
+        $service       = $this->createService($fields, $this->createProvider());
+        $user          = $this->createStub(User::class);
+        $acceptedState = \array_slice($state, 0, 32, true);
+        $accepted      = $service->prepare(
             'com_content.article',
             $user,
             [],
@@ -335,7 +335,7 @@ class FieldsFilterServiceTest extends UnitTestCase
     public function testRejectedPreparationAppliesFalseQueryCondition(): void
     {
         $database = $this->createStub(DatabaseInterface::class);
-        $service = new FieldsFilterService(
+        $service  = new FieldsFilterService(
             $this->createStub(MVCFactoryInterface::class),
             new Dispatcher(),
             $database
@@ -349,13 +349,13 @@ class FieldsFilterServiceTest extends UnitTestCase
 
     public function testAppliesTwoActiveProvidersWithDistinctBindPrefixes(): void
     {
-        $database = $this->createStub(DatabaseInterface::class);
-        $query = $this->getQueryStub($database)->select('*')->from('#__content');
-        $firstField = $this->createField(1, 'list', true);
-        $secondField = $this->createField(2, 'list', true);
-        $first = $this->createMock(CustomFieldFilterProviderInterface::class);
-        $second = $this->createMock(CustomFieldFilterProviderInterface::class);
-        $expression = 'a.id';
+        $database       = $this->createStub(DatabaseInterface::class);
+        $query          = $this->getQueryStub($database)->select('*')->from('#__content');
+        $firstField     = $this->createField(1, 'list', true);
+        $secondField    = $this->createField(2, 'list', true);
+        $first          = $this->createMock(CustomFieldFilterProviderInterface::class);
+        $second         = $this->createMock(CustomFieldFilterProviderInterface::class);
+        $expression     = 'a.id';
         $castExpression = $query->castAs('CHAR', $expression);
 
         $first->expects($this->once())->method('applyFilter')->with(
@@ -420,7 +420,7 @@ class FieldsFilterServiceTest extends UnitTestCase
         $provider->method('getFilterField')->willReturn(
             new \SimpleXMLElement('<field name="published" type="list" />')
         );
-        $field = $this->createField(1, 'list', true);
+        $field    = $this->createField(1, 'list', true);
         $prepared = new PreparedFieldsFilter(
             ['customfield_1' => ['field' => $field, 'provider' => $provider]],
             [],

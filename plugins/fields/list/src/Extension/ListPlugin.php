@@ -29,7 +29,7 @@ use Joomla\Event\SubscriberInterface;
  */
 final class ListPlugin extends FieldsListPlugin implements CustomFieldFilterProviderInterface, SubscriberInterface
 {
-    private const MAX_FILTER_VALUES = 100;
+    private const MAX_FILTER_VALUES       = 100;
     private const MAX_FILTER_VALUE_LENGTH = 1024;
 
     /**

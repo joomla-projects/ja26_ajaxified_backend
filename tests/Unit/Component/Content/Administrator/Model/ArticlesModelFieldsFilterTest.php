@@ -10,19 +10,19 @@
 
 namespace Joomla\Tests\Unit\Component\Content\Administrator\Model;
 
+use Joomla\CMS\Categories\CategoryInterface;
+use Joomla\CMS\Categories\CategoryNode;
+use Joomla\CMS\Categories\CategoryServiceInterface;
+use Joomla\CMS\Component\ComponentHelper;
+use Joomla\CMS\Component\ComponentRecord;
+use Joomla\CMS\Factory;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\CMS\Plugin\PluginHelper;
+use Joomla\CMS\User\User;
 use Joomla\Component\Content\Administrator\Model\ArticlesModel;
 use Joomla\Component\Fields\Administrator\Filter\PreparedFieldsFilter;
 use Joomla\Component\Fields\Administrator\Model\FieldsModel;
 use Joomla\Component\Fields\Administrator\Service\FieldsFilterService;
-use Joomla\CMS\Component\ComponentHelper;
-use Joomla\CMS\Component\ComponentRecord;
-use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
-use Joomla\CMS\Categories\CategoryInterface;
-use Joomla\CMS\Categories\CategoryNode;
-use Joomla\CMS\Categories\CategoryServiceInterface;
-use Joomla\CMS\Factory;
-use Joomla\CMS\Plugin\PluginHelper;
-use Joomla\CMS\User\User;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Event\Dispatcher;
 use Joomla\Registry\Registry;
@@ -72,8 +72,8 @@ class ArticlesModelFieldsFilterTest extends UnitTestCase
 
         $app = new class () {
             public array $state = [
-                'com_content.articles.filter' => ['published' => '1', 'customfield_search' => 'term'],
-                'com_content.articles' => null,
+                'com_content.articles.filter'     => ['published' => '1', 'customfield_search' => 'term'],
+                'com_content.articles'            => null,
                 'com_content.articles.limitstart' => 40,
             ];
             public object $input;
@@ -109,7 +109,7 @@ class ArticlesModelFieldsFilterTest extends UnitTestCase
                 mixed $default = null,
                 string $type = 'none'
             ): mixed {
-                if (!array_key_exists($request, $this->input->values)) {
+                if (!\array_key_exists($request, $this->input->values)) {
                     return $this->getUserState($key, $default);
                 }
 
@@ -125,11 +125,11 @@ class ArticlesModelFieldsFilterTest extends UnitTestCase
             }
         };
 
-        $pluginsProperty = new \ReflectionProperty(PluginHelper::class, 'plugins');
-        $priorPlugins    = $pluginsProperty->getValue();
+        $pluginsProperty    = new \ReflectionProperty(PluginHelper::class, 'plugins');
+        $priorPlugins       = $pluginsProperty->getValue();
         $componentsProperty = new \ReflectionProperty(ComponentHelper::class, 'components');
-        $priorComponents = $componentsProperty->getValue();
-        $component = new ComponentRecord(['enabled' => true]);
+        $priorComponents    = $componentsProperty->getValue();
+        $component          = new ComponentRecord(['enabled' => true]);
         $component->setParams(new Registry(['custom_fields_enable' => 1]));
         $componentsProperty->setValue(null, ['com_content' => $component]);
         $pluginsProperty->setValue(null, []);
@@ -196,7 +196,7 @@ class ArticlesModelFieldsFilterTest extends UnitTestCase
             }
         };
 
-        $priorApplication = Factory::$application;
+        $priorApplication     = Factory::$application;
         Factory::$application = $app;
 
         try {
@@ -228,7 +228,7 @@ class ArticlesModelFieldsFilterTest extends UnitTestCase
             }
         };
 
-        $priorApplication = Factory::$application;
+        $priorApplication     = Factory::$application;
         Factory::$application = $app;
 
         try {

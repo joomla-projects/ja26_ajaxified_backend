@@ -33,7 +33,7 @@ use Joomla\Event\DispatcherInterface;
 final class FieldsFilterService
 {
     private const FIELD_PREFIX = 'customfield_';
-    private const MAX_FILTERS = 32;
+    private const MAX_FILTERS  = 32;
 
     public function __construct(
         private readonly MVCFactoryInterface $mvcFactory,
@@ -127,7 +127,7 @@ final class FieldsFilterService
                 continue;
             }
 
-            $explicit = array_key_exists($name, $submitted);
+            $explicit = \array_key_exists($name, $submitted);
 
             if (!$validName || !isset($fields[$name])) {
                 if ($explicit && $this->isActive($value)) {

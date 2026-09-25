@@ -10,15 +10,15 @@
 
 namespace Joomla\Tests\Unit\Plugin\Fields\ListField\Extension;
 
-use Joomla\CMS\Event\CustomFields\GetFilterProviderEvent;
 use Joomla\CMS\Application\CMSApplicationInterface;
-use Joomla\CMS\Language\Language;
+use Joomla\CMS\Event\CustomFields\GetFilterProviderEvent;
 use Joomla\CMS\Form\Form;
+use Joomla\CMS\Language\Language;
 use Joomla\CMS\User\User;
 use Joomla\Component\Fields\Administrator\Plugin\FieldsPlugin;
-use Joomla\Plugin\Fields\ListField\Extension\ListPlugin;
 use Joomla\Database\Mysqli\MysqliDriver;
 use Joomla\Database\Pgsql\PgsqlDriver;
+use Joomla\Plugin\Fields\ListField\Extension\ListPlugin;
 use Joomla\Registry\Registry;
 use Joomla\Tests\Unit\UnitTestCase;
 
@@ -133,7 +133,7 @@ class ListPluginTest extends UnitTestCase
     public function testEnforcesFilterValueCountBoundary(): void
     {
         $plugin = $this->getPlugin();
-        $field = $this->getField();
+        $field  = $this->getField();
 
         $this->assertSame(['1'], $plugin->normaliseValue($field, array_fill(0, 100, '1')));
 
@@ -143,14 +143,14 @@ class ListPluginTest extends UnitTestCase
 
     public function testRejectsOversizedTokenEvenWhenItIsAConfiguredOption(): void
     {
-        $accepted = str_repeat('x', 1024);
-        $rejected = str_repeat('x', 1025);
-        $field = $this->getField();
+        $accepted           = str_repeat('x', 1024);
+        $rejected           = str_repeat('x', 1025);
+        $field              = $this->getField();
         $field->fieldparams = new Registry(['options' => [
             ['value' => $accepted, 'name' => 'Accepted'],
             ['value' => $rejected, 'name' => 'Rejected'],
         ]]);
-        $plugin = $this->getPlugin();
+        $plugin  = $this->getPlugin();
         $options = $plugin->getFilterField($field, 'customfield_7')->option;
 
         $this->assertCount(1, $options);
@@ -250,8 +250,8 @@ class ListPluginTest extends UnitTestCase
 
     private function getPlugin(): ListPlugin
     {
-        $reflection = new \ReflectionClass(ListPlugin::class);
-        $plugin     = $reflection->newInstanceWithoutConstructor();
+        $reflection     = new \ReflectionClass(ListPlugin::class);
+        $plugin         = $reflection->newInstanceWithoutConstructor();
         $plugin->params = new Registry();
 
         return $plugin;
