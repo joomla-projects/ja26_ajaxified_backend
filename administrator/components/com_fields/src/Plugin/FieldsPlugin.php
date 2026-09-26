@@ -10,10 +10,12 @@
 
 namespace Joomla\Component\Fields\Administrator\Plugin;
 
+use Joomla\CMS\Event\CustomFields\GetFilterProviderEvent;
 use Joomla\CMS\Event\CustomFields\GetTypesEvent;
 use Joomla\CMS\Event\CustomFields\PrepareDomEvent;
 use Joomla\CMS\Event\CustomFields\PrepareFieldEvent;
 use Joomla\CMS\Event\Model\PrepareFormEvent;
+use Joomla\CMS\Fields\CustomFieldFilterProviderInterface;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Plugin\CMSPlugin;
@@ -60,11 +62,30 @@ abstract class FieldsPlugin extends CMSPlugin
     public static function getSubscribedEvents(): array
     {
         return [
-            'onCustomFieldsGetTypes'     => 'getFieldTypes',
-            'onCustomFieldsPrepareField' => 'prepareField',
-            'onCustomFieldsPrepareDom'   => 'prepareDom',
-            'onContentPrepareForm'       => 'prepareForm',
+            'onCustomFieldsGetFilterProvider' => 'getFilterProvider',
+            'onCustomFieldsGetTypes'          => 'getFieldTypes',
+            'onCustomFieldsPrepareField'      => 'prepareField',
+            'onCustomFieldsPrepareDom'        => 'prepareDom',
+            'onContentPrepareForm'            => 'prepareForm',
         ];
+    }
+
+    /**
+     * Advertises this plugin as a filter provider when it implements the contract and supports the field type.
+     *
+     * @param   GetFilterProviderEvent  $event  The provider discovery event.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getFilterProvider(GetFilterProviderEvent $event): void
+    {
+        $field = $event->getField();
+
+        if ($this instanceof CustomFieldFilterProviderInterface && $this->isTypeSupported($field->type)) {
+            $event->addResult($this);
+        }
     }
 
     /**
