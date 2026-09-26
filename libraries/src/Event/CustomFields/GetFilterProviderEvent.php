@@ -11,7 +11,6 @@ namespace Joomla\CMS\Event\CustomFields;
 
 use Joomla\CMS\Event\Result\ResultAware;
 use Joomla\CMS\Event\Result\ResultAwareInterface;
-use Joomla\CMS\Event\Result\ResultTypeObjectAware;
 use Joomla\CMS\Fields\CustomFieldFilterProviderInterface;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -26,24 +25,6 @@ use Joomla\CMS\Fields\CustomFieldFilterProviderInterface;
 class GetFilterProviderEvent extends CustomFieldsEvent implements ResultAwareInterface
 {
     use ResultAware;
-    use ResultTypeObjectAware;
-
-    /**
-     * Constructs the provider discovery event.
-     *
-     * @param   string  $name       The event name.
-     * @param   array   $arguments  The event arguments.
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    public function __construct($name, array $arguments = [])
-    {
-        $this->resultAcceptableClasses  = [
-            CustomFieldFilterProviderInterface::class,
-        ];
-
-        parent::__construct($name, $arguments);
-    }
 
     /**
      * Returns the custom field being evaluated.
@@ -55,6 +36,30 @@ class GetFilterProviderEvent extends CustomFieldsEvent implements ResultAwareInt
     public function getField(): object
     {
         return $this->getArgument('subject');
+    }
+
+    /**
+     * Checks whether a result implements the filter provider contract.
+     *
+     * @param   mixed  $data  The result to type check.
+     *
+     * @return  void
+     *
+     * @throws  \InvalidArgumentException  When the result is not a filter provider.
+     *
+     * @internal
+     * @since   __DEPLOY_VERSION__
+     */
+    public function typeCheckResult($data): void
+    {
+        if (!$data instanceof CustomFieldFilterProviderInterface) {
+            throw new \InvalidArgumentException(
+                \sprintf(
+                    'Event %s only accepts CustomFieldFilterProviderInterface results.',
+                    $this->getName()
+                )
+            );
+        }
     }
 
     /**
