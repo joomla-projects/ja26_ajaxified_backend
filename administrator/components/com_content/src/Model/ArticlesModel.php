@@ -20,9 +20,7 @@ use Joomla\CMS\MVC\Model\ListModel;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\Table\Category;
 use Joomla\Component\Content\Administrator\Extension\ContentComponent;
-use Joomla\Component\Fields\Administrator\Extension\FieldsComponent;
-use Joomla\Component\Fields\Administrator\Filter\PreparedFieldsFilter;
-use Joomla\Component\Fields\Administrator\Service\FieldsFilterService;
+use Joomla\Component\Fields\Administrator\Model\FieldsFilterBehaviorTrait;
 use Joomla\Database\ParameterType;
 use Joomla\Database\QueryInterface;
 use Joomla\Registry\Registry;
@@ -39,21 +37,7 @@ use Joomla\Utilities\ArrayHelper;
  */
 class ArticlesModel extends ListModel
 {
-    /**
-     * Prepared custom-field filters for this model lifecycle.
-     *
-     * @var    PreparedFieldsFilter|null
-     * @since  __DEPLOY_VERSION__
-     */
-    private ?PreparedFieldsFilter $preparedFieldsFilter = null;
-
-    /**
-     * Shared fields-filter coordinator.
-     *
-     * @var    FieldsFilterService|null
-     * @since  __DEPLOY_VERSION__
-     */
-    private ?FieldsFilterService $fieldsFilterService = null;
+    use FieldsFilterBehaviorTrait;
 
     /**
      * Constructor.
@@ -133,9 +117,7 @@ class ArticlesModel extends ListModel
             $form->removeField('stage', 'filter');
         }
 
-        if ($this->preparedFieldsFilter) {
-            $this->getFieldsFilterService()->addFilterFields($form, $this->preparedFieldsFilter, $loadData);
-        }
+        $this->addFieldsFiltersToForm($form, $loadData);
 
         return $form;
     }
@@ -192,7 +174,14 @@ class ArticlesModel extends ListModel
 
         $submitted = $input->exists('filter') ? $input->get('filter', [], 'array') : [];
 
-        $this->prepareCustomFieldFilters($app, $submitted, $previousFilters);
+        $this->prepareFieldsFilter(
+            $app,
+            'com_content.article',
+            $this->getEffectiveCategoryIds((array) $this->state->get('filter.category_id', [])),
+            (string) $this->state->get('filter.language', ''),
+            $submitted,
+            $previousFilters
+        );
     }
 
     /**
@@ -226,9 +215,7 @@ class ArticlesModel extends ListModel
         $id .= ':' . $this->getState('filter.end_date_range');
         $id .= ':' . $this->getState('filter.relative_date');
 
-        if ($this->preparedFieldsFilter) {
-            $id .= ':' . $this->preparedFieldsFilter->getFingerprint();
-        }
+        $id = $this->addFieldsFilterStoreId($id);
 
         return parent::getStoreId($id);
     }
@@ -718,9 +705,7 @@ class ArticlesModel extends ListModel
 
         $query->order($ordering);
 
-        if ($this->preparedFieldsFilter) {
-            $this->getFieldsFilterService()->applyToQuery($query, $this->preparedFieldsFilter, $db->quoteName('a.id'));
-        }
+        $this->applyPreparedFieldsFilters($query, $db->quoteName('a.id'));
 
         return $query;
     }
@@ -736,89 +721,7 @@ class ArticlesModel extends ListModel
     {
         $this->getState();
 
-        $active = parent::getActiveFilters();
-
-        if ($this->preparedFieldsFilter) {
-            $active = array_merge($active, $this->preparedFieldsFilter->getActive());
-        }
-
-        return $active;
-    }
-
-    /**
-     * Prepares and synchronises the custom-field filter state once.
-     *
-     * @param   object  $app              The current application.
-     * @param   array   $submitted        Filter values submitted by this request.
-     * @param   array   $previousFilters  Filter state before request processing.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    private function prepareCustomFieldFilters(object $app, array $submitted, array $previousFilters): void
-    {
-        $filterState = (array) $app->getUserState($this->context . '.filter', []);
-        $categoryIds = $this->getEffectiveCategoryIds((array) $this->state->get('filter.category_id', []));
-        $language    = (string) $this->state->get('filter.language', '');
-
-        $this->preparedFieldsFilter = $this->getFieldsFilterService()->prepare(
-            'com_content.article',
-            $this->getCurrentUser(),
-            $categoryIds,
-            $language,
-            $filterState,
-            $submitted
-        );
-
-        $oldDynamic = [];
-
-        foreach ($previousFilters as $name => $value) {
-            if ($this->isCustomFieldFilterName((string) $name)) {
-                $oldDynamic[$name] = $value;
-                $this->setState('filter.' . $name, []);
-            }
-        }
-
-        foreach ($filterState as $name => $value) {
-            if ($this->isCustomFieldFilterName((string) $name)) {
-                unset($filterState[$name]);
-                $this->setState('filter.' . $name, []);
-            }
-        }
-
-        foreach ($this->preparedFieldsFilter->getActive() as $name => $value) {
-            $filterState[$name] = $value;
-            $this->setState('filter.' . $name, $value);
-        }
-
-        $app->setUserState($this->context . '.filter', $filterState);
-
-        $formState         = $app->getUserState($this->context, new \stdClass());
-        $formState->filter = isset($formState->filter) ? (array) $formState->filter : [];
-
-        foreach (array_keys($formState->filter) as $name) {
-            if ($this->isCustomFieldFilterName((string) $name)) {
-                unset($formState->filter[$name]);
-            }
-        }
-
-        foreach ($this->preparedFieldsFilter->getActive() as $name => $value) {
-            $formState->filter[$name] = $value;
-        }
-
-        $app->setUserState($this->context, $formState);
-
-        if ($oldDynamic !== $this->preparedFieldsFilter->getActive()) {
-            $app->getInput()->set('limitstart', 0);
-            $app->setUserState($this->context . '.limitstart', 0);
-            $this->setState('list.start', 0);
-        }
-
-        if ($this->preparedFieldsFilter->isRejected()) {
-            $app->getLanguage()->load('com_fields', JPATH_ADMINISTRATOR);
-            $app->enqueueMessage(Text::_('COM_FIELDS_FILTER_INVALID_SELECTION'), 'warning');
-        }
+        return $this->mergeFieldsActiveFilters(parent::getActiveFilters());
     }
 
     /**
@@ -866,38 +769,6 @@ class ArticlesModel extends ListModel
         }
 
         return array_values(array_unique($effective));
-    }
-
-    /**
-     * Tests whether a state key belongs to the numeric custom-field filter namespace.
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    private function isCustomFieldFilterName(string $name): bool
-    {
-        return preg_match('/^customfield_(?:[0-9].*)?$/D', $name) === 1;
-    }
-
-    /**
-     * Returns the shared custom-field filter service.
-     *
-     * @return  FieldsFilterService
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    private function getFieldsFilterService(): FieldsFilterService
-    {
-        if ($this->fieldsFilterService === null) {
-            $component = Factory::getApplication()->bootComponent('com_fields');
-
-            if (!$component instanceof FieldsComponent) {
-                throw new \UnexpectedValueException('The com_fields component does not provide custom-field filtering.');
-            }
-
-            $this->fieldsFilterService = $component->getFieldsFilterService();
-        }
-
-        return $this->fieldsFilterService;
     }
 
     /**
