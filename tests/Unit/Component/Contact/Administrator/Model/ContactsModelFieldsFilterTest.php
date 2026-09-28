@@ -104,10 +104,10 @@ class ContactsModelFieldsFilterTest extends UnitTestCase
 
     public function testCategoryScopeMatchesNativeDescendantLevelSemantics(): void
     {
-        $parent = new CategoryNode((object) ['id' => 5, 'level' => 2]);
-        $child  = new CategoryNode((object) ['id' => 6, 'level' => 3]);
-        $deep   = new CategoryNode((object) ['id' => 7, 'level' => 4]);
-        $second = new CategoryNode((object) ['id' => 8, 'level' => 2]);
+        $parent       = new CategoryNode((object) ['id' => 5, 'level' => 2]);
+        $child        = new CategoryNode((object) ['id' => 6, 'level' => 3]);
+        $deep         = new CategoryNode((object) ['id' => 7, 'level' => 4]);
+        $second       = new CategoryNode((object) ['id' => 8, 'level' => 2]);
         $siblingChild = new CategoryNode((object) ['id' => 9, 'level' => 3]);
         $child->setParent($parent);
         $deep->setParent($child);

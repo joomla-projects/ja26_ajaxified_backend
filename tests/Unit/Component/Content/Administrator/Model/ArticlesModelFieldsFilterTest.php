@@ -230,7 +230,7 @@ class ArticlesModelFieldsFilterTest extends UnitTestCase
                 [],
                 '',
                 ['customfield_999' => ['invalid']],
-                ['published' => '1', 'customfield_999' => ['invalid']]
+                ['published'       => '1', 'customfield_999' => ['invalid']]
             );
 
             $query = $this->createMock(QueryInterface::class);

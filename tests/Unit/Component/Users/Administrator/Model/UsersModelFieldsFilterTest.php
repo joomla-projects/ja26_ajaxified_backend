@@ -55,15 +55,15 @@ class UsersModelFieldsFilterTest extends UnitTestCase
 
     public function testPopulateStateSuppliesUserScopesAndLayoutContexts(): void
     {
-        $componentsProperty = new \ReflectionProperty(ComponentHelper::class, 'components');
-        $previousComponents = $componentsProperty->getValue();
+        $componentsProperty  = new \ReflectionProperty(ComponentHelper::class, 'components');
+        $previousComponents  = $componentsProperty->getValue();
         $previousApplication = Factory::$application;
-        $component = new ComponentRecord(['enabled' => true]);
+        $component           = new ComponentRecord(['enabled' => true]);
         $component->setParams(new Registry());
         $componentsProperty->setValue(null, ['com_users' => $component]);
 
         try {
-            $model = $this->createPopulateModel();
+            $model   = $this->createPopulateModel();
             $fixture = $this->createApplication(
                 [
                     'layout'   => 'modal',
@@ -81,7 +81,7 @@ class UsersModelFieldsFilterTest extends UnitTestCase
                     'com_users.user',
                     [],
                     '',
-                    ['state' => '1', 'customfield_7' => ['north']],
+                    ['state'              => '1', 'customfield_7' => ['north']],
                     ['customfield_search' => 'term'],
                 ],
                 $model->preparedArguments
@@ -90,8 +90,8 @@ class UsersModelFieldsFilterTest extends UnitTestCase
             $this->assertSame([9, 11], $model->getState('filter.excluded'));
             $this->assertSame('com_users.users.modal', $this->getContext($model));
 
-            $defaultModel = $this->createPopulateModel();
-            $fixture = $this->createApplication();
+            $defaultModel         = $this->createPopulateModel();
+            $fixture              = $this->createApplication();
             Factory::$application = $fixture->application;
             $defaultModel->populateForTest();
 
