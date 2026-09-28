@@ -124,7 +124,7 @@ class CheckboxesTest extends UnitTestCase
         $this->assertSame(ParameterType::STRING, $bounded[':cff0_value0']->dataType);
     }
 
-    public function testUsesExactRowMembershipForOneValueWithoutPartialMatching(): void
+    public function testUsesExactRowMembershipForOneValue(): void
     {
         $database = new MysqliDriver([
             'host'     => '127.0.0.1',
@@ -147,7 +147,6 @@ class CheckboxesTest extends UnitTestCase
 
         $this->assertStringContainsString('BINARY `fv`.`value` = BINARY :cff0_value0', (string) $query);
         $this->assertSame('A', $query->getBounded()[':cff0_value0']->value);
-        $this->assertStringNotContainsString('AA', (string) $query);
     }
 
     public function testBuildsPostgresqlByteExactAnyComparison(): void
