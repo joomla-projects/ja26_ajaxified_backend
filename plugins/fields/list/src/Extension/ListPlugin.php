@@ -14,7 +14,6 @@ use Joomla\CMS\Event\CustomFields\BeforePrepareFieldEvent;
 use Joomla\CMS\Fields\CustomFieldFilterProviderInterface;
 use Joomla\Component\Fields\Administrator\Plugin\FieldsListPlugin;
 use Joomla\Database\DatabaseInterface;
-use Joomla\Database\ParameterType;
 use Joomla\Database\QueryInterface;
 use Joomla\Event\SubscriberInterface;
 
@@ -29,9 +28,6 @@ use Joomla\Event\SubscriberInterface;
  */
 final class ListPlugin extends FieldsListPlugin implements CustomFieldFilterProviderInterface, SubscriberInterface
 {
-    private const MAX_FILTER_VALUES       = 100;
-    private const MAX_FILTER_VALUE_LENGTH = 1024;
-
     /**
      * Returns an array of events this subscriber will listen to.
      *
@@ -58,22 +54,7 @@ final class ListPlugin extends FieldsListPlugin implements CustomFieldFilterProv
      */
     public function getFilterField(object $field, string $name): \SimpleXMLElement
     {
-        $element = new \SimpleXMLElement('<field/>');
-        $element->addAttribute('name', $name);
-        $element->addAttribute('type', 'list');
-        $element->addAttribute('label', (string) $field->label);
-        $element->addAttribute('hint', (string) $field->label);
-        $element->addAttribute('multiple', 'true');
-        $element->addAttribute('strictselection', 'true');
-        $element->addAttribute('layout', 'joomla.form.field.list-fancy-select');
-        $element->addAttribute('class', 'js-select-submit-on-change');
-
-        foreach ($this->getFilterOptions($field) as $value => $label) {
-            $option = $element->addChild('option', htmlspecialchars((string) $label, ENT_XML1 | ENT_COMPAT, 'UTF-8'));
-            $option->addAttribute('value', (string) $value);
-        }
-
-        return $element;
+        return $this->getSelectionFilterField($field, $name);
     }
 
     /**
@@ -90,68 +71,7 @@ final class ListPlugin extends FieldsListPlugin implements CustomFieldFilterProv
      */
     public function normaliseValue(object $field, mixed $value): array
     {
-        $values = \is_array($value) ? $value : [$value];
-
-        if (\count($values) > self::MAX_FILTER_VALUES) {
-            throw new \InvalidArgumentException('Too many custom field filter values.');
-        }
-
-        $options = [];
-
-        foreach ($this->getFilterOptions($field) as $option => $label) {
-            $options[(string) $option] = true;
-        }
-
-        $normalised = [];
-
-        foreach ($values as $selected) {
-            if (!\is_string($selected) && !\is_int($selected)) {
-                throw new \InvalidArgumentException('Invalid custom field filter value.');
-            }
-
-            $selected = (string) $selected;
-
-            if ($selected === '') {
-                continue;
-            }
-
-            if (\strlen($selected) > self::MAX_FILTER_VALUE_LENGTH || !isset($options[$selected])) {
-                throw new \InvalidArgumentException('Unknown custom field filter value.');
-            }
-
-            $normalised[$selected] = $selected;
-        }
-
-        $normalised = array_values($normalised);
-        sort($normalised, SORT_STRING);
-
-        return $normalised;
-    }
-
-    /**
-     * Returns the supported options from the authoritative field configuration.
-     *
-     * @param   object  $field  The custom-field definition.
-     *
-     * @return  array
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    private function getFilterOptions(object $field): array
-    {
-        $options = [];
-
-        foreach ($this->getOptionsFromField($field) as $value => $label) {
-            $value = (string) $value;
-
-            if ($value === '' || \strlen($value) > self::MAX_FILTER_VALUE_LENGTH) {
-                continue;
-            }
-
-            $options[$value] = $label;
-        }
-
-        return $options;
+        return $this->normaliseSelectionFilterValue($field, $value);
     }
 
     /**
@@ -176,47 +96,7 @@ final class ListPlugin extends FieldsListPlugin implements CustomFieldFilterProv
         string $itemIdExpression,
         string $bindPrefix
     ): void {
-        $fieldId  = (int) $field->id;
-        $subQuery = $database->createQuery()
-            ->select('1')
-            ->from($database->quoteName('#__fields_values', 'fv'))
-            ->where($database->quoteName('fv.field_id') . ' = :' . $bindPrefix . 'field');
-        $query->bind(':' . $bindPrefix . 'field', $fieldId, ParameterType::INTEGER);
-
-        $serverType = $database->getServerType();
-
-        if ($serverType === 'mysql') {
-            $subQuery->where('BINARY ' . $database->quoteName('fv.item_id') . ' = BINARY ' . $itemIdExpression);
-        } elseif ($serverType === 'postgresql') {
-            $subQuery->where(
-                "convert_to(" . $database->quoteName('fv.item_id') . ", 'UTF8') = convert_to(" . $itemIdExpression . ", 'UTF8')"
-            );
-        } else {
-            $subQuery->where($database->quoteName('fv.item_id') . ' = ' . $itemIdExpression);
-        }
-
-        $comparisons = [];
-
-        $tokens = array_values($value);
-
-        foreach ($tokens as $index => &$token) {
-            $placeholder = ':' . $bindPrefix . 'value' . $index;
-
-            if ($serverType === 'mysql') {
-                $comparisons[] = 'BINARY ' . $database->quoteName('fv.value') . ' = BINARY ' . $placeholder;
-            } elseif ($serverType === 'postgresql') {
-                $comparisons[] = "convert_to(" . $database->quoteName('fv.value') . ", 'UTF8') = convert_to(" . $placeholder . ", 'UTF8')";
-            } else {
-                $comparisons[] = $database->quoteName('fv.value') . ' = ' . $placeholder;
-            }
-
-            $query->bind($placeholder, $token, ParameterType::STRING);
-        }
-
-        unset($token);
-
-        $subQuery->where('(' . implode(' OR ', $comparisons) . ')');
-        $query->where('EXISTS (' . $subQuery . ')');
+        $this->applySelectionFilter($query, $database, $field, $value, $itemIdExpression, $bindPrefix);
     }
 
     /**
