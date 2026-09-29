@@ -2,7 +2,77 @@
  * @copyright  (C) 2023 Open Source Matters, Inc. <https://www.joomla.org>
  * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
-import JoomlaEditorDecorator from 'editor-decorator';
+import JoomlaEditorDecorator, { JoomlaEditorChangeObservationError } from 'editor-decorator';
+
+const lifecycleSubscriptions = new Map();
+
+/**
+ * Metadata describing an editor registry lifecycle change.
+ *
+ * @typedef {Object} JoomlaEditorLifecycleDetail
+ * @property {'registered'|'unregistered'} type Registry change type.
+ * @property {string} id Public editor ID.
+ * @property {string} editorType Public editor type.
+ */
+
+/**
+ * Editor registry lifecycle callback. No editor value, decorator, DOM node, or provider instance
+ * is exposed.
+ *
+ * @callback JoomlaEditorLifecycleCallback
+ * @param {JoomlaEditorLifecycleDetail} detail Immutable lifecycle metadata.
+ *
+ * @returns {void}
+ */
+
+/**
+ * Report a subscriber error without interrupting the remaining subscribers.
+ *
+ * @param {Error} error Subscriber error.
+ *
+ * @returns {void}
+ *
+ * @private
+ */
+const reportSubscriberError = (error) => {
+  if (typeof globalThis.reportError === 'function') {
+    globalThis.reportError(error);
+
+    return;
+  }
+
+  queueMicrotask(() => {
+    throw error;
+  });
+};
+
+/**
+ * Notify editor registry subscribers using metadata only.
+ *
+ * @param {'registered'|'unregistered'} type Lifecycle change type.
+ * @param {JoomlaEditorDecorator} editor Affected editor.
+ *
+ * @returns {void}
+ */
+const notifyLifecycle = (type, editor) => {
+  const detail = Object.freeze({
+    type,
+    id: editor.getId(),
+    editorType: editor.getType(),
+  });
+
+  [...lifecycleSubscriptions.entries()].forEach(([subscription, callback]) => {
+    if (!lifecycleSubscriptions.has(subscription)) {
+      return;
+    }
+
+    try {
+      callback(detail);
+    } catch (error) {
+      reportSubscriberError(error);
+    }
+  });
+};
 
 /**
  * Editor API.
@@ -34,10 +104,24 @@ const JoomlaEditor = {
       throw new Error('Unexpected editor instance');
     }
 
-    this.instances[editor.getId()] = editor;
+    const id = editor.getId();
+    const registered = this.instances[id];
+
+    if (registered === editor) {
+      return this;
+    }
+
+    if (registered) {
+      this.unregister(registered);
+    }
+
+    this.instances[id] = editor;
 
     // For backward compatibility
-    Joomla.editors.instances[editor.getId()] = editor;
+    Joomla.editors.instances[id] = editor;
+
+    // Notify only after the editor is publicly retrievable from both registries.
+    notifyLifecycle('registered', editor);
 
     return this;
   },
@@ -51,15 +135,23 @@ const JoomlaEditor = {
    */
   unregister(editor) {
     let id;
+    let expected = null;
     if (editor instanceof JoomlaEditorDecorator) {
       id = editor.getId();
+      expected = editor;
     } else if (typeof editor === 'string') {
       id = editor;
     } else {
       throw new Error('Unexpected editor instance or identifier');
     }
 
-    if (this.active && this.active === this.instances[id]) {
+    const registered = this.instances[id];
+
+    if (!registered || (expected && registered !== expected)) {
+      return this;
+    }
+
+    if (this.active && this.active === registered) {
       this.active = null;
     }
 
@@ -68,7 +160,45 @@ const JoomlaEditor = {
     // For backward compatibility
     delete Joomla.editors.instances[id];
 
+    registered.releaseChangeSubscriptions();
+
+    // Notify only after the editor is no longer publicly retrievable.
+    notifyLifecycle('unregistered', registered);
+
     return this;
+  },
+
+  /**
+   * Subscribe to editor registration and unregistration.
+   *
+   * The callback receives immutable metadata with `type`, `id`, and `editorType`. Registration is
+   * reported after get(id) returns the editor; unregistration is reported after get(id) returns
+   * false. No editor content or provider instance is exposed. The returned function removes only
+   * this subscription and can safely be called more than once. Passing a decorator to unregister()
+   * removes it only while that exact instance is registered, preventing stale teardown from
+   * removing a newer editor with the same ID.
+   *
+   * @param {JoomlaEditorLifecycleCallback} callback Lifecycle callback.
+   *
+   * @returns {Function} Idempotent unsubscribe function.
+   */
+  subscribeLifecycle(callback) {
+    if (typeof callback !== 'function') {
+      throw new TypeError('The lifecycle callback must be a function');
+    }
+
+    const subscription = Symbol('editor-lifecycle-subscription');
+    lifecycleSubscriptions.set(subscription, callback);
+    let subscribed = true;
+
+    return () => {
+      if (!subscribed) {
+        return;
+      }
+
+      subscribed = false;
+      lifecycleSubscriptions.delete(subscription);
+    };
   },
 
   /**
@@ -186,4 +316,9 @@ const JoomlaEditorButton = {
   },
 };
 
-export { JoomlaEditor, JoomlaEditorButton, JoomlaEditorDecorator };
+export {
+  JoomlaEditor,
+  JoomlaEditorButton,
+  JoomlaEditorChangeObservationError,
+  JoomlaEditorDecorator,
+};

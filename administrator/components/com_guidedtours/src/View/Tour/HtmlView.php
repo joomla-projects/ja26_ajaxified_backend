@@ -10,6 +10,9 @@
 
 namespace Joomla\Component\Guidedtours\Administrator\View\Tour;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -28,6 +31,15 @@ use Joomla\Component\Guidedtours\Administrator\Model\TourModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether the generic Autosave interface should be rendered.
+     *
+     * @var boolean
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
     /**
      * The \JForm object
      *
@@ -81,8 +93,69 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task');
 
         $this->addToolbar();
+        $this->prepareAutosave();
 
         parent::display($tpl);
+    }
+
+    /**
+     * Configure Autosave for one existing Guided Tour.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        $application  = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($application, $this->getDocument(), $application->getIdentity());
+        $configurator->disable('com_guidedtours.autosave.tour');
+
+        if ($this->getLayout() !== 'edit') {
+            return;
+        }
+
+        try {
+            $provider = $application->bootComponent('com_guidedtours')->getAutosaveProvider('com_guidedtours.tour');
+            $itemId   = (int) $this->item->id;
+            $targetId = null;
+
+            if ($itemId > 0) {
+                $targetId = $provider->canonicalizeTargetId((string) $itemId);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($application->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+
+            if ($targetId !== null && !$provider->targetExists($targetId)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $fieldIds = [];
+
+        foreach (['title', 'uid', 'description', 'note', 'url', 'autostart'] as $fieldName) {
+            $field = $this->form->getField($fieldName);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $fieldIds[$fieldName] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $targetId,
+            'com_guidedtours.autosave.tour',
+            'guidedtours-form',
+            $fieldIds,
+            'com_guidedtours.tour-autosave'
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**

@@ -10,7 +10,9 @@
 
 namespace Joomla\Component\Languages\Administrator\Controller;
 
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\MVC\Controller\FormController;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -23,6 +25,24 @@ use Joomla\CMS\MVC\Controller\FormController;
  */
 class LanguageController extends FormController
 {
+    use AutosaveFormControllerTrait;
+
+
+    private const AUTOSAVE_CONTEXT      = 'com_languages.language';
+    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new'];
+
+    public function save($key = null, $urlVar = null)
+    {
+        return $this->executeAutosaveCanonicalSave(
+            fn () => parent::save($key, $urlVar),
+            $urlVar ?: 'lang_id'
+        );
+    }
+
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        $this->captureAutosaveCanonicalResult($model, 'language.id');
+    }
     /**
      * Gets the URL arguments to append to an item redirect.
      *

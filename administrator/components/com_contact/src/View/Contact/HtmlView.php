@@ -10,6 +10,9 @@
 
 namespace Joomla\Component\Contact\Administrator\View\Contact;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -27,6 +30,8 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
  */
 class HtmlView extends FormView
 {
+    public bool $autosaveEnabled = false;
+
     /**
      * Set to true, if saving to menu should be supported
      *
@@ -96,6 +101,70 @@ class HtmlView extends FormView
         $this->form
             ->addControlField('task')
             ->addControlField('forcedLanguage', $forcedLanguage);
+
+        $this->prepareAutosave();
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_contact.autosave.contact');
+
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            return;
+        }
+
+        $target = null;
+
+        try {
+            $provider = $app->bootComponent('com_contact')->getAutosaveProvider('com_contact.contact');
+            $itemId   = (int) $this->item->id;
+
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+
+                if (!$provider->targetExists($target)) {
+                    return;
+                }
+            } elseif ($itemId !== 0 || $this->getLayout() !== 'edit' || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                // Genuine new record: authorize the blank form now; every later
+                // provisional operation re-runs authorization against the anchored
+                // category carried by the normalized draft.
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $names = [
+            'name', 'alias', 'catid', 'version_note', 'misc', 'image', 'con_position', 'email_to', 'address',
+            'suburb', 'state', 'postcode', 'country', 'telephone', 'mobile', 'fax', 'webpage',
+            'sortname1', 'sortname2', 'sortname3', 'publish_up', 'publish_down', 'metakey', 'metadesc',
+        ];
+        $ids = [];
+
+        foreach ($names as $name) {
+            $field = $this->form->getField($name);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $ids[$name] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $target,
+            'com_contact.autosave.contact',
+            'contact-form',
+            $ids,
+            'com_contact.contact-autosave'
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**

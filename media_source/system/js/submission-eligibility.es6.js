@@ -42,6 +42,17 @@ export default class SubmissionEligibility {
      * @returns {{eligible: boolean, reason: string}}
      */
     static evaluate(context) {
+        const transportOverride = context.form?.dataset?.joomlaSubmissionTransport;
+
+        if (transportOverride === 'native') {
+            delete context.form.dataset.joomlaSubmissionTransport;
+
+            return {
+                eligible: false,
+                reason: REASONS.WORKSPACE_EXIT,
+            };
+        }
+
         if (!window.isSecureContext) {
             return {
                 eligible: false,

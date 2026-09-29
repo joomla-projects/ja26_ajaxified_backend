@@ -11,19 +11,58 @@ export default class WorkspaceSynchronizer {
      *
      * @returns {void}
      */
-    static synchronize(snapshot, strategy = { synchronizeControls: true }) {
+    static synchronize(
+        snapshot,
+        strategy = { synchronizeControls: true },
+        submissionState = null
+    ) {
         const { document: detachedDocument, response } = snapshot;
-
-        this.synchronizeHistory(response);
-
         const detachedForm = detachedDocument.querySelector('form[name="adminForm"]');
         const liveForm = document.querySelector('form[name="adminForm"]');
+
+        if (submissionState?.form && submissionState.form !== liveForm) {
+            return;
+        }
+
+        this.synchronizeHistory(response);
 
         this.synchronizeFormAction(detachedForm, liveForm);
 
         if (strategy.synchronizeControls) {
-            this.synchronizeFormControls(detachedForm, liveForm);
+            this.synchronizeFormControls(detachedForm, liveForm, submissionState);
         }
+    }
+
+    /**
+     * Capture normalized control values before an Ajax request begins.
+     *
+     * @param {HTMLFormElement} form
+     *
+     * @returns {{form: HTMLFormElement, controls: Map}|null}
+     */
+    static captureFormControls(form) {
+        if (!(form instanceof HTMLFormElement)) {
+            return null;
+        }
+
+        const captured = new Map();
+
+        for (const control of form.elements) {
+            if (!control.name) {
+                continue;
+            }
+
+            if (!captured.has(control.name)) {
+                captured.set(control.name, []);
+            }
+
+            captured.get(control.name).push(this.readControl(control));
+        }
+
+        return Object.freeze({
+            form,
+            controls: captured,
+        });
     }
 
     /**
@@ -65,10 +104,16 @@ export default class WorkspaceSynchronizer {
      *
      * @returns {void}
      */
-    static synchronizeFormControls(detachedForm, liveForm) {
+    static synchronizeFormControls(detachedForm, liveForm, submissionState = null) {
         if (!detachedForm || !liveForm) {
             return;
         }
+
+        if (submissionState?.form && submissionState.form !== liveForm) {
+            return;
+        }
+
+        const submittedControls = submissionState?.controls || null;
 
         const synchronizedNames = new Set();
 
@@ -84,6 +129,13 @@ export default class WorkspaceSynchronizer {
             }
 
             for (let i = 0; i < detachedElements.length; i++) {
+                const submitted = submittedControls?.get(name)?.[i];
+
+                if (submitted !== undefined
+                    && !this.sameControlValue(this.readControl(liveElements[i]), submitted)) {
+                    continue;
+                }
+
                 this.synchronizeControl(detachedElements[i], liveElements[i]);
             }
 
@@ -153,5 +205,47 @@ export default class WorkspaceSynchronizer {
             default:
                 break;
         }
+    }
+
+    /**
+     * Read one control without exposing DOM objects in the snapshot.
+     *
+     * @param {Element} control
+     *
+     * @returns {string|boolean|string[]|null}
+     */
+    static readControl(control) {
+        if (!control) {
+            return null;
+        }
+
+        if (control.tagName === 'INPUT'
+            && (control.type === 'checkbox' || control.type === 'radio')) {
+            return [control.checked, control.value];
+        }
+
+        if (control.tagName === 'SELECT' && control.multiple) {
+            return Array.from(control.selectedOptions).map((option) => option.value);
+        }
+
+        if ('value' in control) {
+            return control.value;
+        }
+
+        return null;
+    }
+
+    /**
+     * Compare normalized submitted and current control values.
+     */
+    static sameControlValue(first, second) {
+        if (Array.isArray(first) || Array.isArray(second)) {
+            return Array.isArray(first)
+                && Array.isArray(second)
+                && first.length === second.length
+                && first.every((value, index) => value === second[index]);
+        }
+
+        return first === second;
     }
 }

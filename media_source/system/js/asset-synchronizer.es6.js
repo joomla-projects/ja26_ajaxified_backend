@@ -298,14 +298,30 @@ export default class AssetSynchronizer {
     /**
      * Reconcile and load missing module assets.
      *
+     * A response may declare module scripts whose bare-specifier imports are
+     * only resolvable through its own import map. Native import maps are frozen
+     * once the first module has loaded, so such assets cannot be activated in
+     * the live document. In that case nothing is loaded and `false` is returned
+     * so the caller can perform a full navigation to the response URL instead
+     * of leaving the response page without its required module assets.
+     *
      * @param {ResponseSnapshot} snapshot
      *
-     * @returns {Promise<void>}
+     * @returns {Promise<boolean>} True when the response module assets were
+     * satisfied in the live document; false when a full navigation is required.
      */
     static async synchronize(snapshot) {
         const delta = this.compare(snapshot);
+
+        if (delta.missingImportMaps.length > 0
+            && delta.missingModules.some((module) => module.kind === 'script')) {
+            return false;
+        }
+
         const loadPromises = delta.missingModules.map((module) => this.loadModule(module));
         await Promise.all(loadPromises);
+
+        return true;
     }
 
     /**

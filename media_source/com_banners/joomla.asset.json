@@ -6,6 +6,34 @@
   "license": "GPL-2.0-or-later",
   "assets": [
     {
+      "name": "com_banners.client-autosave",
+      "type": "script",
+      "uri": "com_banners/client-autosave.min.js",
+      "dependencies": [
+        "core",
+        "com_autosave.create-binding",
+        "com_autosave.integration-controller"
+      ],
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
+      "name": "com_banners.banner-autosave",
+      "type": "script",
+      "uri": "com_banners/banner-autosave.min.js",
+      "dependencies": [
+        "core",
+        "com_autosave.create-binding",
+        "com_autosave.integration-controller",
+        "editor-api",
+        "webcomponent.field-media"
+      ],
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
       "name": "com_banners.admin-banner-edit",
       "type": "script",
       "uri": "com_banners/admin-banner-edit.min.js",

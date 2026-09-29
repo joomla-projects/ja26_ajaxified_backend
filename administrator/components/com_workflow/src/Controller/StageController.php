@@ -11,9 +11,11 @@
 namespace Joomla\Component\Workflow\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Router\Route;
 use Joomla\Input\Input;
 
@@ -28,6 +30,11 @@ use Joomla\Input\Input;
  */
 class StageController extends FormController
 {
+    use AutosaveFormControllerTrait;
+
+
+    private const AUTOSAVE_CONTEXT      = 'com_workflow.stage';
+    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'];
     /**
      * The workflow in where the stage belongs to
      *
@@ -188,6 +195,11 @@ class StageController extends FormController
      */
     public function save($key = null, $urlVar = null)
     {
+        return $this->executeAutosaveCanonicalSave(fn () => $this->executeStageSave($key, $urlVar), $urlVar);
+    }
+
+    private function executeStageSave($key = null, $urlVar = null)
+    {
         $result  = parent::save($key, $urlVar);
         $input   = $this->input;
         $isModal = $input->get('layout') === 'modal' || $input->get('tmpl') === 'component';
@@ -203,6 +215,10 @@ class StageController extends FormController
         return $result;
     }
 
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        $this->captureAutosaveCanonicalResult($model, 'stage.id');
+    }
     /**
      * Method to cancel an edit.
      *

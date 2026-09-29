@@ -3,7 +3,7 @@
  * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
-const serializeBoundary = (boundaryName, payload) => {
+export const serializeBoundary = (boundaryName, payload) => {
     let html = `<template for="${boundaryName}"><?start name="${boundaryName}"?>`;
 
     payload.forEach((node) => {
@@ -11,6 +11,10 @@ const serializeBoundary = (boundaryName, payload) => {
 
         if (clone.nodeType === Node.ELEMENT_NODE) {
             html += clone.outerHTML;
+        } else if (clone.nodeType === Node.PROCESSING_INSTRUCTION_NODE) {
+            html += `<?${clone.target}${clone.data ? ` ${clone.data}` : ''}?>`;
+        } else if (clone.nodeType === Node.COMMENT_NODE) {
+            html += `<!--${clone.nodeValue}-->`;
         } else {
             html += clone.textContent;
         }

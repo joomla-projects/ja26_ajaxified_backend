@@ -19,7 +19,7 @@ export default class SubmissionSynchronization {
      *
      * @returns {Promise<void>}
      */
-    static async synchronize({ response, context }) {
+    static async synchronize({ response, context, submissionState = null }) {
         /*
          * Phase 1:
          * Determine whether the response remains within
@@ -31,6 +31,10 @@ export default class SubmissionSynchronization {
             return;
         }
 
+        if (!this.isCurrentSubmission(context, submissionState)) {
+            return;
+        }
+
         /*
          * Phase 3:
          * Interpret the response into an immutable snapshot.
@@ -39,9 +43,22 @@ export default class SubmissionSynchronization {
 
         const strategy = this.resolveSynchronizationStrategy(context);
 
-        await this.synchronizeAssets(snapshot);
+        const assetsSatisfied = await this.synchronizeAssets(snapshot);
 
-        this.synchronizeWorkspace(snapshot, strategy);
+        if (!assetsSatisfied) {
+            /*
+             * The response declares module assets that cannot be executed in
+             * the live document (their import-map entries are absent and native
+             * import maps cannot be extended after the first module load).
+             * Activate the response through a full navigation so its module
+             * assets evaluate with the document import map they were built for.
+             */
+            this.performNavigation(response);
+
+            return;
+        }
+
+        this.synchronizeWorkspace(snapshot, strategy, submissionState);
 
         this.synchronizeRuntimeOptions(snapshot);
 
@@ -109,10 +126,11 @@ export default class SubmissionSynchronization {
      *
      * @param {ResponseSnapshot} snapshot
      *
-     * @returns {Promise<void>}
+     * @returns {Promise<boolean>} Whether the response module assets could be
+     * satisfied in the live document.
      */
     static async synchronizeAssets(snapshot) {
-        await AssetSynchronizer.synchronize(snapshot);
+        return AssetSynchronizer.synchronize(snapshot);
     }
 
     /**
@@ -123,8 +141,36 @@ export default class SubmissionSynchronization {
      *
      * @returns {void}
      */
-    static synchronizeWorkspace(snapshot, strategy) {
-        WorkspaceSynchronizer.synchronize(snapshot, strategy);
+    static synchronizeWorkspace(snapshot, strategy, submissionState = null) {
+        WorkspaceSynchronizer.synchronize(snapshot, strategy, submissionState);
+    }
+
+    /**
+     * Capture successful-control values at the exact transport boundary.
+     *
+     * @param {SubmissionContext} context
+     *
+     * @returns {{form: HTMLFormElement, controls: Map}|null}
+     */
+    static captureSubmissionState(context) {
+        return WorkspaceSynchronizer.captureFormControls(context?.form);
+    }
+
+    /**
+     * Determine whether an asynchronous response still belongs to the live form.
+     *
+     * @param {SubmissionContext} context
+     * @param {{form: HTMLFormElement, controls: Map}|null} submissionState
+     *
+     * @returns {boolean}
+     */
+    static isCurrentSubmission(context, submissionState) {
+        if (!submissionState?.form) {
+            return true;
+        }
+
+        return submissionState.form === context?.form
+            && submissionState.form.isConnected !== false;
     }
 
     /**

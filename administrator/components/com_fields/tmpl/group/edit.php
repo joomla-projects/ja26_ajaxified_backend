@@ -8,7 +8,7 @@
  * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
-defined('_JEXEC') or die;
+\defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\HTML\HTMLHelper;
@@ -23,7 +23,7 @@ $wa = $this->getDocument()->getWebAssetManager();
 $wa->useScript('keepalive')
     ->useScript('form.validate');
 
-$app = Factory::getApplication();
+$app   = Factory::getApplication();
 $input = $app->getInput();
 
 $this->useCoreUI = true;
@@ -31,6 +31,13 @@ $this->useCoreUI = true;
 ?>
 
 <form action="<?php echo Route::_('index.php?option=com_fields&context=' . $this->state->get('filter.context') . '&layout=edit&id=' . (int) $this->item->id); ?>" method="post" name="adminForm" id="item-form" aria-label="<?php echo Text::_('COM_FIELDS_GROUP_FORM_' . ((int) $this->item->id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="form-validate">
+    <?php if ($this->autosaveEnabled) :
+        ?>
+        <?php echo LayoutHelper::render('joomla.autosave.status'); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.recovery'); ?>
+        <?php
+    endif; ?>
+
     <?php echo LayoutHelper::render('joomla.edit.title_alias', $this); ?>
     <div class="main-card form-horizontal">
         <?php echo HTMLHelper::_('uitab.startTabSet', 'myTab', ['active' => 'general', 'recall' => true, 'breakpoint' => 768]); ?>

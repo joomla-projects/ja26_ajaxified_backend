@@ -11,6 +11,7 @@
 namespace Joomla\Component\Fields\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
@@ -29,6 +30,11 @@ use Joomla\Registry\Registry;
  */
 class GroupController extends FormController
 {
+    use AutosaveFormControllerTrait;
+
+    private const AUTOSAVE_CONTEXT      = 'com_fields.group';
+    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'];
+
     /**
      * The prefix to use with controller messages.
      *
@@ -165,6 +171,8 @@ class GroupController extends FormController
             $registry->loadArray($item->params);
             $item->params = (string) $registry;
         }
+
+        $this->captureAutosaveCanonicalResult($model, 'group.id');
     }
 
     /**

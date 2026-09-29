@@ -16,7 +16,10 @@ use Joomla\CMS\Extension\Service\Provider\ComponentDispatcherFactory;
 use Joomla\CMS\Extension\Service\Provider\MVCFactory;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Guidedtours\Administrator\Autosave\StepAutosaveProvider;
+use Joomla\Component\Guidedtours\Administrator\Autosave\TourAutosaveProvider;
 use Joomla\Component\Guidedtours\Administrator\Extension\GuidedtoursComponent;
+use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
 
@@ -51,6 +54,10 @@ return new class () implements ServiceProviderInterface {
 
                 $component->setRegistry($container->get(Registry::class));
                 $component->setMVCFactory($container->get(MVCFactoryInterface::class));
+                $autosaveProvider = new TourAutosaveProvider($container->get(DatabaseInterface::class));
+                $component->setAutosaveProvider($autosaveProvider->getContext(), $autosaveProvider);
+                $stepAutosaveProvider = new StepAutosaveProvider($container->get(DatabaseInterface::class));
+                $component->setAutosaveProvider($stepAutosaveProvider->getContext(), $stepAutosaveProvider);
 
                 return $component;
             }

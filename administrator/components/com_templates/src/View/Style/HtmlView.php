@@ -10,12 +10,14 @@
 
 namespace Joomla\Component\Templates\Administrator\View\Style;
 
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\CMS\Toolbar\ToolbarHelper;
+use Joomla\Component\Templates\Administrator\Autosave\StyleAutosaveProvider;
 use Joomla\Component\Templates\Administrator\Model\StyleModel;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -29,6 +31,8 @@ use Joomla\Component\Templates\Administrator\Model\StyleModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
+
     /**
      * The item
      *
@@ -92,9 +96,52 @@ class HtmlView extends BaseHtmlView
         $this->form
             ->addControlField('task');
 
+        $this->prepareAutosave();
+
         $this->addToolbar();
 
         parent::display($tpl);
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_templates.autosave.style');
+
+        if (!\in_array($this->getLayout(), ['edit', 'default'], true) || (int) $this->item->id <= 0) {
+            return;
+        }
+
+        try {
+            $provider = $app->bootComponent('com_templates')->getAutosaveProvider('com_templates.style');
+
+            if (!$provider instanceof StyleAutosaveProvider) {
+                return;
+            }
+
+            $target = $provider->canonicalizeTargetId((string) (int) $this->item->id);
+            $schema = $provider->getDynamicSchemaForForm($target, $this->form);
+        } catch (\Throwable) {
+            return;
+        }
+
+        $field = $this->form->getField('title');
+
+        if (!$field || !\is_string($field->id) || $field->id === '') {
+            return;
+        }
+
+        $configurator->configure(
+            $provider,
+            $target,
+            'com_templates.autosave.style',
+            'style-form',
+            ['title' => $field->id],
+            'com_templates.style-autosave',
+            ['fields' => $schema->fields(), 'fingerprint' => $schema->fingerprint()]
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**

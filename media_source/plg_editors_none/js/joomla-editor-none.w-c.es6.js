@@ -2,48 +2,8 @@
  * @copyright  (C) 2018 Open Source Matters, Inc. <https://www.joomla.org>
  * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
-import { JoomlaEditor, JoomlaEditorDecorator } from 'editor-api';
-
-/**
- * EditorNone Decorator for Joomla.Editor
- */
-class EditorNoneDecorator extends JoomlaEditorDecorator {
-  /**
-   * @returns {string}
-   */
-  getValue() {
-    return this.instance.getValue();
-  }
-
-  /**
-   * @param {string} value
-   * @returns {EditorNoneDecorator}
-   */
-  setValue(value) {
-    this.instance.setValue(value);
-    return this;
-  }
-
-  /**
-   * @returns {string}
-   */
-  getSelection() {
-    return this.instance.getSelection();
-  }
-
-  replaceSelection(value) {
-    this.instance.replaceSelection(value);
-    return this;
-  }
-
-  disable(enable) {
-    if (this.instance.editor) {
-      this.instance.editor.disabled = !enable;
-      this.instance.editor.readOnly = !enable;
-    }
-    return this;
-  }
-}
+import { JoomlaEditor } from 'editor-api';
+import EditorNoneDecorator from '../src/editor-none-decorator.es6.js';
 
 class JoomlaEditorNone extends HTMLElement {
   constructor() {
@@ -51,6 +11,7 @@ class JoomlaEditorNone extends HTMLElement {
 
     // Properties
     this.editor = '';
+    this.jEditor = null;
 
     // Bindings
     this.unregisterEditor = this.unregisterEditor.bind(this);
@@ -85,6 +46,7 @@ class JoomlaEditorNone extends HTMLElement {
    */
   disconnectedCallback() {
     this.unregisterEditor();
+    this.editor = '';
     this.removeEventListener('click', this.interactionCallback);
   }
 
@@ -132,16 +94,21 @@ class JoomlaEditorNone extends HTMLElement {
    * Register the editor
    */
   registerEditor() {
-    const jEditor = new EditorNoneDecorator(this, 'none', this.editor.id);
-    JoomlaEditor.register(jEditor);
+    if (!this.editor || JoomlaEditor.get(this.editor.id)) {
+      return;
+    }
+
+    this.jEditor = new EditorNoneDecorator(this, 'none', this.editor.id);
+    JoomlaEditor.register(this.jEditor);
   }
 
   /**
    * Remove the editor from the Joomla API
    */
   unregisterEditor() {
-    if (this.editor) {
-      JoomlaEditor.unregister(this.editor.id);
+    if (this.jEditor) {
+      JoomlaEditor.unregister(this.jEditor);
+      this.jEditor = null;
     }
   }
 
@@ -149,15 +116,27 @@ class JoomlaEditorNone extends HTMLElement {
    * Called when element's child list changes
    */
   childrenChange() {
-    // Ensure the first child is an input with a textarea type.
-    if (this.firstElementChild
-            && this.firstElementChild.tagName
-            && this.firstElementChild.tagName.toLowerCase() === 'textarea'
-            && this.firstElementChild.getAttribute('id')) {
-      this.editor = this.firstElementChild;
+    const nextEditor = this.firstElementChild;
+    const supported = this.isConnected
+      && nextEditor
+      && nextEditor.tagName
+      && nextEditor.tagName.toLowerCase() === 'textarea'
+      && nextEditor.getAttribute('id');
+
+    if (!supported) {
       this.unregisterEditor();
-      this.registerEditor();
+      this.editor = '';
+
+      return;
     }
+
+    if (this.editor === nextEditor && JoomlaEditor.get(nextEditor.id)) {
+      return;
+    }
+
+    this.unregisterEditor();
+    this.editor = nextEditor;
+    this.registerEditor();
   }
 }
 

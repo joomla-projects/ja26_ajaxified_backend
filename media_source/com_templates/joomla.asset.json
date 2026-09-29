@@ -6,6 +6,13 @@
   "license": "GPL-2.0-or-later",
   "assets": [
     {
+      "name": "com_templates.style-autosave",
+      "type": "script",
+      "uri": "com_templates/style-autosave.min.js",
+      "attributes": { "type": "module" },
+      "dependencies": ["com_autosave.runtime", "com_autosave.integration-controller"]
+    },
+    {
       "name": "com_templates.admin-template-toggle-assignment",
       "type": "script",
       "uri": "com_templates/admin-template-toggle-assignment.min.js",

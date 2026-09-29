@@ -10,6 +10,9 @@
 
 namespace Joomla\Component\Content\Administrator\View\Article;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -28,6 +31,15 @@ use Joomla\Component\Content\Site\Helper\RouteHelper;
  */
 class HtmlView extends FormView
 {
+    /**
+     * Whether the generic Autosave interface should be rendered.
+     *
+     * @var boolean
+     *
+     * @since __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
     /**
      * Pagebreak TOC alias
      *
@@ -84,6 +96,7 @@ class HtmlView extends FormView
         parent::initializeView();
 
         $this->canDo = ContentHelper::getActions('com_content', 'article', $this->item->id);
+        $this->prepareAutosave();
 
         $url = RouteHelper::getArticleRoute($this->item->id . ':' . $this->item->alias, $this->item->catid, $this->item->language);
 
@@ -115,6 +128,76 @@ class HtmlView extends FormView
             ->addControlField('task')
             ->addControlField('return', $input->getBase64('return', ''))
             ->addControlField('forcedLanguage', $forcedLanguage);
+    }
+
+    /**
+     * Configure the headless Autosave integration for one canonical Article.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        $document              = $this->getDocument();
+        $this->autosaveEnabled = false;
+        $application           = Factory::getApplication();
+        $configurator          = new AutosaveViewConfigurator(
+            $application,
+            $document,
+            $this->getCurrentUser()
+        );
+        $configurator->disable('com_content.autosave.article');
+
+        if ($this->getLayout() !== 'edit') {
+            return;
+        }
+
+        try {
+            $provider = Factory::getApplication()
+                ->bootComponent('com_content')
+                ->getAutosaveProvider('com_content.article');
+            $targetId = null;
+            $itemId   = (int) $this->item->id;
+
+            if ($itemId > 0) {
+                $targetId = $provider->canonicalizeTargetId((string) $itemId);
+
+                if (!$provider->targetExists($targetId)) {
+                    return;
+                }
+            } elseif ($itemId !== 0) {
+                return;
+            } elseif (!$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($this->getCurrentUser(), AutosaveOperation::InitializeCreate, null);
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $fieldIds = [];
+
+        foreach (['title', 'alias', 'articletext', 'catid'] as $fieldName) {
+            $field = $this->form->getField($fieldName);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $fieldIds[$fieldName] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $targetId,
+            'com_content.autosave.article',
+            'item-form',
+            $fieldIds,
+            'com_content.article-autosave'
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**

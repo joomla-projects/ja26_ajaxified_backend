@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Finder\Administrator\Extension;
 
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Component\Router\RouterServiceInterface;
 use Joomla\CMS\Component\Router\RouterServiceTrait;
 use Joomla\CMS\Extension\BootableExtensionInterface;
@@ -30,10 +32,16 @@ use Psr\Container\ContainerInterface;
  *
  * @since  4.0.0
  */
-class FinderComponent extends MVCComponent implements BootableExtensionInterface, RouterServiceInterface
+class FinderComponent extends MVCComponent implements BootableExtensionInterface, AutosaveServiceInterface, RouterServiceInterface
 {
+    use AutosaveServiceTrait;
     use RouterServiceTrait;
     use HTMLRegistryAwareTrait;
+
+    public function getAutosaveContexts(): array
+    {
+        return ['com_finder.filter' => true];
+    }
 
     /**
      * Booting the extension. This is the function to set up the environment of the extension like

@@ -10,6 +10,10 @@
 
 namespace Joomla\Component\Menus\Administrator\View\Item;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveDynamicCreateDescriptorProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -18,6 +22,7 @@ use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\CMS\Toolbar\ToolbarHelper;
+use Joomla\Component\Menus\Administrator\Autosave\ItemAutosaveProvider;
 use Joomla\Component\Menus\Administrator\Model\ItemModel;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -31,6 +36,8 @@ use Joomla\Component\Menus\Administrator\Model\ItemModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
+
     /**
      * The Form object
      *
@@ -136,6 +143,8 @@ class HtmlView extends BaseHtmlView
             ->addControlField('menutype', $input->get('menutype', ''))
             ->addControlField('fieldtype', '', ['id' => 'fieldtype']);
 
+        $this->prepareAutosave();
+
         if ($this->getLayout() !== 'modal') {
             $this->addToolbar();
         } else {
@@ -143,6 +152,152 @@ class HtmlView extends BaseHtmlView
         }
 
         parent::display($tpl);
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_menus.autosave.item');
+
+        if (!\in_array($this->getLayout(), ['edit', 'default'], true)) {
+            return;
+        }
+
+        $target      = null;
+        $createScope = null;
+        $schema      = null;
+        $itemId      = (int) $this->item->id;
+
+        try {
+            $provider = $app->bootComponent('com_menus')->getAutosaveProvider('com_menus.item');
+
+            if (!$provider instanceof ItemAutosaveProvider) {
+                return;
+            }
+
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+
+                if (!$provider->targetExists($target)) {
+                    return;
+                }
+
+                $schema = $provider->getDynamicSchemaForForm($target, $this->form);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } elseif ($provider instanceof AutosaveDynamicCreateDescriptorProviderInterface) {
+                // A new Menu Item only gains create mode once a genuine type has been
+                // chosen. The native type selection binds the routed link, client and
+                // target menu into the editor through the session form data that
+                // loadFormData() merges into the form, and getItem() echoes them onto
+                // the model state/item. None of those carriers alone is guaranteed to
+                // be re-seeded on every create-mode render, so the candidate falls
+                // back from the model state to the loaded item and finally to the
+                // bound form values (mirroring com_modules and com_fields). It is
+                // canonicalized and authorized once at render; the browser never
+                // resubmits authoritative creation state afterwards.
+                $candidate = $provider->createScopeCandidate(
+                    $this->candidateClientId(),
+                    $this->candidateString('item.menutype', 'menutype'),
+                    // The loaded item cannot speak for the type: getItem() coerces an
+                    // unchosen type to 'component', which would shadow a genuine
+                    // special type bound in the form data.
+                    $this->candidateString('item.type', 'type', false),
+                    $this->candidateString('item.link', 'link')
+                );
+
+                if ($candidate === null) {
+                    return;
+                }
+
+                $createScope = $provider->canonicalizeStaticCreateScope($candidate);
+                $provider->authorizeStaticCreateScope($app->getIdentity(), $createScope, AutosaveOperation::InitializeCreate, null);
+                $schema = $provider->getDynamicSchemaForScope($createScope);
+            } else {
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        if ($schema === null) {
+            return;
+        }
+
+        $ids = [];
+
+        foreach (['title', 'alias', 'note', 'browserNav'] as $name) {
+            $field = $this->form->getField($name);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $ids[$name] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $target,
+            'com_menus.autosave.item',
+            'item-form',
+            $ids,
+            'com_menus.item-autosave',
+            ['fields' => $schema->fields(), 'fingerprint' => $schema->fingerprint(), 'support' => $schema->support()],
+            $createScope
+        );
+        $this->autosaveEnabled = true;
+    }
+
+    /**
+     * Resolve the create-editor client id from the model state, the loaded item
+     * and finally the bound form values.
+     *
+     * @return  int
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function candidateClientId(): int
+    {
+        $clientId = $this->state->get('item.client_id', null);
+
+        if ($clientId === null && isset($this->item->client_id)) {
+            $clientId = $this->item->client_id;
+        }
+
+        if ($clientId === null) {
+            $clientId = $this->form->getValue('client_id');
+        }
+
+        return (int) $clientId;
+    }
+
+    /**
+     * Resolve one create-editor candidate value from the model state, optionally
+     * the loaded item, and finally the bound form values.
+     *
+     * @param   string   $stateKey    The model state key.
+     * @param   string   $property    The item property and form field name.
+     * @param   boolean  $fromItem    Consult the loaded item before the form.
+     *
+     * @return  string
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function candidateString(string $stateKey, string $property, bool $fromItem = true): string
+    {
+        $value = (string) $this->state->get($stateKey, '');
+
+        if ($value === '' && $fromItem && isset($this->item->{$property}) && $this->item->{$property} !== null) {
+            $value = (string) $this->item->{$property};
+        }
+
+        if ($value === '') {
+            $value = (string) $this->form->getValue($property, null, '');
+        }
+
+        return $value;
     }
 
     /**

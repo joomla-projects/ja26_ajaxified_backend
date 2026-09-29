@@ -54,6 +54,7 @@ async function handleSubmit(event) {
     }
 
     event.preventDefault();
+    const submissionState = SubmissionSynchronization.captureSubmissionState(context);
 
     try {
         const response = await SubmissionTransport.send(context);
@@ -61,11 +62,31 @@ async function handleSubmit(event) {
         await SubmissionSynchronization.synchronize({
             response,
             context,
+            submissionState,
         });
+
+        form.dispatchEvent(new CustomEvent('joomla:submission-complete', {
+            detail: {
+                task: context.rawTask,
+                action: context.action,
+                controller: context.controller,
+                component: context.component,
+            },
+        }));
     } catch (error) {
         if (error.name === 'SubmissionBlockedError') {
             return;
         }
+
+        form.dispatchEvent(new CustomEvent('joomla:submission-error', {
+            detail: {
+                task: context.rawTask,
+                action: context.action,
+                controller: context.controller,
+                component: context.component,
+                uncertain: true,
+            },
+        }));
 
         throw error;
     }

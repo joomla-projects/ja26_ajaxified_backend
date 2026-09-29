@@ -10,7 +10,9 @@
 
 namespace Joomla\Component\Banners\Administrator\Controller;
 
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\MVC\Controller\FormController;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Versioning\VersionableControllerTrait;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -24,7 +26,16 @@ use Joomla\CMS\Versioning\VersionableControllerTrait;
  */
 class ClientController extends FormController
 {
+    use AutosaveFormControllerTrait;
     use VersionableControllerTrait;
+
+    private const AUTOSAVE_CONTEXT      = 'com_banners.client';
+    private const AUTOSAVE_TASK_INTENTS = [
+        'apply'     => 'apply',
+        'save'      => 'save-exit',
+        'save2new'  => 'save-new',
+        'save2copy' => 'save-copy',
+    ];
 
     /**
      * The prefix to use with controller messages.
@@ -33,4 +44,19 @@ class ClientController extends FormController
      * @since  1.6
      */
     protected $text_prefix = 'COM_BANNERS_CLIENT';
+
+    /**
+     * Capture the authoritative Client identity after Joomla saves it.
+     *
+     * @param   BaseDatabaseModel  $model      The saved model.
+     * @param   array              $validData  The validated form data.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        $this->captureAutosaveCanonicalResult($model, 'client.id');
+    }
 }
