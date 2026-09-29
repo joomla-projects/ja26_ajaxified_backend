@@ -12,11 +12,13 @@ namespace Joomla\Component\Categories\Administrator\Model;
 
 use Joomla\CMS\Association\AssociationServiceInterface;
 use Joomla\CMS\Categories\CategoryServiceInterface;
+use Joomla\CMS\Categories\SectionNotFoundException;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Associations;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\ListModel;
 use Joomla\CMS\Table\Category;
+use Joomla\Component\Fields\Administrator\Model\FieldsFilterBehaviorTrait;
 use Joomla\Database\ParameterType;
 use Joomla\Database\QueryInterface;
 use Joomla\Utilities\ArrayHelper;
@@ -32,6 +34,8 @@ use Joomla\Utilities\ArrayHelper;
  */
 class CategoriesModel extends ListModel
 {
+    use FieldsFilterBehaviorTrait;
+
     /**
      * Does an association exist? Caches the result of getAssoc().
      *
@@ -79,6 +83,31 @@ class CategoriesModel extends ListModel
     }
 
     /**
+     * Get the filter form.
+     *
+     * @param   array    $data      Data.
+     * @param   boolean  $loadData  Load current data.
+     *
+     * @return  \Joomla\CMS\Form\Form|null  The Form object or null if the form can't be found.
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getFilterForm($data = [], $loadData = true)
+    {
+        $this->getState();
+
+        $form = parent::getFilterForm($data, $loadData);
+
+        if (!$form) {
+            return null;
+        }
+
+        $this->addFieldsFiltersToForm($form, $loadData);
+
+        return $form;
+    }
+
+    /**
      * Method to auto-populate the model state.
      *
      * Note. Calling getState in this method will result in recursion.
@@ -92,12 +121,13 @@ class CategoriesModel extends ListModel
      */
     protected function populateState($ordering = 'a.lft', $direction = 'asc')
     {
-        $app = Factory::getApplication();
+        $app   = Factory::getApplication();
+        $input = $app->getInput();
 
-        $forcedLanguage = $app->getInput()->get('forcedLanguage', '', 'cmd');
+        $forcedLanguage = $input->get('forcedLanguage', '', 'cmd');
 
         // Adjust the context to support modal layouts.
-        if ($layout = $app->getInput()->get('layout')) {
+        if ($layout = $input->get('layout')) {
             $this->context .= '.' . $layout;
         }
 
@@ -117,6 +147,8 @@ class CategoriesModel extends ListModel
         // Extract the optional section name
         $this->setState('filter.section', (\count($parts) > 1) ? $parts[1] : null);
 
+        $previousFilters = (array) $app->getUserState($this->context . '.filter', []);
+
         // List state information.
         parent::populateState($ordering, $direction);
 
@@ -124,6 +156,23 @@ class CategoriesModel extends ListModel
         if (!empty($forcedLanguage)) {
             $this->setState('filter.language', $forcedLanguage);
         }
+
+        $language = (string) $this->state->get('filter.language', '');
+
+        if ($language === '*') {
+            $language = '';
+        }
+
+        $submitted = $input->exists('filter') ? $input->get('filter', [], 'array') : [];
+
+        $this->prepareFieldsFilter(
+            $app,
+            $extension . '.categories',
+            $this->getFieldsFilterCategoryIds($this->state->get('filter.category_id', [])),
+            $language,
+            $submitted,
+            $previousFilters
+        );
     }
 
     /**
@@ -150,7 +199,23 @@ class CategoriesModel extends ListModel
         $id .= ':' . $this->getState('filter.level');
         $id .= ':' . serialize($this->getState('filter.tag'));
 
+        $id = $this->addFieldsFilterStoreId($id);
+
         return parent::getStoreId($id);
+    }
+
+    /**
+     * Returns the active native and custom-field filters.
+     *
+     * @return  array
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getActiveFilters()
+    {
+        $this->getState();
+
+        return $this->mergeFieldsActiveFilters(parent::getActiveFilters());
     }
 
     /**
@@ -440,7 +505,84 @@ class CategoriesModel extends ListModel
                 ag.title,
                 ua.name');
 
+        $this->applyPreparedFieldsFilters($query, $db->quoteName('a.id'));
+
         return $query;
+    }
+
+    /**
+     * Returns the category item scope used to discover eligible custom fields.
+     *
+     * @param   mixed  $selected  Selected category IDs.
+     *
+     * @return  integer[]
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function getFieldsFilterCategoryIds(mixed $selected): array
+    {
+        if ($selected === [] || $selected === '' || $selected === null) {
+            return [];
+        }
+
+        if (!\is_array($selected)) {
+            $selected = [$selected];
+        }
+
+        $roots = [];
+
+        foreach ($selected as $categoryId) {
+            if (!\is_int($categoryId) && !\is_string($categoryId)) {
+                continue;
+            }
+
+            $categoryId = filter_var($categoryId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+            if ($categoryId !== false) {
+                $roots[$categoryId] = $categoryId;
+            }
+        }
+
+        if (!$roots) {
+            return [0];
+        }
+
+        $component = Factory::getApplication()->bootComponent((string) $this->state->get('filter.component'));
+
+        if (!$component instanceof CategoryServiceInterface) {
+            return array_values($roots);
+        }
+
+        try {
+            $categories = $component->getCategory(
+                [
+                    'access'    => false,
+                    'published' => 0,
+                ],
+                (string) $this->state->get('filter.section', '')
+            );
+        } catch (SectionNotFoundException) {
+            return array_values($roots);
+        }
+
+        $level     = (int) $this->state->get('filter.level', 0);
+        $effective = $roots;
+
+        foreach ($roots as $categoryId) {
+            $category = $categories->get($categoryId);
+
+            if (!$category) {
+                continue;
+            }
+
+            foreach ($category->getChildren(true) as $child) {
+                if (!$level || $child->level <= $category->level + $level - 1) {
+                    $effective[(int) $child->id] = (int) $child->id;
+                }
+            }
+        }
+
+        return array_values($effective);
     }
 
     /**
