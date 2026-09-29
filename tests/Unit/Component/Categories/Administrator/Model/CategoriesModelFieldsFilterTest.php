@@ -257,7 +257,7 @@ class CategoriesModelFieldsFilterTest extends UnitTestCase
     public function testQueryAppliesPreparedFiltersOnceAgainstDatabaseQuotedCategoryId(): void
     {
         $model = new class () extends CategoriesModel {
-            public int $applicationCount = 0;
+            public int $applicationCount    = 0;
             public string $itemIdExpression = '';
 
             public function __construct()
