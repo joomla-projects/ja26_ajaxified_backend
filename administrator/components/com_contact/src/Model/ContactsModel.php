@@ -10,11 +10,13 @@
 
 namespace Joomla\Component\Contact\Administrator\Model;
 
+use Joomla\CMS\Categories\CategoryServiceInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Associations;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\ListModel;
 use Joomla\CMS\Table\Category;
+use Joomla\Component\Fields\Administrator\Model\FieldsFilterBehaviorTrait;
 use Joomla\Database\ParameterType;
 use Joomla\Database\QueryInterface;
 use Joomla\Utilities\ArrayHelper;
@@ -30,6 +32,8 @@ use Joomla\Utilities\ArrayHelper;
  */
 class ContactsModel extends ListModel
 {
+    use FieldsFilterBehaviorTrait;
+
     /**
      * Constructor.
      *
@@ -72,6 +76,31 @@ class ContactsModel extends ListModel
     }
 
     /**
+     * Get the filter form.
+     *
+     * @param   array    $data      Data.
+     * @param   boolean  $loadData  Load current data.
+     *
+     * @return  \Joomla\CMS\Form\Form|null  The Form object or null if the form can't be found.
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getFilterForm($data = [], $loadData = true)
+    {
+        $this->getState();
+
+        $form = parent::getFilterForm($data, $loadData);
+
+        if (!$form) {
+            return null;
+        }
+
+        $this->addFieldsFiltersToForm($form, $loadData);
+
+        return $form;
+    }
+
+    /**
      * Method to auto-populate the model state.
      *
      * Note. Calling getState in this method will result in recursion.
@@ -85,12 +114,13 @@ class ContactsModel extends ListModel
      */
     protected function populateState($ordering = 'a.name', $direction = 'asc')
     {
-        $app = Factory::getApplication();
+        $app   = Factory::getApplication();
+        $input = $app->getInput();
 
-        $forcedLanguage = $app->getInput()->get('forcedLanguage', '', 'cmd');
+        $forcedLanguage = $input->get('forcedLanguage', '', 'cmd');
 
         // Adjust the context to support modal layouts.
-        if ($layout = $app->getInput()->get('layout')) {
+        if ($layout = $input->get('layout')) {
             $this->context .= '.' . $layout;
         }
 
@@ -99,6 +129,8 @@ class ContactsModel extends ListModel
             $this->context .= '.' . $forcedLanguage;
         }
 
+        $previousFilters = (array) $app->getUserState($this->context . '.filter', []);
+
         // List state information.
         parent::populateState($ordering, $direction);
 
@@ -106,6 +138,17 @@ class ContactsModel extends ListModel
         if (!empty($forcedLanguage)) {
             $this->setState('filter.language', $forcedLanguage);
         }
+
+        $submitted = $input->exists('filter') ? $input->get('filter', [], 'array') : [];
+
+        $this->prepareFieldsFilter(
+            $app,
+            'com_contact.contact',
+            $this->getEffectiveCategoryIds((array) $this->state->get('filter.category_id', [])),
+            (string) $this->state->get('filter.language', ''),
+            $submitted,
+            $previousFilters
+        );
     }
 
     /**
@@ -132,7 +175,23 @@ class ContactsModel extends ListModel
         $id .= ':' . serialize($this->getState('filter.tag'));
         $id .= ':' . $this->getState('filter.level');
 
+        $id = $this->addFieldsFilterStoreId($id);
+
         return parent::getStoreId($id);
+    }
+
+    /**
+     * Returns the active native and custom-field filters.
+     *
+     * @return  array
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getActiveFilters()
+    {
+        $this->getState();
+
+        return $this->mergeFieldsActiveFilters(parent::getActiveFilters());
     }
 
     /**
@@ -394,6 +453,59 @@ class ContactsModel extends ListModel
 
         $query->order($db->escape($orderCol . ' ' . $orderDirn));
 
+        $this->applyPreparedFieldsFilters($query, $db->quoteName('a.id'));
+
         return $query;
+    }
+
+    /**
+     * Expands selected categories to the scope used by the Contacts query.
+     *
+     * @param   array  $selected  Selected category IDs.
+     *
+     * @return  integer[]
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function getEffectiveCategoryIds(array $selected): array
+    {
+        if (!$selected) {
+            return [];
+        }
+
+        $selected = array_values(array_filter(ArrayHelper::toInteger($selected)));
+
+        if (!$selected) {
+            return [0];
+        }
+
+        $component = Factory::getApplication()->bootComponent('com_contact');
+
+        if (!$component instanceof CategoryServiceInterface) {
+            return $selected;
+        }
+
+        $categories = $component->getCategory([
+            'access'    => !$this->getCurrentUser()->authorise('core.admin'),
+            'published' => 0,
+        ]);
+        $level       = (int) $this->state->get('filter.level', 0);
+        $effective   = $selected;
+
+        foreach ($selected as $categoryId) {
+            $category = $categories->get($categoryId);
+
+            if (!$category) {
+                continue;
+            }
+
+            foreach ($category->getChildren(true) as $child) {
+                if (!$level || $child->level <= $category->level + $level - 1) {
+                    $effective[] = (int) $child->id;
+                }
+            }
+        }
+
+        return array_values(array_unique($effective));
     }
 }

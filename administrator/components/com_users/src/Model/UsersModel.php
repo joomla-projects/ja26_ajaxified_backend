@@ -17,6 +17,7 @@ use Joomla\CMS\Form\Form;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\ListModel;
 use Joomla\CMS\Plugin\PluginHelper;
+use Joomla\Component\Fields\Administrator\Model\FieldsFilterBehaviorTrait;
 use Joomla\Database\ParameterType;
 use Joomla\Database\QueryInterface;
 use Joomla\Utilities\ArrayHelper;
@@ -32,6 +33,8 @@ use Joomla\Utilities\ArrayHelper;
  */
 class UsersModel extends ListModel
 {
+    use FieldsFilterBehaviorTrait;
+
     /**
      * A list of filter variables to not merge into the model's state
      *
@@ -97,6 +100,8 @@ class UsersModel extends ListModel
             $this->context .= '.' . $layout;
         }
 
+        $previousFilters = (array) $app->getUserState($this->context . '.filter', []);
+
         $groups = json_decode(base64_decode($input->get('groups', '', 'BASE64')));
 
         if (isset($groups)) {
@@ -119,6 +124,17 @@ class UsersModel extends ListModel
 
         // List state information.
         parent::populateState($ordering, $direction);
+
+        $submitted = $input->exists('filter') ? $input->get('filter', [], 'array') : [];
+
+        $this->prepareFieldsFilter(
+            $app,
+            'com_users.user',
+            [],
+            '',
+            $submitted,
+            $previousFilters
+        );
     }
 
     /**
@@ -146,6 +162,8 @@ class UsersModel extends ListModel
         if (PluginHelper::isEnabled('multifactorauth')) {
             $id .= ':' . $this->getState('filter.mfa');
         }
+
+        $id = $this->addFieldsFilterStoreId($id);
 
         return parent::getStoreId($id);
     }
@@ -268,15 +286,36 @@ class UsersModel extends ListModel
      */
     public function getFilterForm($data = [], $loadData = true)
     {
+        $this->getState();
+
         $form = parent::getFilterForm($data, $loadData);
 
-        if ($form && !PluginHelper::isEnabled('multifactorauth')) {
+        if (!$form) {
+            return null;
+        }
+
+        if (!PluginHelper::isEnabled('multifactorauth')) {
             $form->removeField('mfa', 'filter');
         }
+
+        $this->addFieldsFiltersToForm($form, $loadData);
 
         return $form;
     }
 
+    /**
+     * Returns the active native and custom-field filters.
+     *
+     * @return  array
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getActiveFilters()
+    {
+        $this->getState();
+
+        return $this->mergeFieldsActiveFilters(parent::getActiveFilters());
+    }
 
     /**
      * Build an SQL query to load the list data.
@@ -518,6 +557,8 @@ class UsersModel extends ListModel
         $query->order(
             $db->quoteName($db->escape($this->getState('list.ordering', 'a.name'))) . ' ' . $db->escape($this->getState('list.direction', 'ASC'))
         );
+
+        $this->applyPreparedFieldsFilters($query, $db->quoteName('a.id'));
 
         return $query;
     }

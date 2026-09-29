@@ -14,6 +14,8 @@ use Joomla\CMS\HTML\HTMLHelper;
 
 extract($displayData);
 
+$strictSelection = $strictSelection ?? false;
+
 /**
  * Layout variables
  * -----------------
@@ -43,6 +45,7 @@ extract($displayData);
  * @var   array    $options         Options available for this field.
  * @var   string   $dataAttribute   Miscellaneous data attributes preprocessed for HTML output
  * @var   array    $dataAttributes  Miscellaneous data attribute for eg, data-*
+ * @var   boolean  $strictSelection Use string-strict matching for selected values.
  */
 
 $html = [];
@@ -65,7 +68,15 @@ if ($readonly || $disabled) {
 
 // Create a read-only list (no name) with hidden input(s) to store the value(s).
 if ($readonly) {
-    $html[] = HTMLHelper::_('select.genericlist', $options, '', trim($attr), 'value', 'text', $value, $id);
+    $listoptions = [
+        'option.key'  => 'value',
+        'option.text' => 'text',
+        'list.select' => $value,
+        'list.strict' => $strictSelection,
+        'id'          => $id,
+        'list.attr'   => trim($attr),
+    ];
+    $html[]      = HTMLHelper::_('select.genericlist', $options, '', $listoptions);
 
     // E.g. form field type tag sends $this->value as array
     if ($multiple && is_array($value)) {
@@ -85,6 +96,7 @@ if ($readonly) {
     $listoptions['option.key'] = 'value';
     $listoptions['option.text'] = 'text';
     $listoptions['list.select'] = $value;
+    $listoptions['list.strict'] = $strictSelection;
     $listoptions['id'] = $id;
     $listoptions['list.translate'] = false;
     $listoptions['option.attr'] = 'optionattr';

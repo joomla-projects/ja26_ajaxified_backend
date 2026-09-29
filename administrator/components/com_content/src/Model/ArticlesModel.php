@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Content\Administrator\Model;
 
+use Joomla\CMS\Categories\CategoryServiceInterface;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Associations;
@@ -19,6 +20,7 @@ use Joomla\CMS\MVC\Model\ListModel;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\Table\Category;
 use Joomla\Component\Content\Administrator\Extension\ContentComponent;
+use Joomla\Component\Fields\Administrator\Model\FieldsFilterBehaviorTrait;
 use Joomla\Database\ParameterType;
 use Joomla\Database\QueryInterface;
 use Joomla\Registry\Registry;
@@ -35,6 +37,8 @@ use Joomla\Utilities\ArrayHelper;
  */
 class ArticlesModel extends ListModel
 {
+    use FieldsFilterBehaviorTrait;
+
     /**
      * Constructor.
      *
@@ -99,13 +103,21 @@ class ArticlesModel extends ListModel
      */
     public function getFilterForm($data = [], $loadData = true)
     {
+        $this->getState();
+
         $form = parent::getFilterForm($data, $loadData);
+
+        if (!$form) {
+            return null;
+        }
 
         $params = ComponentHelper::getParams('com_content');
 
         if (!$params->get('workflow_enabled')) {
             $form->removeField('stage', 'filter');
         }
+
+        $this->addFieldsFiltersToForm($form, $loadData);
 
         return $form;
     }
@@ -139,6 +151,8 @@ class ArticlesModel extends ListModel
             $this->context .= '.' . $forcedLanguage;
         }
 
+        $previousFilters = (array) $app->getUserState($this->context . '.filter', []);
+
         // Required content filters for the administrator menu
         $this->getUserStateFromRequest($this->context . '.filter.category_id', 'filter_category_id');
         $this->getUserStateFromRequest($this->context . '.filter.level', 'filter_level');
@@ -157,6 +171,17 @@ class ArticlesModel extends ListModel
             $this->setState('filter.language', $forcedLanguage);
             $this->setState('filter.forcedLanguage', $forcedLanguage);
         }
+
+        $submitted = $input->exists('filter') ? $input->get('filter', [], 'array') : [];
+
+        $this->prepareFieldsFilter(
+            $app,
+            'com_content.article',
+            $this->getEffectiveCategoryIds((array) $this->state->get('filter.category_id', [])),
+            (string) $this->state->get('filter.language', ''),
+            $submitted,
+            $previousFilters
+        );
     }
 
     /**
@@ -189,6 +214,8 @@ class ArticlesModel extends ListModel
         $id .= ':' . $this->getState('filter.start_date_range');
         $id .= ':' . $this->getState('filter.end_date_range');
         $id .= ':' . $this->getState('filter.relative_date');
+
+        $id = $this->addFieldsFilterStoreId($id);
 
         return parent::getStoreId($id);
     }
@@ -678,7 +705,70 @@ class ArticlesModel extends ListModel
 
         $query->order($ordering);
 
+        $this->applyPreparedFieldsFilters($query, $db->quoteName('a.id'));
+
         return $query;
+    }
+
+    /**
+     * Returns the active native and custom-field filters.
+     *
+     * @return  array
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getActiveFilters()
+    {
+        $this->getState();
+
+        return $this->mergeFieldsActiveFilters(parent::getActiveFilters());
+    }
+
+    /**
+     * Expands selected categories to the scope used by the Articles query.
+     *
+     * @param   array  $selected  Selected category IDs.
+     *
+     * @return  integer[]
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function getEffectiveCategoryIds(array $selected): array
+    {
+        $selected = array_values(array_filter(ArrayHelper::toInteger($selected)));
+
+        if (!$selected) {
+            return [];
+        }
+
+        $component = Factory::getApplication()->bootComponent('com_content');
+
+        if (!$component instanceof CategoryServiceInterface) {
+            return $selected;
+        }
+
+        $categories = $component->getCategory([
+            'access'    => !$this->getCurrentUser()->authorise('core.admin'),
+            'published' => 0,
+        ]);
+        $level       = (int) $this->state->get('filter.level', 0);
+        $effective   = $selected;
+
+        foreach ($selected as $categoryId) {
+            $category = $categories->get($categoryId);
+
+            if (!$category) {
+                continue;
+            }
+
+            foreach ($category->getChildren(true) as $child) {
+                if (!$level || $child->level <= $category->level + $level - 1) {
+                    $effective[] = (int) $child->id;
+                }
+            }
+        }
+
+        return array_values(array_unique($effective));
     }
 
     /**

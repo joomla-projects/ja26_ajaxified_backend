@@ -85,6 +85,7 @@ abstract class Select
      *                               Defaults to the same as the name.
      *                               list.select, string|array: Identifies one or more option elements
      *                               to be selected, based on the option key values.
+     *                               list.strict, boolean: Uses string-strict matching for array selections.
      * @param   string   $optKey     The name of the object variable for the option value. If
      *                               set to null, the index of the value array is used.
      * @param   string   $optText    The name of the object variable for the option text.
@@ -462,6 +463,8 @@ abstract class Select
      *                                true for backwards compatibility.
      *                               -list.select: either the value of one selected option or an array
      *                                of selected options. Default: none.
+     *                               -list.strict: Boolean. If set, array selections are compared as
+     *                                strings using strict equality. Default is false.
      *                               -list.translate: Boolean. If set, text and labels are translated via
      *                                Text::_(). Default is false.
      *                               -option.id: The property in each option array to use as the
@@ -496,7 +499,7 @@ abstract class Select
         $options = array_merge(
             HTMLHelper::$formatOptions,
             static::$optionDefaults['option'],
-            ['format.depth' => 0, 'groups' => true, 'list.select' => null, 'list.translate' => false]
+            ['format.depth' => 0, 'groups' => true, 'list.select' => null, 'list.strict' => false, 'list.translate' => false]
         );
 
         if (\is_array($optKey)) {
@@ -626,7 +629,7 @@ abstract class Select
                     foreach ($options['list.select'] as $val) {
                         $key2 = \is_object($val) ? $val->{$options['option.key']} : $val;
 
-                        if ($key == $key2) {
+                        if ($options['list.strict'] ? (string) $key === (string) $key2 : $key == $key2) {
                             $extra .= ' selected="selected"';
                             break;
                         }
