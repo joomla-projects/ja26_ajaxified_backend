@@ -12,6 +12,7 @@ namespace Joomla\Component\Menus\Administrator\Controller;
 
 use Joomla\CMS\Application\ApplicationHelper;
 use Joomla\CMS\Application\CMSWebApplicationInterface;
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\Filter\InputFilter;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
@@ -29,6 +30,15 @@ use Joomla\Component\Menus\Administrator\Helper\MenusHelper;
  */
 class MenuController extends FormController
 {
+    use AutosaveFormControllerTrait;
+
+    private const AUTOSAVE_CONTEXT      = 'com_menus.menu';
+    private const AUTOSAVE_TASK_INTENTS = [
+        'apply'    => 'apply',
+        'save'     => 'save-exit',
+        'save2new' => 'save-new',
+    ];
+
     /**
      * Dummy method to redirect back to standard controller
      *
@@ -56,6 +66,24 @@ class MenuController extends FormController
      * @since   1.6
      */
     public function save($key = null, $urlVar = null)
+    {
+        return $this->executeAutosaveCanonicalSave(
+            fn () => $this->executeMenuSave($key, $urlVar),
+            $urlVar
+        );
+    }
+
+    /**
+     * Execute the authoritative native Menu save workflow.
+     *
+     * @param   string  $key     The name of the primary key URL variable.
+     * @param   string  $urlVar  The URL variable when different from the primary key.
+     *
+     * @return  boolean
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function executeMenuSave($key = null, $urlVar = null)
     {
         // Check for request forgeries.
         $this->checkToken();
@@ -132,6 +160,8 @@ class MenuController extends FormController
 
             return false;
         }
+
+        $this->captureAutosaveCanonicalResult($model, 'menu.id');
 
         // Import the preset selected
         if (isset($preset) && $data['client_id'] == 1) {

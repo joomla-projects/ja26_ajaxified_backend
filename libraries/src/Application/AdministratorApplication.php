@@ -42,17 +42,20 @@ class AdministratorApplication extends CMSApplication
     /**
      * List of allowed components for guests and users which do not have the core.login.admin privilege.
      *
-     * By default we allow two core components:
+     * By default we allow three core components:
      *
      * - com_login   Absolutely necessary to let users log into the backend of the site. Do NOT remove!
      * - com_ajax    Handle AJAX requests or other administrative callbacks without logging in. Required for
      *               passwordless authentication using WebAuthn.
+     * - com_autosave Return a protected JSON authentication failure instead of an HTML login redirect. The component
+     *                performs its own authentication, backend-login and CSRF checks before dispatching any operation.
      *
      * @var array
      */
     protected $allowedUnprivilegedOptions = [
         'com_login',
         'com_ajax',
+        'com_autosave',
     ];
 
     /**

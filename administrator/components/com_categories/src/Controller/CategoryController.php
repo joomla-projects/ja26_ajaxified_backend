@@ -11,6 +11,7 @@
 namespace Joomla\Component\Categories\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
@@ -30,7 +31,18 @@ use Joomla\Registry\Registry;
  */
 class CategoryController extends FormController
 {
+    use AutosaveFormControllerTrait;
     use VersionableControllerTrait;
+
+    private const AUTOSAVE_CONTEXT      = 'com_categories.category';
+    private const AUTOSAVE_TASK_INTENTS = [
+        'apply'         => 'apply',
+        'save'          => 'save-exit',
+        'save2new'      => 'save-new',
+        'save2copy'     => 'save-copy',
+        'save2menulist' => 'save-exit',
+        'save2menublog' => 'save-exit',
+    ];
 
     /**
      * The extension for which the categories apply.
@@ -131,8 +143,12 @@ class CategoryController extends FormController
      */
     public function save($key = null, $urlVar = null)
     {
-        $result = parent::save($key, $urlVar);
+        return $this->executeAutosaveCanonicalSave(fn () => $this->executeCategorySave($key, $urlVar), $urlVar);
+    }
 
+    private function executeCategorySave($key = null, $urlVar = null)
+    {
+        $result = parent::save($key, $urlVar);
         $oldKey = $this->option . '.edit.category.data';
         $newKey = $this->option . '.edit.category.' . substr($this->extension, 4) . '.data';
         $this->app->setUserState($newKey, $this->app->getUserState($oldKey));
@@ -290,5 +306,7 @@ class CategoryController extends FormController
 
             $this->setRedirect(Route::_($return, false));
         }
+
+        $this->captureAutosaveCanonicalResult($model, 'category.id');
     }
 }

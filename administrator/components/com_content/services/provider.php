@@ -21,8 +21,10 @@ use Joomla\CMS\Extension\Service\Provider\MVCFactory;
 use Joomla\CMS\Extension\Service\Provider\RouterFactory;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Content\Administrator\Autosave\ArticleAutosaveProvider;
 use Joomla\Component\Content\Administrator\Extension\ContentComponent;
 use Joomla\Component\Content\Administrator\Helper\AssociationsHelper;
+use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
 
@@ -60,6 +62,9 @@ return new class () implements ServiceProviderInterface {
                 $component->setCategoryFactory($container->get(CategoryFactoryInterface::class));
                 $component->setAssociationExtension($container->get(AssociationExtensionInterface::class));
                 $component->setRouterFactory($container->get(RouterFactoryInterface::class));
+
+                $autosaveProvider = new ArticleAutosaveProvider($container->get(DatabaseInterface::class));
+                $component->setAutosaveProvider($autosaveProvider->getContext(), $autosaveProvider);
 
                 return $component;
             }

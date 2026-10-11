@@ -32,6 +32,11 @@ $wa->useScript('keepalive')
 <form action="<?php echo Route::_('index.php?option=com_guidedtours&view=tour&layout=edit&id=' .
     (int) $this->item->id); ?>" method="post" name="adminForm" id="guidedtours-form" class="form-validate">
 
+    <?php if ($this->autosaveEnabled) : ?>
+        <?php echo LayoutHelper::render('joomla.autosave.status'); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.recovery'); ?>
+    <?php endif; ?>
+
     <div class="row title-alias form-vertical mb-3">
         <div class="col-12 col-md-6">
             <?php echo $this->form->renderField('title'); ?>

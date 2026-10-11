@@ -10,6 +10,9 @@
 
 namespace Joomla\Component\Workflow\Administrator\View\Workflow;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -29,6 +32,7 @@ use Joomla\Component\Workflow\Administrator\Model\WorkflowModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
     /**
      * The model state
      *
@@ -110,11 +114,51 @@ class HtmlView extends BaseHtmlView
 
         // Set the toolbar
         $this->addToolbar();
-
+        $this->prepareAutosave();
         // Display the template
         parent::display($tpl);
     }
 
+    private function prepareAutosave(): void
+    {
+        $this->configureAutosave('com_workflow.workflow', 'com_workflow.autosave.workflow', ['title', 'description'], 'com_workflow.workflow-autosave');
+    }
+
+    private function configureAutosave(string $context, string $optionsKey, array $fields, string $asset): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable($optionsKey);
+        if ($this->getLayout() !== 'edit') {
+            return;
+        }
+        try {
+            $provider = $app->bootComponent('com_workflow')->getAutosaveProvider($context);
+            $itemId   = (int) $this->item->id;
+            $target   = null;
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+            if ($target !== null && !$provider->targetExists($target)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+        $ids = [];
+        foreach ($fields as $name) {
+            $field = $this->form->getField($name);
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            } $ids[$name] = $field->id;
+        }
+        $configurator->configure($provider, $target, $optionsKey, 'workflow-form', $ids, $asset);
+        $this->autosaveEnabled = true;
+    }
     /**
      * Add the page title and toolbar.
      *

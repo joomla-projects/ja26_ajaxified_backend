@@ -8,7 +8,7 @@
  * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
-defined('_JEXEC') or die;
+\defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\HTML\HTMLHelper;
@@ -23,8 +23,8 @@ $wa = $this->getDocument()->getWebAssetManager();
 $wa->useScript('keepalive')
     ->useScript('form.validate');
 
-$app = Factory::getApplication();
-$user = $app->getIdentity();
+$app   = Factory::getApplication();
+$user  = $app->getIdentity();
 $input = $app->getInput();
 
 // In case of modal
@@ -36,10 +36,16 @@ $lang     = $this->getLanguage()->getTag();
 ?>
 
 <form action="<?php echo Route::_('index.php?option=com_workflow&view=workflow&extension=' . $input->getCmd('extension') . '&layout=' . $layout . $tmpl . '&id=' . (int) $this->item->id); ?>" method="post" name="adminForm" id="workflow-form" aria-label="<?php echo Text::_('COM_WORKFLOW_FORM_' . ((int) $this->item->id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="form-validate">
+    <?php if ($this->autosaveEnabled) :
+        ?>
+        <?php echo LayoutHelper::render('joomla.autosave.status'); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.recovery'); ?>
+        <?php
+    endif; ?>
 
     <?php echo LayoutHelper::render('joomla.edit.title_alias', $this); ?>
 
-    <?php // Add the translation of the workflow item title when client is administrator ?>
+    <?php // Add the translation of the workflow item title when client is administrator?>
     <?php if ($clientId === 0 && $this->item->id != 0) : ?>
         <div class="row title-alias form-vertical mb-3">
             <div class="col-md-6">

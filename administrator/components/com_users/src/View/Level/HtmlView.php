@@ -10,6 +10,9 @@
 
 namespace Joomla\Component\Users\Administrator\View\Level;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -30,6 +33,7 @@ use Joomla\Component\Users\Administrator\Model\LevelModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
     /**
      * The Form object
      *
@@ -79,9 +83,46 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task');
 
         $this->addToolbar();
+        $this->prepareAutosave();
         parent::display($tpl);
     }
 
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_users.autosave.level');
+        if ($this->getLayout() !== 'edit') {
+            return;
+        }
+        $itemId = (int) $this->item->id;
+        $target = null;
+        try {
+            $provider = $app->bootComponent('com_users')->getAutosaveProvider('com_users.level');
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+                if (!$provider->targetExists($target)) {
+                    return;
+                }
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+        } catch (\Throwable) {
+            return;
+        }
+        $ids = [];
+        foreach (['title', 'rules'] as $name) {
+            $field = $this->form->getField($name);
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+            $ids[$name] = $field->id;
+        }
+        $configurator->configure($provider, $target, 'com_users.autosave.level', 'level-form', $ids, 'com_users.level-autosave');
+        $this->autosaveEnabled = true;
+    }
     /**
      * Add the page title and toolbar.
      *

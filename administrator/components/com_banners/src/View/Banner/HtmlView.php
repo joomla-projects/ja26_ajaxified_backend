@@ -10,6 +10,9 @@
 
 namespace Joomla\Component\Banners\Administrator\View\Banner;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
@@ -32,6 +35,8 @@ use Joomla\Component\Banners\Administrator\Model\BannerModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
+
     /**
      * The Form object
      *
@@ -86,7 +91,81 @@ class HtmlView extends BaseHtmlView
         $this->form
             ->addControlField('task');
 
+        $this->prepareAutosave();
+
         parent::display($tpl);
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_banners.autosave.banner');
+
+        if ($this->getLayout() !== 'edit') {
+            return;
+        }
+
+        try {
+            $provider = $app->bootComponent('com_banners')->getAutosaveProvider('com_banners.banner');
+            $itemId   = (int) $this->item->id;
+            $target   = null;
+
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+            if ($target !== null && !$provider->targetExists($target)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $fieldGroups = [
+            'name'             => null,
+            'catid'            => null,
+            'cid'              => null,
+            'alias'            => null,
+            'description'      => null,
+            'type'             => null,
+            'custombannercode' => null,
+            'clickurl'         => null,
+            'version_note'     => null,
+            'publish_up'       => null,
+            'publish_down'     => null,
+            'imageurl'         => 'params',
+            'width'            => 'params',
+            'height'           => 'params',
+            'alt'              => 'params',
+            'metakey'          => null,
+            'metakey_prefix'   => null,
+            'own_prefix'       => null,
+        ];
+        $ids = [];
+
+        foreach ($fieldGroups as $name => $group) {
+            $field = $this->form->getField($name, $group);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $ids[$name] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $target,
+            'com_banners.autosave.banner',
+            'banner-form',
+            $ids,
+            'com_banners.banner-autosave'
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**

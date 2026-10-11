@@ -31,6 +31,11 @@ $user = $this->getCurrentUser();
     method="post" name="adminForm" id="style-form" aria-label="<?php echo Text::_('COM_TEMPLATES_STYLE_FORM_EDIT'); ?>"
     class="form-validate">
 
+    <?php if ($this->autosaveEnabled) : ?>
+        <?php echo LayoutHelper::render('joomla.autosave.status'); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.recovery'); ?>
+    <?php endif; ?>
+
     <?php echo LayoutHelper::render('joomla.edit.title_alias', $this); ?>
 
     <div class="main-card">

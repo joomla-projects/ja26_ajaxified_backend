@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Users\Administrator\Extension;
 
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Component\Router\RouterServiceInterface;
 use Joomla\CMS\Component\Router\RouterServiceTrait;
 use Joomla\CMS\Extension\BootableExtensionInterface;
@@ -30,12 +32,18 @@ use Psr\Container\ContainerInterface;
  *
  * @since  4.0.0
  */
-class UsersComponent extends MVCComponent implements BootableExtensionInterface, RouterServiceInterface, FieldsFormServiceInterface
+class UsersComponent extends MVCComponent implements BootableExtensionInterface, RouterServiceInterface, FieldsFormServiceInterface, AutosaveServiceInterface
 {
+    use AutosaveServiceTrait;
     use FieldsServiceTrait;
     use RouterServiceTrait;
     use HTMLRegistryAwareTrait;
 
+
+    public function getAutosaveContexts(): array
+    {
+        return ['com_users.group' => true, 'com_users.level' => true, 'com_users.note' => true];
+    }
     /**
      * Booting the extension. This is the function to set up the environment of the extension like
      * registering new class loaders, etc.

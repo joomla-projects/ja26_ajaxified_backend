@@ -1,0 +1,73 @@
+{
+  "$schema": "https://developer.joomla.org/schemas/json-schema/web_assets.json",
+  "name": "com_autosave",
+  "version": "6.2.0",
+  "description": "Joomla CMS",
+  "license": "GNU General Public License version 2 or later; see LICENSE.txt",
+  "assets": [
+    {
+      "name": "com_autosave.runtime",
+      "type": "script",
+      "uri": "com_autosave/runtime.min.js",
+      "importmap": true,
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
+      "name": "com_autosave.canonical-actions",
+      "type": "script",
+      "uri": "com_autosave/canonical-action-coordinator.min.js",
+      "dependencies": [
+        "core",
+        "com_autosave.runtime",
+        "joomla.dialog"
+      ],
+      "importmap": true,
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
+      "name": "com_autosave.ui",
+      "type": "script",
+      "uri": "com_autosave/ui.min.js",
+      "dependencies": [
+        "core",
+        "com_autosave.runtime",
+        "joomla.dialog"
+      ],
+      "importmap": true,
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
+      "name": "com_autosave.create-binding",
+      "type": "script",
+      "uri": "com_autosave/create-binding.min.js",
+      "dependencies": [
+        "core"
+      ],
+      "importmap": true,
+      "attributes": {
+        "type": "module"
+      }
+    },
+    {
+      "name": "com_autosave.integration-controller",
+      "type": "script",
+      "uri": "com_autosave/integration-controller.min.js",
+      "dependencies": [
+        "core",
+        "com_autosave.runtime",
+        "com_autosave.canonical-actions",
+        "com_autosave.ui"
+      ],
+      "importmap": true,
+      "attributes": {
+        "type": "module"
+      }
+    }
+  ]
+}

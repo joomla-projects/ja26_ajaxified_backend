@@ -10,6 +10,10 @@
 
 namespace Joomla\Component\Modules\Administrator\View\Module;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveDynamicCreateDescriptorProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -18,6 +22,7 @@ use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\CMS\Toolbar\ToolbarHelper;
+use Joomla\Component\Modules\Administrator\Autosave\ModuleAutosaveProvider;
 use Joomla\Component\Modules\Administrator\Model\ModuleModel;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -31,6 +36,8 @@ use Joomla\Component\Modules\Administrator\Model\ModuleModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    public bool $autosaveEnabled = false;
+
     /**
      * The Form object
      *
@@ -120,6 +127,8 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task')
             ->addControlField('return', Factory::getApplication()->getInput()->getBase64('return', ''));
 
+        $this->prepareAutosave();
+
         if ($this->getLayout() !== 'modal') {
             $this->addToolbar();
         } else {
@@ -127,6 +136,92 @@ class HtmlView extends BaseHtmlView
         }
 
         parent::display($tpl);
+    }
+
+    private function prepareAutosave(): void
+    {
+        $app          = Factory::getApplication();
+        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
+        $configurator->disable('com_modules.autosave.module');
+
+        if (!\in_array($this->getLayout(), ['edit', 'default'], true)) {
+            return;
+        }
+
+        $target      = null;
+        $createScope = null;
+        $schema      = null;
+        $itemId      = (int) $this->item->id;
+
+        try {
+            $provider = $app->bootComponent('com_modules')->getAutosaveProvider('com_modules.module');
+
+            if (!$provider instanceof ModuleAutosaveProvider) {
+                return;
+            }
+
+            if ($itemId > 0) {
+                $target = $provider->canonicalizeTargetId((string) $itemId);
+
+                if (!$provider->targetExists($target)) {
+                    return;
+                }
+
+                $schema = $provider->getDynamicSchemaForForm($target, $this->form);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } elseif ($provider instanceof AutosaveDynamicCreateDescriptorProviderInterface) {
+                // A new Module only gains create mode once the module-type chooser has
+                // bound a genuine extension: the model then carries the module element
+                // and client as server state. The candidate is canonicalized and
+                // authorized once at render; the browser never resubmits authoritative
+                // creation state afterwards.
+                $candidate = $provider->createScopeCandidate(
+                    (int) $this->item->client_id,
+                    (string) $this->item->module
+                );
+
+                if ($candidate === null) {
+                    return;
+                }
+
+                $createScope = $provider->canonicalizeStaticCreateScope($candidate);
+                $provider->authorizeStaticCreateScope($app->getIdentity(), $createScope, AutosaveOperation::InitializeCreate, null);
+                $schema = $provider->getDynamicSchemaForScope($createScope);
+            } else {
+                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        if ($schema === null) {
+            return;
+        }
+
+        $ids = [];
+
+        foreach (['title', 'note', 'version_note', 'showtitle', 'position', 'content'] as $name) {
+            $field = $this->form->getField($name);
+
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $ids[$name] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $target,
+            'com_modules.autosave.module',
+            'module-form',
+            $ids,
+            'com_modules.module-autosave',
+            ['fields' => $schema->fields(), 'fingerprint' => $schema->fingerprint(), 'support' => $schema->support()],
+            $createScope
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**

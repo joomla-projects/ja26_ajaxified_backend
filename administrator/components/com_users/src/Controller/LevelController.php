@@ -12,8 +12,10 @@ namespace Joomla\Component\Users\Administrator\Controller;
 
 use Joomla\CMS\Access\Access;
 use Joomla\CMS\Access\Exception\NotAllowed;
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Router\Route;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -27,6 +29,15 @@ use Joomla\CMS\Router\Route;
  */
 class LevelController extends FormController
 {
+    use AutosaveFormControllerTrait;
+
+
+    private const AUTOSAVE_CONTEXT      = 'com_users.level';
+    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'];
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        $this->captureAutosaveCanonicalResult($model, 'level.id');
+    }
     /**
      * @var     string  The prefix to use with controller messages.
      * @since   1.6

@@ -10,6 +10,9 @@
 
 namespace Joomla\Component\Redirect\Administrator\View\Link;
 
+use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
+use Joomla\CMS\Autosave\AutosaveOperation;
+use Joomla\CMS\Autosave\AutosaveViewConfigurator;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -30,6 +33,15 @@ use Joomla\Component\Redirect\Administrator\Model\LinkModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether the generic Autosave interface should be rendered.
+     *
+     * @var boolean
+     *
+     * @since __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
     /**
      * The active item
      *
@@ -78,8 +90,71 @@ class HtmlView extends BaseHtmlView
         $this->form
             ->addControlField('task');
 
+        $this->prepareAutosave();
         $this->addToolbar();
         parent::display($tpl);
+    }
+
+    /**
+     * Configure Autosave for one existing Redirect link.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        $application           = Factory::getApplication();
+        $document              = $this->getDocument();
+        $configurator          = new AutosaveViewConfigurator($application, $document, $application->getIdentity());
+        $this->autosaveEnabled = false;
+        $configurator->disable('com_redirect.autosave.link');
+
+        if ($this->getLayout() !== 'edit') {
+            return;
+        }
+
+        try {
+            $provider = $application
+                ->bootComponent('com_redirect')
+                ->getAutosaveProvider('com_redirect.link');
+            $itemId   = (int) $this->item->id;
+            $targetId = null;
+
+            if ($itemId > 0) {
+                $targetId = $provider->canonicalizeTargetId((string) $itemId);
+            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
+                return;
+            } else {
+                $provider->authorizeCreate($application->getIdentity(), AutosaveOperation::InitializeCreate, null);
+            }
+
+            if ($targetId !== null && !$provider->targetExists($targetId)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        $fieldIds = [];
+        foreach (['old_url', 'new_url', 'comment'] as $fieldName) {
+            $field = $this->form->getField($fieldName);
+            if (!$field || !\is_string($field->id) || $field->id === '') {
+                return;
+            }
+
+            $fieldIds[$fieldName] = $field->id;
+        }
+
+        $configurator->configure(
+            $provider,
+            $targetId,
+            'com_redirect.autosave.link',
+            'link-form',
+            $fieldIds,
+            'com_redirect.link-autosave'
+        );
+        $this->autosaveEnabled = true;
     }
 
     /**

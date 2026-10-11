@@ -11,6 +11,7 @@
 namespace Joomla\Component\Fields\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
@@ -29,6 +30,11 @@ use Joomla\Registry\Registry;
  */
 class FieldController extends FormController
 {
+    use AutosaveFormControllerTrait;
+
+    private const AUTOSAVE_CONTEXT      = 'com_fields.field';
+    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'];
+
     /**
      * @var    string
      */
@@ -103,20 +109,6 @@ class FieldController extends FormController
             return parent::allowEdit($data, $key);
         }
 
-        // Get existing record
-        $record = $this->getModel()->getItem($recordId);
-
-        if (empty($record)) {
-            return false;
-        }
-
-        [$recordOption] = explode('.', $record->context);
-
-        // Validate request context and field context match
-        if ($recordOption !== $this->component) {
-            return false;
-        }
-
         // Check edit on the record asset (explicit or inherited)
         if ($user->authorise('core.edit', $this->component . '.field.' . $recordId)) {
             return true;
@@ -124,6 +116,13 @@ class FieldController extends FormController
 
         // Check edit own on the record asset (explicit or inherited)
         if ($user->authorise('core.edit.own', $this->component . '.field.' . $recordId)) {
+            // Existing record already has an owner, get it
+            $record = $this->getModel()->getItem($recordId);
+
+            if (empty($record)) {
+                return false;
+            }
+
             // Grant if current user is owner of the record
             return $user->id == $record->created_user_id;
         }
@@ -199,5 +198,12 @@ class FieldController extends FormController
             $registry->loadArray($item->params);
             $item->params = (string) $registry;
         }
+
+        $this->captureAutosaveCanonicalResult($model, 'field.id');
+    }
+
+    public function save($key = null, $urlVar = null)
+    {
+        return $this->executeAutosaveCanonicalSave(fn () => parent::save($key, $urlVar), $urlVar);
     }
 }

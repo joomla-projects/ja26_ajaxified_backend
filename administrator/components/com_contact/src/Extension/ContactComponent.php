@@ -12,6 +12,8 @@ namespace Joomla\Component\Contact\Administrator\Extension;
 
 use Joomla\CMS\Association\AssociationServiceInterface;
 use Joomla\CMS\Association\AssociationServiceTrait;
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Categories\CategoryServiceInterface;
 use Joomla\CMS\Categories\CategoryServiceTrait;
 use Joomla\CMS\Component\Router\RouterServiceInterface;
@@ -48,9 +50,11 @@ class ContactComponent extends MVCComponent implements
     FieldsFormServiceInterface,
     SchemaorgServiceInterface,
     AssociationServiceInterface,
+    AutosaveServiceInterface,
     RouterServiceInterface,
     TagServiceInterface
 {
+    use AutosaveServiceTrait;
     use AssociationServiceTrait;
     use HTMLRegistryAwareTrait;
     use RouterServiceTrait;
@@ -59,6 +63,11 @@ class ContactComponent extends MVCComponent implements
         CategoryServiceTrait::getTableNameForSection insteadof TagServiceTrait;
         CategoryServiceTrait::getStateColumnForSection insteadof TagServiceTrait;
         CategoryServiceTrait::prepareForm insteadof FieldsServiceTrait;
+    }
+
+    public function getAutosaveContexts(): array
+    {
+        return ['com_contact.contact' => true];
     }
 
     /**

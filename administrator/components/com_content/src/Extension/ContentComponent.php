@@ -12,6 +12,8 @@ namespace Joomla\Component\Content\Administrator\Extension;
 
 use Joomla\CMS\Association\AssociationServiceInterface;
 use Joomla\CMS\Association\AssociationServiceTrait;
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Categories\CategoryServiceInterface;
 use Joomla\CMS\Categories\CategoryServiceTrait;
 use Joomla\CMS\Component\Router\RouterServiceInterface;
@@ -29,13 +31,11 @@ use Joomla\CMS\Schemaorg\SchemaorgServiceInterface;
 use Joomla\CMS\Schemaorg\SchemaorgServiceTrait;
 use Joomla\CMS\Tag\TagServiceInterface;
 use Joomla\CMS\Tag\TagServiceTrait;
-use Joomla\CMS\User\UserFactoryInterface;
 use Joomla\CMS\Workflow\WorkflowServiceInterface;
 use Joomla\CMS\Workflow\WorkflowServiceTrait;
 use Joomla\Component\Content\Administrator\Helper\ContentHelper;
 use Joomla\Component\Content\Administrator\Service\HTML\AdministratorService;
 use Joomla\Component\Content\Administrator\Service\HTML\Icon;
-use Joomla\Database\DatabaseInterface;
 use Psr\Container\ContainerInterface;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -52,12 +52,14 @@ class ContentComponent extends MVCComponent implements
     CategoryServiceInterface,
     FieldsFormServiceInterface,
     AssociationServiceInterface,
+    AutosaveServiceInterface,
     SchemaorgServiceInterface,
     WorkflowServiceInterface,
     RouterServiceInterface,
     TagServiceInterface
 {
     use AssociationServiceTrait;
+    use AutosaveServiceTrait;
     use RouterServiceTrait;
     use HTMLRegistryAwareTrait;
     use WorkflowServiceTrait;
@@ -129,13 +131,8 @@ class ContentComponent extends MVCComponent implements
      */
     public function boot(ContainerInterface $container)
     {
-        $contentAdministrator = new AdministratorService();
-        $contentAdministrator->setDatabase($container->get(DatabaseInterface::class));
-        $this->getRegistry()->register('contentadministrator', $contentAdministrator);
-
-        $icon = new Icon();
-        $icon->setUserFactory($container->get(UserFactoryInterface::class));
-        $this->getRegistry()->register('contenticon', $icon);
+        $this->getRegistry()->register('contentadministrator', new AdministratorService());
+        $this->getRegistry()->register('contenticon', new Icon());
 
         // The layout joomla.content.icons does need a general icon service
         $this->getRegistry()->register('icon', $this->getRegistry()->getService('contenticon'));
@@ -209,6 +206,20 @@ class ContentComponent extends MVCComponent implements
         ];
 
         return $contexts;
+    }
+
+    /**
+     * Returns valid exact contexts for Autosave.
+     *
+     * @return  array<string, mixed>
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getAutosaveContexts(): array
+    {
+        return [
+            'com_content.article' => true,
+        ];
     }
 
     /**

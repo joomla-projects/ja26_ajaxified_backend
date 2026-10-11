@@ -3,8 +3,8 @@
  */
 
 import fsp from 'node:fs/promises';
-import path from 'node:path';
-import fs from 'node:fs';
+import path from "node:path";
+import fs from "node:fs";
 
 import { transform } from 'esbuild';
 import { rollup } from 'rollup';
@@ -24,6 +24,9 @@ const getExternalModules = async () => {
   externalModules.push(
     'cropper-module',
     'codemirror',
+    'com_autosave.runtime',
+    'com_autosave.canonical-actions',
+    'com_autosave.ui',
     'joomla.dialog',
     'editor-api',
     'editor-decorator',
@@ -76,7 +79,7 @@ export const handleJSFile = async (srcPath, targetPath) => {
       const saveMin = fsp.writeFile(
         targetPath.replace('.js', '.min.js'),
         jsMin,
-        { encoding: 'utf8', mode: 0o644 },
+        { encoding: 'utf8', mode: 0o644 }
       );
 
       return Promise.all([saveCopy, saveMin]);
@@ -95,7 +98,7 @@ export const handleJSFile = async (srcPath, targetPath) => {
  * @returns { Promise }
  */
 export const handleMJSFile = async (srcPath, targetPath, externalModulesList = []) => {
-  const externalModules = externalModulesList && externalModulesList.length ? externalModulesList : await getExternalModules();
+  const externalModules =  externalModulesList && externalModulesList.length ? externalModulesList : await getExternalModules();
   const targetFolder = path.dirname(targetPath);
 
   if (!fs.existsSync(targetFolder)) {
@@ -133,7 +136,7 @@ export const handleMJSFile = async (srcPath, targetPath, externalModulesList = [
       }),
     ],
     external: externalModules,
-  }).then((bundle) => {
+  }).then(( bundle) => {
     // Process and store source file
     const result = bundle.write({
       format: targetPath.endsWith('core.js') ? 'iife' : 'es',
@@ -143,12 +146,12 @@ export const handleMJSFile = async (srcPath, targetPath, externalModulesList = [
 
     // Minify the code and store
     const saveMin = result
-      .then((value) => minifyJSContent(value.output[0].code))
-      .then((jsMin) => {
+      .then(( value ) => minifyJSContent(value.output[0].code))
+      .then(( jsMin ) => {
         return fsp.writeFile(
           targetPath.replace('.js', '.min.js'),
           jsMin,
-          { encoding: 'utf8', mode: 0o644 },
+          { encoding: 'utf8', mode: 0o644 }
         );
       });
 
