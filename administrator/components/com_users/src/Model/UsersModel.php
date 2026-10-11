@@ -17,6 +17,7 @@ use Joomla\CMS\Form\Form;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\ListModel;
 use Joomla\CMS\Plugin\PluginHelper;
+use Joomla\Component\Fields\Administrator\Helper\FieldsHelper;
 use Joomla\Database\ParameterType;
 use Joomla\Database\QueryInterface;
 use Joomla\Utilities\ArrayHelper;
@@ -146,6 +147,8 @@ class UsersModel extends ListModel
         if (PluginHelper::isEnabled('multifactorauth')) {
             $id .= ':' . $this->getState('filter.mfa');
         }
+
+        $id .= ':' . serialize(FieldsHelper::getListFilterValues($this->state->toArray()));
 
         return parent::getStoreId($id);
     }
@@ -514,12 +517,49 @@ class UsersModel extends ListModel
             $query->whereNotIn($db->quoteName('id'), $excluded);
         }
 
+        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+
+        if ($customFieldFilters) {
+            $eligibleFields = FieldsHelper::getFilterFields('com_users.user');
+
+            foreach ($customFieldFilters as $fieldId => $values) {
+                if (isset($eligibleFields[$fieldId])) {
+                    FieldsHelper::applyListFilter($query, (int) $fieldId, $values, $query->castAs('CHAR', $db->quoteName('a.id')));
+                }
+            }
+        }
+
         // Add the list ordering clause.
         $query->order(
             $db->quoteName($db->escape($this->getState('list.ordering', 'a.name'))) . ' ' . $db->escape($this->getState('list.direction', 'ASC'))
         );
 
         return $query;
+    }
+
+    /**
+     * Get the active filters, including custom-field filters.
+     *
+     * @return  array
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getActiveFilters()
+    {
+        $activeFilters      = parent::getActiveFilters();
+        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+
+        if ($customFieldFilters) {
+            $eligibleFields = FieldsHelper::getFilterFields('com_users.user');
+
+            foreach ($customFieldFilters as $fieldId => $values) {
+                if (isset($eligibleFields[$fieldId])) {
+                    $activeFilters['customfield_' . $fieldId] = $values;
+                }
+            }
+        }
+
+        return $activeFilters;
     }
 
     /**

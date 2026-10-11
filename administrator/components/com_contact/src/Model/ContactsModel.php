@@ -15,6 +15,7 @@ use Joomla\CMS\Language\Associations;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\ListModel;
 use Joomla\CMS\Table\Category;
+use Joomla\Component\Fields\Administrator\Helper\FieldsHelper;
 use Joomla\Database\ParameterType;
 use Joomla\Database\QueryInterface;
 use Joomla\Utilities\ArrayHelper;
@@ -131,6 +132,7 @@ class ContactsModel extends ListModel
         $id .= ':' . $this->getState('filter.language');
         $id .= ':' . serialize($this->getState('filter.tag'));
         $id .= ':' . $this->getState('filter.level');
+        $id .= ':' . serialize(FieldsHelper::getListFilterValues($this->state->toArray()));
 
         return parent::getStoreId($id);
     }
@@ -384,6 +386,18 @@ class ContactsModel extends ListModel
             $query->bind(':level', $level, ParameterType::INTEGER);
         }
 
+        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+
+        if ($customFieldFilters) {
+            $eligibleFields = FieldsHelper::getFilterFields('com_contact.contact');
+
+            foreach ($customFieldFilters as $fieldId => $values) {
+                if (isset($eligibleFields[$fieldId])) {
+                    FieldsHelper::applyListFilter($query, (int) $fieldId, $values, $query->castAs('CHAR', $db->quoteName('a.id')));
+                }
+            }
+        }
+
         // Add the list ordering clause.
         $orderCol  = $this->state->get('list.ordering', 'a.name');
         $orderDirn = $this->state->get('list.direction', 'asc');
@@ -395,5 +409,30 @@ class ContactsModel extends ListModel
         $query->order($db->escape($orderCol . ' ' . $orderDirn));
 
         return $query;
+    }
+
+    /**
+     * Get the active filters, including custom-field filters.
+     *
+     * @return  array
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getActiveFilters()
+    {
+        $activeFilters      = parent::getActiveFilters();
+        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+
+        if ($customFieldFilters) {
+            $eligibleFields = FieldsHelper::getFilterFields('com_contact.contact');
+
+            foreach ($customFieldFilters as $fieldId => $values) {
+                if (isset($eligibleFields[$fieldId])) {
+                    $activeFilters['customfield_' . $fieldId] = $values;
+                }
+            }
+        }
+
+        return $activeFilters;
     }
 }

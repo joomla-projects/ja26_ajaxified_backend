@@ -66,6 +66,10 @@ class UsersComponent extends MVCComponent implements BootableExtensionInterface,
      */
     public function validateSection($section, $item = null)
     {
+        if (\in_array($section, ['users', 'users.default'], true) && Factory::getApplication()->isClient('administrator')) {
+            $section = 'user';
+        }
+
         if (Factory::getApplication()->isClient('site')) {
             switch ($section) {
                 case 'registration':
