@@ -228,8 +228,8 @@ describe('Test in backend that the articles list', () => {
           [checkboxesId, 'checkbox-round', 'Checkbox round', 'checkbox-square', 'Checkbox square'],
         ].forEach(([fieldId, firstValue, firstLabel, secondValue, secondLabel]) => {
           cy.get(`#filter_customfield_${fieldId}`).should('have.prop', 'multiple', true)
-            .and('not.have.attr', 'required')
-            .closest('joomla-field-fancy-select').should('exist');
+            .and('not.have.attr', 'required');
+          cy.get(`#filter_customfield_${fieldId}`).closest('joomla-field-fancy-select').should('exist');
           cy.get(`#filter_customfield_${fieldId} option:selected`).should('not.exist');
           cy.get(`#filter_customfield_${fieldId} option[value="${firstValue}"]`).should('have.text', firstLabel);
           cy.get(`#filter_customfield_${fieldId} option[value="${secondValue}"]`).should('have.text', secondLabel);
