@@ -118,6 +118,10 @@ class UsersModel extends ListModel
         $params = ComponentHelper::getParams('com_users');
         $this->setState('params', $params);
 
+        foreach (FieldsHelper::getFilterFields('com_users.user') as $fieldId => $field) {
+            $this->getUserStateFromRequest($this->context . '.filter.customfield_' . $fieldId, 'filter_customfield_' . $fieldId);
+        }
+
         // List state information.
         parent::populateState($ordering, $direction);
     }
@@ -148,7 +152,13 @@ class UsersModel extends ListModel
             $id .= ':' . $this->getState('filter.mfa');
         }
 
-        $id .= ':' . serialize(FieldsHelper::getListFilterValues($this->state->toArray()));
+        foreach (FieldsHelper::getFilterFields('com_users.user') as $fieldId => $field) {
+            $values = FieldsHelper::getListFilterValues($this->getState('filter.customfield_' . $fieldId));
+
+            if ($values) {
+                $id .= ':' . $fieldId . ':' . serialize($values);
+            }
+        }
 
         return parent::getStoreId($id);
     }
@@ -517,15 +527,11 @@ class UsersModel extends ListModel
             $query->whereNotIn($db->quoteName('id'), $excluded);
         }
 
-        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+        foreach (FieldsHelper::getFilterFields('com_users.user') as $fieldId => $field) {
+            $values = FieldsHelper::getListFilterValues($this->getState('filter.customfield_' . $fieldId));
 
-        if ($customFieldFilters) {
-            $eligibleFields = FieldsHelper::getFilterFields('com_users.user');
-
-            foreach ($customFieldFilters as $fieldId => $values) {
-                if (isset($eligibleFields[$fieldId])) {
-                    FieldsHelper::applyListFilter($query, (int) $fieldId, $values, $query->castAs('CHAR', $db->quoteName('a.id')));
-                }
+            if ($values) {
+                FieldsHelper::applyListFilter($query, (int) $fieldId, $values, $query->castAs('CHAR', $db->quoteName('a.id')));
             }
         }
 
@@ -546,16 +552,13 @@ class UsersModel extends ListModel
      */
     public function getActiveFilters()
     {
-        $activeFilters      = parent::getActiveFilters();
-        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+        $activeFilters = parent::getActiveFilters();
 
-        if ($customFieldFilters) {
-            $eligibleFields = FieldsHelper::getFilterFields('com_users.user');
+        foreach (FieldsHelper::getFilterFields('com_users.user') as $fieldId => $field) {
+            $values = FieldsHelper::getListFilterValues($this->getState('filter.customfield_' . $fieldId));
 
-            foreach ($customFieldFilters as $fieldId => $values) {
-                if (isset($eligibleFields[$fieldId])) {
-                    $activeFilters['customfield_' . $fieldId] = $values;
-                }
+            if ($values) {
+                $activeFilters['customfield_' . $fieldId] = $values;
             }
         }
 

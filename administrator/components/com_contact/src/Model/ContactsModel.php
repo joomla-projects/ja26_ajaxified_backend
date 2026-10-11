@@ -100,6 +100,10 @@ class ContactsModel extends ListModel
             $this->context .= '.' . $forcedLanguage;
         }
 
+        foreach (FieldsHelper::getFilterFields('com_contact.contact') as $fieldId => $field) {
+            $this->getUserStateFromRequest($this->context . '.filter.customfield_' . $fieldId, 'filter_customfield_' . $fieldId);
+        }
+
         // List state information.
         parent::populateState($ordering, $direction);
 
@@ -132,7 +136,14 @@ class ContactsModel extends ListModel
         $id .= ':' . $this->getState('filter.language');
         $id .= ':' . serialize($this->getState('filter.tag'));
         $id .= ':' . $this->getState('filter.level');
-        $id .= ':' . serialize(FieldsHelper::getListFilterValues($this->state->toArray()));
+
+        foreach (FieldsHelper::getFilterFields('com_contact.contact') as $fieldId => $field) {
+            $values = FieldsHelper::getListFilterValues($this->getState('filter.customfield_' . $fieldId));
+
+            if ($values) {
+                $id .= ':' . $fieldId . ':' . serialize($values);
+            }
+        }
 
         return parent::getStoreId($id);
     }
@@ -386,15 +397,11 @@ class ContactsModel extends ListModel
             $query->bind(':level', $level, ParameterType::INTEGER);
         }
 
-        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+        foreach (FieldsHelper::getFilterFields('com_contact.contact') as $fieldId => $field) {
+            $values = FieldsHelper::getListFilterValues($this->getState('filter.customfield_' . $fieldId));
 
-        if ($customFieldFilters) {
-            $eligibleFields = FieldsHelper::getFilterFields('com_contact.contact');
-
-            foreach ($customFieldFilters as $fieldId => $values) {
-                if (isset($eligibleFields[$fieldId])) {
-                    FieldsHelper::applyListFilter($query, (int) $fieldId, $values, $query->castAs('CHAR', $db->quoteName('a.id')));
-                }
+            if ($values) {
+                FieldsHelper::applyListFilter($query, (int) $fieldId, $values, $query->castAs('CHAR', $db->quoteName('a.id')));
             }
         }
 
@@ -420,16 +427,13 @@ class ContactsModel extends ListModel
      */
     public function getActiveFilters()
     {
-        $activeFilters      = parent::getActiveFilters();
-        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+        $activeFilters = parent::getActiveFilters();
 
-        if ($customFieldFilters) {
-            $eligibleFields = FieldsHelper::getFilterFields('com_contact.contact');
+        foreach (FieldsHelper::getFilterFields('com_contact.contact') as $fieldId => $field) {
+            $values = FieldsHelper::getListFilterValues($this->getState('filter.customfield_' . $fieldId));
 
-            foreach ($customFieldFilters as $fieldId => $values) {
-                if (isset($eligibleFields[$fieldId])) {
-                    $activeFilters['customfield_' . $fieldId] = $values;
-                }
+            if ($values) {
+                $activeFilters['customfield_' . $fieldId] = $values;
             }
         }
 

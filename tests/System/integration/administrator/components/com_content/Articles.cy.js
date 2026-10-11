@@ -218,6 +218,7 @@ describe('Test in backend that the articles list', () => {
         ], false);
       }).then((id) => {
         optedOutId = id;
+        cy.db_createArticle({ title: 'Filter provider fixture' });
         cy.reload();
         openSearchTools();
 
@@ -394,21 +395,22 @@ describe('Test in backend that the articles list', () => {
       createFilterField('Filter pagination', 'list', [{ name: 'Match', value: 'match' }])
         .then((id) => {
           fieldId = id;
-          return cy.db_createArticle({ title: 'Filter pagination first' });
-        }).then((article) => cy.db_createFieldValue({ field_id: fieldId, item_id: article.id, value: 'match' }))
-        .then(() => cy.db_createArticle({ title: 'Filter pagination second' }))
-        .then((article) => cy.db_createFieldValue({ field_id: fieldId, item_id: article.id, value: 'match' }))
-        .then(() => cy.db_createArticle({ title: 'Filter pagination third' }))
-        .then((article) => cy.db_createFieldValue({ field_id: fieldId, item_id: article.id, value: 'match' }))
-        .then(() => {
-          cy.visit('/administrator/index.php?option=com_content&view=articles&filter%5Bsearch%5D=Filter%20pagination&list%5Blimit%5D=1');
-          cy.visit('/administrator/index.php?option=com_content&view=articles&filter%5Bsearch%5D=Filter%20pagination&list%5Blimit%5D=1&limitstart=1');
-          cy.get('#articleList').should('contain.text', 'Filter pagination second')
-            .and('not.contain.text', 'Filter pagination third');
+        }).then(() => {
+          ['first', 'second', 'third', 'fourth', 'fifth', 'sixth'].forEach((title) => {
+            cy.db_createArticle({ title: `Filter pagination ${title}` })
+              .then((article) => cy.db_createFieldValue({ field_id: fieldId, item_id: article.id, value: 'match' }));
+          });
+        }).then(() => {
+          cy.visit('/administrator/index.php?option=com_content&view=articles&filter%5Bsearch%5D=Filter%20pagination&list%5Blimit%5D=5');
+          cy.visit('/administrator/index.php?option=com_content&view=articles&filter%5Bsearch%5D=Filter%20pagination&list%5Blimit%5D=5&limitstart=5');
+          cy.get('#articleList tbody tr').should('have.length', 1);
+          cy.get('#articleList').should('contain.text', 'Filter pagination first')
+            .and('not.contain.text', 'Filter pagination sixth');
           openSearchTools();
           selectFieldValues(fieldId, 'match');
-          cy.get('#articleList').should('contain.text', 'Filter pagination third')
-            .and('not.contain.text', 'Filter pagination second');
+          cy.get('#articleList tbody tr').should('have.length', 5);
+          cy.get('#articleList').should('contain.text', 'Filter pagination sixth')
+            .and('not.contain.text', 'Filter pagination first');
         });
     });
   });

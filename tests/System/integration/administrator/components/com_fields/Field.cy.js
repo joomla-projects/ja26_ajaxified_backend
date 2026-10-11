@@ -50,6 +50,7 @@ describe('Test in backend that the field form', () => {
       cy.visit(url);
       cy.get(enabled).should('be.checked');
       cy.clickToolbarButton('Cancel');
+      cy.db_createArticle({ title: 'Field filter opt-in fixture' });
       cy.visit('/administrator/index.php?option=com_content&view=articles&filter=');
       cy.get(`#filter_customfield_${id}`).should('exist');
     });

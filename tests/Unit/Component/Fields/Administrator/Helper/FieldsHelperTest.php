@@ -10,10 +10,12 @@
 
 namespace Joomla\Tests\Unit\Component\Fields\Administrator\Helper;
 
+use Joomla\CMS\MVC\Model\State;
 use Joomla\Component\Fields\Administrator\Helper\FieldsHelper;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Database\Mysqli\MysqliQuery;
 use Joomla\Database\ParameterType;
+use Joomla\Registry\Registry;
 use Joomla\Tests\Unit\UnitTestCase;
 
 /**
@@ -25,15 +27,15 @@ class FieldsHelperTest extends UnitTestCase
 {
     public function testListFilterValuesIgnoreEmptyAndNonScalarInputButKeepZero(): void
     {
-        $this->assertSame([
-            7 => ['0', 'blue'],
-            8 => ['small'],
-        ], FieldsHelper::getListFilterValues([
-            'filter.search'        => 'Article',
-            'filter.customfield_7' => ['', '0', ['nested'], null, 'blue'],
-            'filter.customfield_8' => 'small',
-            'filter.customfield_9' => '',
-        ]));
+        foreach ([new State(), new Registry()] as $state) {
+            $state->set('filter.customfield_7', ['', '0', ['nested'], null, 'blue']);
+            $state->set('filter.customfield_8', 'small');
+            $state->set('filter.customfield_9', '');
+
+            $this->assertSame(['0', 'blue'], FieldsHelper::getListFilterValues($state->get('filter.customfield_7')));
+            $this->assertSame(['small'], FieldsHelper::getListFilterValues($state->get('filter.customfield_8')));
+            $this->assertSame([], FieldsHelper::getListFilterValues($state->get('filter.customfield_9')));
+        }
     }
 
     public function testApplyListFilterBindsEachFieldAndItsSelectedValues(): void

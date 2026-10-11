@@ -305,6 +305,11 @@ final class Fields extends CMSPlugin implements SubscriberInterface
         if ($this->getApplication()->isClient('administrator') && str_ends_with($context, '.filter')) {
             $filterContext = substr($context, 0, -7);
 
+            // Custom-field filters belong to administrator lists, not modal item selectors.
+            if (\in_array('modal', explode('.', $filterContext), true)) {
+                return;
+            }
+
             if ($filterContext === 'com_categories.categories' || str_starts_with($filterContext, 'com_categories.categories.')) {
                 $extension = $this->getApplication()->getInput()->get('extension', '', 'cmd')
                     ?: $this->getApplication()->getUserState($context . '.extension', 'com_content');
