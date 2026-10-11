@@ -402,7 +402,7 @@ class FieldsHelper
             return;
         }
 
-        $fieldParameter = $query->bindArray([$fieldId], ParameterType::INTEGER)[0];
+        $fieldParameter  = $query->bindArray([$fieldId], ParameterType::INTEGER)[0];
         $valueParameters = $query->bindArray(array_values($values), ParameterType::STRING);
 
         $query->where(
