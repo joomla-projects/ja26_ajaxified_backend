@@ -66,7 +66,8 @@ class UsersComponent extends MVCComponent implements BootableExtensionInterface,
      */
     public function validateSection($section, $item = null)
     {
-        if (\in_array($section, ['users', 'users.default'], true) && Factory::getApplication()->isClient('administrator')) {
+        // The administrator users list always appends its layout, which defaults to 'default'.
+        if ($section === 'users.default' && Factory::getApplication()->isClient('administrator')) {
             $section = 'user';
         }
 

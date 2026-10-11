@@ -118,6 +118,10 @@ class CategoriesModel extends ListModel
         // Extract the optional section name
         $this->setState('filter.section', (\count($parts) > 1) ? $parts[1] : null);
 
+        foreach (FieldsHelper::getFilterFields($extension . '.categories') as $fieldId => $field) {
+            $this->getUserStateFromRequest($this->context . '.filter.customfield_' . $fieldId, 'filter_customfield_' . $fieldId);
+        }
+
         // List state information.
         parent::populateState($ordering, $direction);
 
@@ -150,7 +154,14 @@ class CategoriesModel extends ListModel
         $id .= ':' . $this->getState('filter.language');
         $id .= ':' . $this->getState('filter.level');
         $id .= ':' . serialize($this->getState('filter.tag'));
-        $id .= ':' . serialize(FieldsHelper::getListFilterValues($this->state->toArray()));
+
+        foreach (FieldsHelper::getFilterFields($this->getState('filter.extension') . '.categories') as $fieldId => $field) {
+            $values = FieldsHelper::getListFilterValues($this->getState('filter.customfield_' . $fieldId));
+
+            if ($values) {
+                $id .= ':' . $fieldId . ':' . serialize($values);
+            }
+        }
 
         return parent::getStoreId($id);
     }
@@ -410,15 +421,11 @@ class CategoriesModel extends ListModel
             }
         }
 
-        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+        foreach (FieldsHelper::getFilterFields($this->getState('filter.extension') . '.categories') as $fieldId => $field) {
+            $values = FieldsHelper::getListFilterValues($this->getState('filter.customfield_' . $fieldId));
 
-        if ($customFieldFilters) {
-            $eligibleFields = FieldsHelper::getFilterFields($this->getState('filter.extension') . '.categories');
-
-            foreach ($customFieldFilters as $fieldId => $values) {
-                if (isset($eligibleFields[$fieldId])) {
-                    FieldsHelper::applyListFilter($query, (int) $fieldId, $values, $query->castAs('CHAR', $db->quoteName('a.id')));
-                }
+            if ($values) {
+                FieldsHelper::applyListFilter($query, (int) $fieldId, $values, $query->castAs('CHAR', $db->quoteName('a.id')));
             }
         }
 
@@ -466,16 +473,13 @@ class CategoriesModel extends ListModel
      */
     public function getActiveFilters()
     {
-        $activeFilters      = parent::getActiveFilters();
-        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+        $activeFilters = parent::getActiveFilters();
 
-        if ($customFieldFilters) {
-            $eligibleFields = FieldsHelper::getFilterFields($this->getState('filter.extension') . '.categories');
+        foreach (FieldsHelper::getFilterFields($this->getState('filter.extension') . '.categories') as $fieldId => $field) {
+            $values = FieldsHelper::getListFilterValues($this->getState('filter.customfield_' . $fieldId));
 
-            foreach ($customFieldFilters as $fieldId => $values) {
-                if (isset($eligibleFields[$fieldId])) {
-                    $activeFilters['customfield_' . $fieldId] = $values;
-                }
+            if ($values) {
+                $activeFilters['customfield_' . $fieldId] = $values;
             }
         }
 

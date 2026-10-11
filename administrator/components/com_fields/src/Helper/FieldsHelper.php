@@ -264,6 +264,8 @@ class FieldsHelper
     /**
      * Returns fields which can be used as administrator list filters.
      *
+     * getFields() shares a request-static model and may retain the language of an earlier item lookup.
+     *
      * @param   string  $context  The custom-field context.
      *
      * @return  array
@@ -291,34 +293,20 @@ class FieldsHelper
     }
 
     /**
-     * Returns non-empty custom-field selections from list model state.
+     * Returns non-empty scalar selections for one custom-field filter.
      *
-     * @param   array  $state  The list model state.
+     * @param   mixed  $value  The selection read from the known list model state key.
      *
      * @return  array
      *
      * @since   __DEPLOY_VERSION__
      */
-    public static function getListFilterValues(array $state): array
+    public static function getListFilterValues($value): array
     {
-        $filters = [];
-
-        foreach ($state as $name => $value) {
-            if (!str_starts_with($name, 'filter.customfield_')) {
-                continue;
-            }
-
-            $values = array_values(array_filter(
-                \is_array($value) ? $value : [$value],
-                static fn ($value) => \is_scalar($value) && $value !== ''
-            ));
-
-            if ($values) {
-                $filters[substr($name, \strlen('filter.customfield_'))] = $values;
-            }
-        }
-
-        return $filters;
+        return array_values(array_filter(
+            \is_array($value) ? $value : [$value],
+            static fn ($value) => \is_scalar($value) && $value !== ''
+        ));
     }
 
     /**
@@ -348,7 +336,9 @@ class FieldsHelper
 
             $filterField         = clone $field;
             $filterField->params = clone $field->params;
+            // Keep viewable fields available without inheriting the group's edit read-only setting.
             $filterField->params->set('display_readonly', '1');
+            // Editable In controls edit forms; opted-in site fields also provide administrator filters.
             $filterField->params->set('show_on', '2');
 
             $xml      = new \DOMDocument('1.0', 'UTF-8');
@@ -370,12 +360,17 @@ class FieldsHelper
             $node->setAttribute('multiple', 'true');
             $node->setAttribute('layout', 'joomla.form.field.list-fancy-select');
             $node->setAttribute('class', 'js-select-submit-on-change');
+            // A filter selection is optional even when the edit field is required.
             $node->setAttribute('required', 'false');
+            // Edit permissions must not disable a filter the user is allowed to view.
             $node->removeAttribute('disabled');
+            // An edit field's read-only setting must not prevent filtering.
             $node->removeAttribute('readonly');
+            // Edit-form dependencies do not apply to independent list filters.
             $node->removeAttribute('showon');
             $node->setAttribute('hint', '- ' . Text::_($node->getAttribute('label')) . ' -');
 
+            // An edit default must not select a list filter on first load.
             if ($default = $node->getElementsByTagName('default')->item(0)) {
                 $node->removeChild($default);
             }

@@ -150,6 +150,10 @@ class ArticlesModel extends ListModel
         $this->getUserStateFromRequest($this->context . '.filter.language', 'filter_language', '');
         $this->getUserStateFromRequest($this->context . '.filter.checked_out', 'filter_checked_out', '');
 
+        foreach (FieldsHelper::getFilterFields('com_content.article') as $fieldId => $field) {
+            $this->getUserStateFromRequest($this->context . '.filter.customfield_' . $fieldId, 'filter_customfield_' . $fieldId);
+        }
+
         // List state information.
         parent::populateState($ordering, $direction);
 
@@ -190,7 +194,14 @@ class ArticlesModel extends ListModel
         $id .= ':' . $this->getState('filter.start_date_range');
         $id .= ':' . $this->getState('filter.end_date_range');
         $id .= ':' . $this->getState('filter.relative_date');
-        $id .= ':' . serialize(FieldsHelper::getListFilterValues($this->state->toArray()));
+
+        foreach (FieldsHelper::getFilterFields('com_content.article') as $fieldId => $field) {
+            $values = FieldsHelper::getListFilterValues($this->getState('filter.customfield_' . $fieldId));
+
+            if ($values) {
+                $id .= ':' . $fieldId . ':' . serialize($values);
+            }
+        }
 
         return parent::getStoreId($id);
     }
@@ -665,15 +676,11 @@ class ArticlesModel extends ListModel
                 break;
         }
 
-        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+        foreach (FieldsHelper::getFilterFields('com_content.article') as $fieldId => $field) {
+            $values = FieldsHelper::getListFilterValues($this->getState('filter.customfield_' . $fieldId));
 
-        if ($customFieldFilters) {
-            $eligibleFields = FieldsHelper::getFilterFields('com_content.article');
-
-            foreach ($customFieldFilters as $fieldId => $values) {
-                if (isset($eligibleFields[$fieldId])) {
-                    FieldsHelper::applyListFilter($query, (int) $fieldId, $values, $query->castAs('CHAR', $db->quoteName('a.id')));
-                }
+            if ($values) {
+                FieldsHelper::applyListFilter($query, (int) $fieldId, $values, $query->castAs('CHAR', $db->quoteName('a.id')));
             }
         }
 
@@ -704,16 +711,13 @@ class ArticlesModel extends ListModel
      */
     public function getActiveFilters()
     {
-        $activeFilters      = parent::getActiveFilters();
-        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+        $activeFilters = parent::getActiveFilters();
 
-        if ($customFieldFilters) {
-            $eligibleFields = FieldsHelper::getFilterFields('com_content.article');
+        foreach (FieldsHelper::getFilterFields('com_content.article') as $fieldId => $field) {
+            $values = FieldsHelper::getListFilterValues($this->getState('filter.customfield_' . $fieldId));
 
-            foreach ($customFieldFilters as $fieldId => $values) {
-                if (isset($eligibleFields[$fieldId])) {
-                    $activeFilters['customfield_' . $fieldId] = $values;
-                }
+            if ($values) {
+                $activeFilters['customfield_' . $fieldId] = $values;
             }
         }
 

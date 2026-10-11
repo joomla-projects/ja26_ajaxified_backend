@@ -460,7 +460,7 @@ class ListModel extends BaseDatabaseModel implements FormFactoryAwareInterface, 
             $inputFilter = InputFilter::getInstance();
 
             // Receive & set filters
-            if ($filters = $this->getUserStateFromRequest($this->context . '.filter', 'filter', [], 'array')) {
+            if ($filters = $app->getUserStateFromRequest($this->context . '.filter', 'filter', [], 'array')) {
                 foreach ($filters as $name => $value) {
                     // Exclude if forbidden
                     if (!\in_array($name, $this->filterForbiddenList)) {
