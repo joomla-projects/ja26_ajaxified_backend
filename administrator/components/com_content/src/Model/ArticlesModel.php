@@ -19,6 +19,7 @@ use Joomla\CMS\MVC\Model\ListModel;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\Table\Category;
 use Joomla\Component\Content\Administrator\Extension\ContentComponent;
+use Joomla\Component\Fields\Administrator\Helper\FieldsHelper;
 use Joomla\Database\ParameterType;
 use Joomla\Database\QueryInterface;
 use Joomla\Registry\Registry;
@@ -189,6 +190,7 @@ class ArticlesModel extends ListModel
         $id .= ':' . $this->getState('filter.start_date_range');
         $id .= ':' . $this->getState('filter.end_date_range');
         $id .= ':' . $this->getState('filter.relative_date');
+        $id .= ':' . serialize(FieldsHelper::getListFilterValues($this->state->toArray()));
 
         return parent::getStoreId($id);
     }
@@ -663,6 +665,18 @@ class ArticlesModel extends ListModel
                 break;
         }
 
+        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+
+        if ($customFieldFilters) {
+            $eligibleFields = FieldsHelper::getFilterFields('com_content.article');
+
+            foreach ($customFieldFilters as $fieldId => $values) {
+                if (isset($eligibleFields[$fieldId])) {
+                    FieldsHelper::applyListFilter($query, (int) $fieldId, $values, $query->castAs('CHAR', $db->quoteName('a.id')));
+                }
+            }
+        }
+
         // Add the list ordering clause.
         $orderCol  = $this->state->get('list.ordering', $defaultOrdering);
         $orderDirn = $this->state->get('list.direction', 'DESC');
@@ -679,6 +693,31 @@ class ArticlesModel extends ListModel
         $query->order($ordering);
 
         return $query;
+    }
+
+    /**
+     * Get the active filters, including custom-field filters.
+     *
+     * @return  array
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getActiveFilters()
+    {
+        $activeFilters      = parent::getActiveFilters();
+        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+
+        if ($customFieldFilters) {
+            $eligibleFields = FieldsHelper::getFilterFields('com_content.article');
+
+            foreach ($customFieldFilters as $fieldId => $values) {
+                if (isset($eligibleFields[$fieldId])) {
+                    $activeFilters['customfield_' . $fieldId] = $values;
+                }
+            }
+        }
+
+        return $activeFilters;
     }
 
     /**

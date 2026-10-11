@@ -317,7 +317,7 @@ Joomla = window.Joomla || {};
 
     updateFilterCount(count) {
       if (this.clearButton) {
-        this.clearButton.disabled = (count === 0) && !this.searchString.length;
+        this.clearButton.disabled = (count === 0) && !this.searchString.length && this.options.filtersHidden;
       }
     }
 
@@ -345,9 +345,9 @@ Joomla = window.Joomla || {};
         }
       }
 
-      // Disable clear button when no filter is active and search is empty
+      // Keep Clear available when a remembered filter has no matching option.
       if (this.clearButton) {
-        this.clearButton.disabled = (activeFilterCount === 0) && !this.searchString.length;
+        this.clearButton.disabled = (activeFilterCount === 0) && !this.searchString.length && this.options.filtersHidden;
       }
     }
 

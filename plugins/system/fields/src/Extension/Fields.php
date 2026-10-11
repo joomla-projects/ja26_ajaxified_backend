@@ -302,6 +302,27 @@ final class Fields extends CMSPlugin implements SubscriberInterface
             }
         }
 
+        if ($this->getApplication()->isClient('administrator') && str_ends_with($context, '.filter')) {
+            $filterContext = substr($context, 0, -7);
+
+            if ($filterContext === 'com_categories.categories' || str_starts_with($filterContext, 'com_categories.categories.')) {
+                $extension = $this->getApplication()->getInput()->get('extension', '', 'cmd')
+                    ?: $this->getApplication()->getUserState($context . '.extension', 'com_content');
+
+                if ($extension) {
+                    $filterContext = $extension . '.categories';
+                }
+            }
+
+            $parts = FieldsHelper::extract($filterContext, $form);
+
+            if ($parts) {
+                FieldsHelper::prepareFilterForm($parts[0] . '.' . $parts[1], $form);
+            }
+
+            return;
+        }
+
         $parts = FieldsHelper::extract($context, $form);
 
         if (!$parts) {

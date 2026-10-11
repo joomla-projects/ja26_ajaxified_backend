@@ -17,6 +17,7 @@ use Joomla\CMS\Language\Associations;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\ListModel;
 use Joomla\CMS\Table\Category;
+use Joomla\Component\Fields\Administrator\Helper\FieldsHelper;
 use Joomla\Database\ParameterType;
 use Joomla\Database\QueryInterface;
 use Joomla\Utilities\ArrayHelper;
@@ -149,6 +150,7 @@ class CategoriesModel extends ListModel
         $id .= ':' . $this->getState('filter.language');
         $id .= ':' . $this->getState('filter.level');
         $id .= ':' . serialize($this->getState('filter.tag'));
+        $id .= ':' . serialize(FieldsHelper::getListFilterValues($this->state->toArray()));
 
         return parent::getStoreId($id);
     }
@@ -408,6 +410,18 @@ class CategoriesModel extends ListModel
             }
         }
 
+        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+
+        if ($customFieldFilters) {
+            $eligibleFields = FieldsHelper::getFilterFields($this->getState('filter.extension') . '.categories');
+
+            foreach ($customFieldFilters as $fieldId => $values) {
+                if (isset($eligibleFields[$fieldId])) {
+                    FieldsHelper::applyListFilter($query, (int) $fieldId, $values, $query->castAs('CHAR', $db->quoteName('a.id')));
+                }
+            }
+        }
+
         // Add the list ordering clause
         $listOrdering = $this->getState('list.ordering', 'a.lft');
         $listDirn     = $db->escape($this->getState('list.direction', 'ASC'));
@@ -441,6 +455,31 @@ class CategoriesModel extends ListModel
                 ua.name');
 
         return $query;
+    }
+
+    /**
+     * Get the active filters, including custom-field filters.
+     *
+     * @return  array
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getActiveFilters()
+    {
+        $activeFilters      = parent::getActiveFilters();
+        $customFieldFilters = FieldsHelper::getListFilterValues($this->state->toArray());
+
+        if ($customFieldFilters) {
+            $eligibleFields = FieldsHelper::getFilterFields($this->getState('filter.extension') . '.categories');
+
+            foreach ($customFieldFilters as $fieldId => $values) {
+                if (isset($eligibleFields[$fieldId])) {
+                    $activeFilters['customfield_' . $fieldId] = $values;
+                }
+            }
+        }
+
+        return $activeFilters;
     }
 
     /**
