@@ -82,8 +82,8 @@ class ListModelTest extends UnitTestCase
             'custom selection changed' => [['customfield_7' => ['red']], ['customfield_7' => ['blue']], 0],
             'native selection changed' => [['search' => 'old'], ['search' => 'new'], 0],
             'selection unchanged'      => [['customfield_7' => ['red']], ['customfield_7' => ['red']], 40],
-            'filters cleared'         => [['customfield_7' => ['red']], [], 0],
-            'no filters submitted'    => [['customfield_7' => ['red']], null, 40],
+            'filters cleared'          => [['customfield_7' => ['red']], [], 0],
+            'no filters submitted'     => [['customfield_7' => ['red']], null, 40],
         ];
     }
 }
