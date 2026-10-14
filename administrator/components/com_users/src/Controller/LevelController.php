@@ -10,13 +10,13 @@
 
 namespace Joomla\Component\Users\Administrator\Controller;
 
-use Joomla\CMS\Access\Access;
 use Joomla\CMS\Access\Exception\NotAllowed;
 use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Router\Route;
+use Joomla\Component\Users\Administrator\Helper\UsersHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -70,7 +70,7 @@ class LevelController extends FormController
         $viewLevel = $this->getModel('Level', 'Administrator')->getItem((int) $data['id']);
 
         // If this group is super admin and this user is not super admin, canEdit is false
-        if (!$this->app->getIdentity()->authorise('core.admin') && $viewLevel->rules && Access::checkGroup($viewLevel->rules[0], 'core.admin')) {
+        if (!UsersHelper::canEditViewLevel($this->app->getIdentity(), (array) $viewLevel->rules)) {
             $this->setMessage(Text::_('JLIB_APPLICATION_ERROR_EDIT_NOT_PERMITTED'), 'error');
 
             $this->setRedirect(
@@ -124,7 +124,12 @@ class LevelController extends FormController
 
         $this->setRedirect('index.php?option=com_users&view=levels');
     }
-    /** Optional draft retirement after the authoritative native success hook. */
+    /**
+     * Reconcile private drafts after the authoritative native success hook.
+     *
+     * @inheritDoc
+     * @since  __DEPLOY_VERSION__
+     */
     protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
     {
         parent::postSaveHook($model, $validData);

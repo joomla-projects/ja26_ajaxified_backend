@@ -59,7 +59,6 @@ final class DraftModel
     {
         Form::addFormPath(JPATH_ADMINISTRATOR . '/components/' . $component . '/forms');
         $data += (array) $item;
-        $model->setState('autosave.form_data', $data);
         $form = $model->getForm($data, false);
         if (!$form) {
             throw new AutosaveException('unsupported_context', 'The native form is unavailable.');

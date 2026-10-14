@@ -10,11 +10,16 @@ export const availableControl = (element, descriptor) => {
   if (!element) return false;
   if (descriptor.control === 'checkboxes') return inputs(element, 'checkbox').some((input) => !input.disabled);
   if (descriptor.control === 'radio') return inputs(element, 'radio').some((input) => !input.disabled);
-  if (descriptor.control === 'calendar') return typeof calendar(element)?.setDate === 'function'
+  if (descriptor.control === 'calendar') return element.tagName === 'INPUT' && element.type === 'text'
+    && typeof calendar(element)?.setDate === 'function'
     && typeof calendar(element)?.callHandler === 'function' && typeof Date.parseFieldDate === 'function';
-  if (descriptor.control === 'checkbox') return element.type === 'checkbox';
-  if (descriptor.control === 'multiple') return element.multiple === true;
-  return typeof element.value === 'string';
+  if (descriptor.control === 'checkbox') return element.tagName === 'INPUT' && element.type === 'checkbox';
+  if (descriptor.control === 'multiple') return element.tagName === 'SELECT' && element.multiple === true;
+  if (descriptor.control === 'select') return element.tagName === 'SELECT' && !element.multiple;
+  if (descriptor.control === 'textarea' || descriptor.control === 'editor') return element.tagName === 'TEXTAREA';
+  return descriptor.control === 'text' && element.tagName === 'INPUT'
+    && ['text', 'email', 'url', 'tel', 'search', 'number', 'color'].includes(element.type)
+    && typeof element.value === 'string';
 };
 
 /** Capture the existing native value without changing the control. */

@@ -25,7 +25,12 @@ use Joomla\CMS\MVC\Model\BaseDatabaseModel;
  */
 class TourController extends FormController
 {
-    /** Optional draft retirement after the authoritative native success hook. */
+    /**
+     * Reconcile private drafts after the authoritative native success hook.
+     *
+     * @inheritDoc
+     * @since  __DEPLOY_VERSION__
+     */
     protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
     {
         parent::postSaveHook($model, $validData);

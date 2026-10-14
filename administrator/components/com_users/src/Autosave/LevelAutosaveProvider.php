@@ -9,7 +9,6 @@
 
 namespace Joomla\Component\Users\Administrator\Autosave;
 
-use Joomla\CMS\Access\Access;
 use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\DraftModel;
 use Joomla\CMS\Autosave\DraftProjection;
@@ -17,6 +16,7 @@ use Joomla\CMS\Autosave\DraftProviderInterface;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
+use Joomla\Component\Users\Administrator\Helper\UsersHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -47,8 +47,8 @@ final class LevelAutosaveProvider implements DraftProviderInterface
     /** @inheritDoc */
     public function describe(Form $form, object $item, User $user): array
     {
-        $scope = $this->scope($form, $item);
-        $this->authorize($user, $item, $scope);
+        $scope = [];
+        $this->authorize($user, $item);
         $keys = self::KEYS;
 
         $descriptor = DraftProjection::descriptor(
@@ -96,12 +96,7 @@ final class LevelAutosaveProvider implements DraftProviderInterface
         return $descriptor;
     }
 
-    private function scope(Form $form, object $item): array
-    {
-        return [];
-    }
-
-    private function authorize(User $user, object $item, array $scope): void
+    private function authorize(User $user, object $item): void
     {
         $component = 'com_users';
         if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', $component)) {
@@ -110,10 +105,8 @@ final class LevelAutosaveProvider implements DraftProviderInterface
         if (!$user->authorise('core.admin', 'com_users')) {
             throw new AutosaveException('forbidden', 'Native administrator access is denied.');
         }
-        foreach ($item->rules ?? [] as $id) {
-            if (!$user->authorise('core.admin') && Access::checkGroup((int) $id, 'core.admin')) {
-                throw new AutosaveException('forbidden', 'A protected administrator group is unavailable.');
-            }
+        if (!UsersHelper::canEditViewLevel($user, (array) ($item->rules ?? []))) {
+            throw new AutosaveException('forbidden', 'A protected administrator group is unavailable.');
         }
         if (!(empty($item->id) ? ($user->authorise('core.create', $component) || \count($user->getAuthorisedCategories($component, 'core.create')) > 0) : $user->authorise('core.edit', $component))) {
             throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');

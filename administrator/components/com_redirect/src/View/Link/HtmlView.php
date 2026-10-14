@@ -38,8 +38,20 @@ class HtmlView extends BaseHtmlView
      *
      * @since __DEPLOY_VERSION__
      */
+    /**
+     * Whether optional draft controls are mounted for this native form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
     public bool $autosaveEnabled = false;
 
+    /**
+     * Native layout ID for the compact draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
     public string $autosaveStatusId = 'link-autosave-status';
 
     /**

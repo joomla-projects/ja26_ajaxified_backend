@@ -50,8 +50,7 @@ final class FieldAutosaveProvider implements DraftProviderInterface
     {
         $scope = $this->scope($form, $item);
         $this->authorize($user, $item, $scope);
-        $keys       = self::KEYS;
-        $keys       = array_merge($keys, DraftProjection::groupKeys($form, 'fieldparams'));
+        $keys       = array_merge(self::KEYS, DraftProjection::groupKeys($form, 'fieldparams'));
         $descriptor = DraftProjection::descriptor(
             $form,
             $item,

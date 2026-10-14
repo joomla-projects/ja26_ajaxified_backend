@@ -51,8 +51,7 @@ final class StyleAutosaveProvider implements DraftProviderInterface
         $scope = $this->scope($item);
         $this->authorize($user, $item, $scope);
 
-        $keys       = self::KEYS;
-        $keys       = array_merge($keys, DraftProjection::groupKeys($form, 'params'));
+        $keys       = array_merge(self::KEYS, DraftProjection::groupKeys($form, 'params'));
         $descriptor = DraftProjection::descriptor(
             $form,
             $item,

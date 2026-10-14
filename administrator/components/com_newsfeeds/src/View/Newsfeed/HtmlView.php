@@ -32,8 +32,20 @@ use Joomla\Component\Newsfeeds\Administrator\Model\NewsfeedModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether optional draft controls are mounted for this native form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
     public bool $autosaveEnabled = false;
 
+    /**
+     * Native layout ID for the compact draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
     public string $autosaveStatusId = 'newsfeed-autosave-status';
     /**
      * The item object for the newsfeed
@@ -127,6 +139,13 @@ class HtmlView extends BaseHtmlView
         parent::display($tpl);
     }
 
+    /**
+     * Configure optional drafts only for supported native edit layouts.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
     private function prepareAutosave(): void
     {
         if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
@@ -135,7 +154,7 @@ class HtmlView extends BaseHtmlView
         $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
             'context'    => 'com_newsfeeds.newsfeed', 'formId' => 'newsfeed-form', 'statusId' => $this->autosaveStatusId,
             'optionsKey' => 'com_newsfeeds.autosave.newsfeed', 'script' => 'com_newsfeeds.newsfeed-autosave',
-            'saveTasks'  => ['newsfeed.apply', 'newsfeed.save', 'newsfeed.save2new', 'newsfeed.save2copy'],
+            'saveTasks'  => ['newsfeed.apply', 'newsfeed.save', 'newsfeed.save2new', 'newsfeed.save2copy', 'newsfeed.editAssociations'],
         ]);
         if ($this->autosaveEnabled) {
             DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);

@@ -30,16 +30,26 @@ export const fixture = () => {
   const status = querySelectorAll('[data-draft-status]')[0];
   const control = Object.assign(element(), { id: 'title', value: 'Canonical title', type: 'text', tagName: 'INPUT', name: 'jform[title]' });
   const controls = [control];
+  const metadata = [];
   const ui = Object.assign(new EventTarget(), { matches: () => true, querySelectorAll });
   const document = {
     readyState: 'complete',
     getElementById: (id) => ({ form, status: ui })[id] || controls.find((candidate) => candidate.id === id),
+    createElement: (name) => Object.assign(element(), { tagName: name.toUpperCase(), remove() { metadata.splice(metadata.indexOf(this), 1); } }),
   };
   const form = Object.assign(new EventTarget(), {
     ownerDocument: document,
     isConnected: true,
     contains: (candidate) => controls.includes(candidate) && candidate.form === form,
-    querySelectorAll: (selector) => selector === '[id]' ? controls.filter((candidate) => candidate.form === form) : querySelectorAll(selector),
+    querySelectorAll: (selector) => {
+      if (selector === '[id]') return controls;
+      if (selector === '[data-draft-metadata]') return [...metadata];
+      return querySelectorAll(selector);
+    },
+    appendChild: (child) => {
+      child.form = form;
+      metadata.push(child);
+    },
     elements: { namedItem: () => ({ value: 'article.save' }) },
   });
   const configuration = {

@@ -24,12 +24,16 @@ use Joomla\Database\ParameterType;
  */
 final class DraftStore
 {
+    /** @since  __DEPLOY_VERSION__ */
     public const MAX_REVISION = 9007199254740991;
 
+    /** @since  __DEPLOY_VERSION__ */
     public const DISCOVERY_PAGE_SIZE = 100;
 
+    /** @since  __DEPLOY_VERSION__ */
     public const PURGE_BATCH_SIZE = 100;
 
+    /** @since  __DEPLOY_VERSION__ */
     public const POLICY = [
         'max_payload_bytes' => 4194304,
         'empty_ttl'         => 3600,
@@ -308,7 +312,7 @@ final class DraftStore
     ): void {
         $this->checkRevision($revision);
 
-        if (!\in_array($task, ['apply', 'save', 'save2new', 'save2copy', 'save2menu', 'save2menulist', 'save2menublog'], true) || $result === '') {
+        if (!\in_array($task, ['apply', 'save', 'save2new', 'save2copy', 'save2menu', 'save2menulist', 'save2menublog', 'editAssociations'], true) || $result === '') {
             throw new AutosaveException('invalid_request', 'The native result cannot reconcile this draft.');
         }
 
@@ -416,12 +420,21 @@ final class DraftStore
     /**
      * One physical cleanup batch; the native scheduler supplies the run budget.
      *
+     * @param   Date          $now       The expiry cutoff.
+     * @param   integer       $limit     The maximum discovery batch size.
+     * @param   float|null    $deadline  Optional monotonic nanosecond deadline from hrtime(true).
+     *
+     * @return  integer  The number of rows physically deleted.
+     *
      * @since  __DEPLOY_VERSION__
      */
-    public function purge(Date $now, int $limit = self::PURGE_BATCH_SIZE): int
+    public function purge(Date $now, int $limit = self::PURGE_BATCH_SIZE, ?float $deadline = null): int
     {
         if ($limit < 1 || $limit > self::PURGE_BATCH_SIZE) {
             throw new \InvalidArgumentException('Invalid draft cleanup batch.');
+        }
+        if ($deadline !== null && hrtime(true) >= $deadline) {
+            return 0;
         }
 
         $instant = $now->toSql();
@@ -433,6 +446,9 @@ final class DraftStore
         $count   = 0;
 
         foreach ($expired as $row) {
+            if ($deadline !== null && hrtime(true) >= $deadline) {
+                break;
+            }
             $count += $this->transaction((int) $row['owner_id'], function () use ($row, $instant): int {
                 $id    = $row['draft_id'];
                 $query = $this->db->createQuery()->delete($this->db->quoteName('#__autosave_drafts'))

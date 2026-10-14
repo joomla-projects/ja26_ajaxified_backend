@@ -31,8 +31,20 @@ use Joomla\Component\Menus\Administrator\Model\MenuModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether optional draft controls are mounted for this native form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
     public bool $autosaveEnabled = false;
 
+    /**
+     * Native layout ID for the compact draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
     public string $autosaveStatusId = 'menu-autosave-status';
 
     /**
@@ -99,6 +111,13 @@ class HtmlView extends BaseHtmlView
         }
     }
 
+    /**
+     * Configure optional drafts only for supported native edit layouts.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
     private function prepareAutosave(): void
     {
         if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {

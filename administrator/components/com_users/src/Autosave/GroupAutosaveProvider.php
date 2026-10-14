@@ -47,8 +47,8 @@ final class GroupAutosaveProvider implements DraftProviderInterface
     /** @inheritDoc */
     public function describe(Form $form, object $item, User $user): array
     {
-        $scope = $this->scope($form, $item);
-        $this->authorize($user, $item, $scope);
+        $scope = [];
+        $this->authorize($user, $item);
         $keys = self::KEYS;
 
         $descriptor = DraftProjection::descriptor(
@@ -89,12 +89,7 @@ final class GroupAutosaveProvider implements DraftProviderInterface
         return $descriptor;
     }
 
-    private function scope(Form $form, object $item): array
-    {
-        return [];
-    }
-
-    private function authorize(User $user, object $item, array $scope): void
+    private function authorize(User $user, object $item): void
     {
         $component = 'com_users';
         if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', $component)) {

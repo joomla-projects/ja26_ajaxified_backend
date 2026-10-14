@@ -33,7 +33,7 @@ trait DraftDatabaseFixture
             $update = file_get_contents(JPATH_ADMINISTRATOR . '/components/com_admin/sql/updates/' . $engine . '/6.2.0-2026-10-11.sql');
             foreach (DatabaseDriver::splitSql($update) as $query) {
                 if (str_contains($query, '#__autosave_drafts') && preg_match('/\bCREATE (?:TABLE|(?:UNIQUE )?INDEX)\b/', $query)) {
-                    $sql .= "\n" . $query . ';';
+                    $sql .= "\n" . $query;
                 }
             }
         }
@@ -43,6 +43,11 @@ trait DraftDatabaseFixture
         foreach (DatabaseDriver::splitSql(str_replace('#__', $this->db->getPrefix(), $sql)) as $query) {
             $this->db->setQuery($query)->execute();
         }
+        $this->initializeStore();
+    }
+
+    private function initializeStore(): void
+    {
         foreach ([7, 8] as $id) {
             if (!$this->db->setQuery('SELECT id FROM #__users WHERE id = ' . $id)->loadResult()) {
                 $owner = (object) ['id' => $id, 'username' => 'draft-test-' . $id, 'registerDate' => '2026-10-11 00:00:00', 'params' => '{}'];

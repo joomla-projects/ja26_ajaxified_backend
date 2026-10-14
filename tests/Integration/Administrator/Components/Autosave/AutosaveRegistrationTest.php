@@ -20,7 +20,7 @@ class AutosaveRegistrationTest extends IntegrationTestCase implements DBTestInte
 
     public function getSchemasToLoad(): array
     {
-        return [];
+        return ['autosave.sql'];
     }
 
     private function family(): string
@@ -43,16 +43,6 @@ class AutosaveRegistrationTest extends IntegrationTestCase implements DBTestInte
     protected function setUp(): void
     {
         parent::setUp();
-        $source = file_get_contents(JPATH_INSTALLATION . '/sql/' . $this->family() . '/base.sql')
-            . file_get_contents(JPATH_INSTALLATION . '/sql/' . $this->family() . '/extensions.sql');
-        foreach (['extensions', 'scheduler_tasks'] as $table) {
-            if (\in_array($this->getDBDriver()->getPrefix() . $table, $this->getDBDriver()->getTableList(), true)) {
-                continue;
-            }
-            preg_match('/CREATE TABLE(?: IF NOT EXISTS)? [`"]#__' . $table . '[`"] \([\s\S]*?\n\)[^;]*;/', $source, $match);
-            $this->assertNotEmpty($match, 'Native installation table must exist: ' . $table);
-            $this->execute($match[0]);
-        }
         $db = $this->getDBDriver();
         $db->setQuery('DELETE FROM #__extensions WHERE element = ' . $db->quote('com_autosave')
             . ' OR (element = ' . $db->quote('autosave') . ' AND folder = ' . $db->quote('task') . ')')->execute();

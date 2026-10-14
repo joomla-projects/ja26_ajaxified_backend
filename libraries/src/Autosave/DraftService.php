@@ -11,6 +11,7 @@ namespace Joomla\CMS\Autosave;
 
 use Joomla\CMS\Application\CMSApplicationInterface;
 use Joomla\CMS\Date\Date;
+use Joomla\CMS\Factory;
 use Joomla\CMS\User\User;
 use Joomla\Input\Input;
 use Joomla\Session\SessionInterface;
@@ -26,6 +27,7 @@ use Joomla\Session\SessionInterface;
  */
 final class DraftService
 {
+    /** @since  __DEPLOY_VERSION__ */
     public const RENDER_ADMISSIONS = 'com_autosave.rendered';
 
     /** Bound session metadata; evicted forms keep drafts but cannot resume an empty purged row. */
@@ -364,7 +366,7 @@ final class DraftService
         }
 
         try {
-            $service     = $application->bootComponent('com_autosave')->getDraftService();
+            $service     = Factory::getContainer()->get(self::class);
             $resultScope = null;
             $admission   = $application->getSession()?->get(self::RENDER_ADMISSIONS, [])[$metadata['draft_id']] ?? null;
             // Native success may complete a blank creation or change explicitly declared scope keys.

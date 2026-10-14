@@ -45,14 +45,4 @@ final class AutosaveComponent implements ComponentInterface
     {
         return new Dispatcher($application, $application->getInput(), $this->drafts);
     }
-
-    /**
-     * Return draft operations for optional native-save reconciliation.
-     *
-     * @since  __DEPLOY_VERSION__
-     */
-    public function getDraftService(): DraftService
-    {
-        return $this->drafts;
-    }
 }

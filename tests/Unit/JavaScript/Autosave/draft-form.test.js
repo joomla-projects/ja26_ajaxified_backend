@@ -255,6 +255,11 @@ for (const control of ['multiple', 'checkboxes']) {
     const { view, runtime, requests } = setup(t, { plain: true, prepare: (fixture) => {
       fixture.configuration.fields.title.control = control;
       fixture.control.multiple = true;
+      fixture.control.tagName = control === 'multiple' ? 'SELECT' : 'FIELDSET';
+      options.forEach((option) => {
+        option.name = 'jform[title]';
+        option.form = fixture.form;
+      });
       fixture.control.querySelectorAll = () => options;
       Object.defineProperty(fixture.control, 'selectedOptions', { get: () => options.filter((option) => option.selected) });
     } });
@@ -326,4 +331,79 @@ test('pre-initialization undo to the original value does not create an empty dra
   await runtime.flush();
   assert.equal(requests.filter((request) => request.operation === 'draft.preserve').length, 0);
   assert.equal(runtime.state, 'clean');
+});
+
+for (const timing of ['before', 'after', 'metadata failure', 'in flight']) {
+  test('native submission keeps the writer usable after ' + timing, async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const { view, runtime, requests } = setup(t, { plain: true, prepare: (value) => {
+      value.configuration.saveTasks = ['article.save'];
+      if (timing === 'before') value.form.addEventListener('submit', (event) => event.preventDefault());
+      if (timing === 'metadata failure') {
+        value.form.appendChild = () => {
+          throw new Error('Unavailable metadata');
+        };
+      }
+    } });
+    await new Promise((resolve) => setImmediate(resolve));
+    if (timing === 'after' || timing === 'in flight') view.form.addEventListener('submit', (event) => event.preventDefault());
+    if (timing === 'in flight') {
+      view.control.value = 'Already preserving';
+      signal(view, view.control, 'input');
+      runtime.flush();
+      assert.ok(runtime.inFlight);
+    }
+    view.form.dispatchEvent(new Event('submit', { cancelable: true }));
+    t.mock.timers.tick(0);
+    assert.equal(runtime.submitting, false);
+    assert.equal(view.form.querySelectorAll('[data-draft-metadata]').length, 0);
+    await runtime.inFlight;
+    view.control.value = 'Edit after unsuccessful submission';
+    signal(view, view.control, 'input');
+    t.mock.timers.tick(10000);
+    await runtime.inFlight;
+    assert.equal(runtime.state, 'preserved');
+    assert.equal(requests.at(-1).body.payload.title, view.control.value);
+  });
+}
+
+for (const invalid of ['name', 'form', 'kind', 'hidden', 'duplicate', 'replacement']) {
+  test('ordinary controls reject changed ' + invalid + ' ownership before preservation', async (t) => {
+    const { view, runtime, requests } = setup(t, { plain: true });
+    await new Promise((resolve) => setImmediate(resolve));
+    if (invalid === 'name') view.control.name = 'jform[unapproved_parameter]';
+    if (invalid === 'form') view.control.form = {};
+    if (invalid === 'kind') view.control.tagName = 'SELECT';
+    if (invalid === 'hidden') view.control.type = 'hidden';
+    if (invalid === 'duplicate') view.controls.push(Object.assign(view.element(), { ...view.control }));
+    if (invalid === 'replacement') view.controls.splice(0, 1, Object.assign(view.element(), { ...view.control }));
+    view.control.value = 'Unapproved value';
+    signal(view, view.control, 'input');
+    await runtime.flush();
+    assert.equal(runtime.state, 'unavailable');
+    assert.equal(requests.filter((request) => request.operation === 'draft.preserve').length, 0);
+  });
+}
+
+test('ordinary control admission rejects a mismatched input on first render', async (t) => {
+  const { runtime, requests } = setup(t, { plain: true, prepare: (view) => {
+    view.control.name = 'jform[unapproved_parameter]';
+  } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(runtime.state, 'unavailable');
+  assert.equal(requests.filter((request) => request.operation === 'draft.preserve').length, 0);
+});
+
+test('a declared native textarea preserves its selected string through the ordinary writer', async (t) => {
+  const { view, runtime, requests } = setup(t, { plain: true, prepare: (value) => {
+    value.control.tagName = 'TEXTAREA';
+    value.control.type = 'textarea';
+    value.configuration.fields.title.control = 'textarea';
+  } });
+  await new Promise((resolve) => setImmediate(resolve));
+  view.control.value = 'Selected native textarea';
+  signal(view, view.control, 'input');
+  await runtime.flush();
+  assert.equal(runtime.state, 'preserved');
+  assert.equal(requests.at(-1).body.payload.title, view.control.value);
 });

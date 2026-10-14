@@ -152,16 +152,9 @@ class NativeContextSaveTest extends UnitTestCase
         $nativeComponent->setAutosaveProvider($context, $provider);
         $resolver = new AutosaveContextResolver($app, static fn (): bool => true);
         $service  = new DraftService($resolver, $this->store);
-        $autosave = new \Joomla\Component\Autosave\Administrator\Extension\AutosaveComponent($service);
-        $app->method('bootComponent')->willReturnCallback(static function ($name) use ($component, $nativeComponent, $autosave, $outcome) {
-            if ($name !== 'com_autosave') {
-                return $nativeComponent;
-            }
-            if ($outcome === 'unavailable') {
-                throw new \RuntimeException('Draft storage unavailable');
-            }
-            return $autosave;
-        });
+
+        $this->registerDraftService($service, $outcome !== 'unavailable');
+        $app->method('bootComponent')->willReturn($nativeComponent);
         $model = $this->createMock($prefix . 'Model\\' . $entity . 'Model');
         $model->method('getName')->willReturn(strtolower($entity));
         $model->method('getState')->willReturnCallback(static fn ($state, $default = null) => $state === strtolower($entity) . '.id' ? (int) $result : $default);
@@ -245,6 +238,11 @@ class NativeContextSaveTest extends UnitTestCase
             }
             if ($component !== 'com_templates') {
                 $cases[] = [$component, $entity, 'create', 'success'];
+            }
+        }
+        foreach ([['com_contact', 'Contact', 'save2menu'], ['com_contact', 'Contact', 'editAssociations'], ['com_newsfeeds', 'Newsfeed', 'editAssociations'], ['com_menus', 'Item', 'editAssociations']] as [$component, $entity, $task]) {
+            foreach (['success', 'later', 'validation', 'model'] as $outcome) {
+                $cases[] = [$component, $entity, $task, $outcome];
             }
         }
         foreach ([['com_menus', 'Menu'], ['com_menus', 'Item'], ['com_languages', 'Language']] as [$component, $entity]) {

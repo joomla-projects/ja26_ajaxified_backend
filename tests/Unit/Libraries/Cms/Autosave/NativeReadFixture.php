@@ -40,6 +40,9 @@ trait NativeReadFixture
         }
         $database->method('getIterator')->willReturnCallback(static fn () => new \ArrayIterator($components));
         $database->method('loadObjectList')->willReturnCallback(static function () use (&$query): array {
+            if (str_contains($query, '#__extensions')) {
+                return [];
+            }
             if (str_contains($query, '#__assets')) {
                 return [(object) ['id' => 1, 'name' => 'root.1', 'rules' => '{"core.admin":{"42":true}}', 'parent_id' => 0]];
             }
@@ -57,8 +60,20 @@ trait NativeReadFixture
 
     private function restoreNativeReadFixture(): void
     {
+        Factory::getContainer()->registerServiceProvider(new \Joomla\CMS\Service\Provider\Autosave());
         Factory::$database = $this->previousNativeDatabase;
         Access::clearStatics();
         UserGroupsHelper::getInstance()->setGroups([]);
+    }
+
+    private function registerDraftService(\Joomla\CMS\Autosave\DraftService $service, bool $available = true): void
+    {
+        Factory::getContainer()->share(\Joomla\CMS\Autosave\DraftService::class, static function () use ($service, $available) {
+            if (!$available) {
+                throw new \RuntimeException('Draft storage unavailable');
+            }
+
+            return $service;
+        });
     }
 }

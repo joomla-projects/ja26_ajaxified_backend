@@ -168,6 +168,14 @@ export default class DraftRuntime {
     return revision;
   }
 
+  /** Resume the ordinary writer when native submission keeps the form open. */
+  cancelledSubmission() {
+    if (this.destroyed || !this.submitting) return;
+    this.submitting = false;
+    this.submission = null;
+    this.schedule();
+  }
+
   async request(operation, data) {
     if (this.destroyed) throw new DOMException('Disposed form', 'AbortError');
     const controller = new AbortController();

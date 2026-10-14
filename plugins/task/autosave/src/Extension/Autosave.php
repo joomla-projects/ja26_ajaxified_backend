@@ -81,21 +81,21 @@ final class Autosave extends CMSPlugin implements SubscriberInterface
     }
 
     /**
-     * Purge the new store within a run budget, using native Scheduler continuation.
+     * Purge one instance at a time within a soft run budget, using native Scheduler continuation.
      *
      * @since  __DEPLOY_VERSION__
      */
     private function cleanup(ExecuteTaskEvent $event): int
     {
-        $now     = new Date('now', 'UTC');
-        $started = microtime(true);
-        $deleted = 0;
+        $now      = new Date('now', 'UTC');
+        $deadline = hrtime(true) + self::MAX_PURGE_SECONDS * 1000000000;
+        $deleted  = 0;
 
         try {
             do {
-                $count = $this->drafts->purge($now, min(DraftStore::PURGE_BATCH_SIZE, self::MAX_PURGE_ROWS - $deleted));
+                $count = $this->drafts->purge($now, min(DraftStore::PURGE_BATCH_SIZE, self::MAX_PURGE_ROWS - $deleted), $deadline);
                 $deleted += $count;
-            } while ($count > 0 && $deleted < self::MAX_PURGE_ROWS && microtime(true) - $started < self::MAX_PURGE_SECONDS);
+            } while ($count > 0 && $deleted < self::MAX_PURGE_ROWS && hrtime(true) < $deadline);
 
             $remaining = $this->drafts->hasExpired($now);
             $this->logTask(Text::sprintf('PLG_TASK_AUTOSAVE_DRAFT_CLEANUP_RESULT', $deleted));

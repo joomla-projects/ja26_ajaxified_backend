@@ -144,7 +144,7 @@ test('calendar recovery uses the native parser and calendar methods instead of a
     setDate: (value) => { restored = value; },
     callHandler: () => { notifications += 1; } };
   const attributes = {};
-  const element = { value: 'Current date', closest: () => ({ _joomlaCalendar: native }),
+  const element = { tagName: 'INPUT', type: 'text', value: 'Current date', closest: () => ({ _joomlaCalendar: native }),
     setAttribute: (name, value) => { attributes[name] = value; } };
   globalThis.JoomlaCalendar = { getCalObject: (field) => field.closest() };
   assert.equal(availableControl(element, { control: 'calendar' }), true);

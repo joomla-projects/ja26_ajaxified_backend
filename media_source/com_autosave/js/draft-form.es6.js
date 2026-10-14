@@ -86,10 +86,35 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
     return matches.length === 1 ? matches[0] : null;
   };
 
+  const admittedControl = (element, descriptor) => {
+    if (!form.isConnected || !editable(element) || currentElement(descriptor) !== element) return false;
+    if (descriptor.control === 'checkboxes' || descriptor.control === 'radio') {
+      if (element.tagName !== 'FIELDSET') return false;
+      const type = descriptor.control === 'radio' ? 'radio' : 'checkbox';
+      const members = Array.from(element.querySelectorAll('input[type="' + type + '"]'));
+      return members.length > 0 && members.every((input) => input.name === descriptor.name && input.form === form)
+        && availableControl(element, descriptor);
+    }
+    if (element.form !== form || element.name !== descriptor.name) return false;
+    if (descriptor.control === 'editor') return element.tagName === 'TEXTAREA';
+    return availableControl(element, descriptor);
+  };
+
+  const currentRecord = (record) => {
+    try {
+      return admittedControl(record.element, record.descriptor)
+        && (record.descriptor.control !== 'editor'
+          || (editors.get(record.descriptor.id) === record.editor && record.editor?.getElement() === record.element));
+    } catch (error) {
+      return false;
+    }
+  };
+
   // Compare only the signalled field; full snapshots remain in the serialized writer.
   const changedRecord = (record) => {
     if (!record.available) return;
     try {
+      if (!currentRecord(record)) throw new Error('The protected control changed ownership');
       const value = record.descriptor.control === 'editor'
         ? record.editor.getValue()
         : readControl(record.element, record.descriptor);
@@ -162,7 +187,7 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
   const capture = () => {
     const payload = {};
     Object.entries(fields).forEach(([key, record]) => {
-      if ((record.available || record.observed) && (!editable(record.element) || !record.available)) {
+      if ((record.available || record.observed) && (!record.available || !currentRecord(record))) {
         throw new Error('A previously protected control is unavailable');
       }
       if (record.available) {
@@ -184,15 +209,16 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
   });
   Object.entries(configuration.fields).forEach(([key, descriptor]) => {
     const element = currentElement(descriptor);
-    const initialValue = element ? readControl(element, descriptor) : undefined;
+    const eligible = admittedControl(element, descriptor);
+    const initialValue = eligible ? readControl(element, descriptor) : undefined;
     fields[key] = {
       descriptor,
       element,
       initialElement: element,
       initialValue,
       value: Array.isArray(initialValue) ? [...initialValue] : initialValue,
-      available: editable(element) && availableControl(element, descriptor),
-      observed: descriptor.control !== 'editor' && editable(element) && availableControl(element, descriptor),
+      available: eligible,
+      observed: descriptor.control !== 'editor' && eligible,
     };
     if (descriptor.control === 'editor') {
       observeEditor(fields[key]);
@@ -233,10 +259,11 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
   /**
    * Joomla.submitform produces a native submit event. Optional metadata never prevents it.
    */
-  listen(form, 'submit', () => {
+  listen(form, 'submit', (event) => {
     form.querySelectorAll('[data-draft-metadata]').forEach((element) => element.remove());
     const task = form.elements.namedItem('task')?.value;
-    if (!configuration.saveTasks?.includes(task)) return;
+    if (event.defaultPrevented || !configuration.saveTasks?.includes(task)) return;
+    let metadataReady = false;
     try {
       const submitted = runtime.submitted();
       if (submitted === null) return;
@@ -249,9 +276,18 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
         hidden.setAttribute('data-draft-metadata', '');
         form.appendChild(hidden);
       });
+      metadataReady = true;
     } catch (error) {
       // Ordinary submission remains available even with unsupported or unavailable autosave.
+      form.querySelectorAll('[data-draft-metadata]').forEach((element) => element.remove());
+      runtime.cancelledSubmission();
     }
+    // A task runs after all native submit listeners, including listeners added by extensions.
+    setTimeout(() => {
+      if (destroyed || (!event.defaultPrevented && metadataReady)) return;
+      form.querySelectorAll('[data-draft-metadata]').forEach((element) => element.remove());
+      runtime.cancelledSubmission();
+    }, 0);
   }, true);
 
   const select = node('[data-draft-candidates]');
@@ -346,7 +382,7 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
         const omitted = [...recovery.omitted];
         Object.entries(recovery.payload).forEach(([key, value]) => {
           const record = fields[key];
-          if (!record?.available || !editable(record.element)) {
+          if (!record?.available || !currentRecord(record)) {
             omitted.push(key);
             return;
           }

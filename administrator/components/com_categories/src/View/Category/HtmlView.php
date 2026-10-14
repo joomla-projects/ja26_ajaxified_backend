@@ -35,8 +35,20 @@ use Joomla\Component\Categories\Administrator\Model\CategoryModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether optional draft controls are mounted for this native form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
     public bool $autosaveEnabled = false;
 
+    /**
+     * Native layout ID for the compact draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
     public string $autosaveStatusId = 'category-autosave-status';
 
     /**
@@ -158,9 +170,7 @@ class HtmlView extends BaseHtmlView
         }
 
         if ($this->autosaveEnabled) {
-            if ($this->autosaveEnabled) {
-                DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
-            }
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
         parent::display($tpl);
     }
@@ -189,7 +199,7 @@ class HtmlView extends BaseHtmlView
                 'statusId'   => $this->autosaveStatusId,
                 'optionsKey' => 'com_categories.autosave.category',
                 'script'     => 'com_categories.category-autosave',
-                'saveTasks'  => ['category.apply', 'category.save', 'category.save2new', 'category.save2copy', 'category.save2menulist', 'category.save2menublog'],
+                'saveTasks'  => ['category.apply', 'category.save', 'category.save2new', 'category.save2copy', 'category.save2menulist', 'category.save2menublog', 'category.editAssociations'],
             ]
         );
     }

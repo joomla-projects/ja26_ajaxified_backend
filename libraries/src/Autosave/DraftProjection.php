@@ -33,7 +33,8 @@ final class DraftProjection
             [$group, $name] = str_contains($key, '.') ? explode('.', $key, 2) : [null, $key];
             $type           = strtolower((string) $form->getFieldAttribute($name, 'type', '', $group));
             $control        = match ($type) {
-                'text', 'alias', 'textarea', 'url', 'email', 'tel', 'number', 'int', 'color', 'user', 'media', 'moduleposition'                                                                                      => 'text',
+                'text', 'alias', 'url', 'email', 'tel', 'number', 'int', 'color', 'user', 'media', 'moduleposition'                                                                                                  => 'text',
+                'textarea'                                                                                                                                                                                           => 'textarea',
                 'editor'                                                                                                                                                                                             => 'editor',
                 'checkbox'                                                                                                                                                                                           => 'checkbox',
                 'radio'                                                                                                                                                                                              => 'radio',

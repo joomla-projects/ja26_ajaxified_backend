@@ -13,6 +13,7 @@ use Joomla\CMS\Application\CMSApplicationInterface;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Date\Date;
 use Joomla\CMS\Document\HtmlDocument;
+use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Layout\LayoutHelper;
@@ -22,6 +23,7 @@ use Joomla\CMS\Toolbar\Button\InlinehelpButton;
 use Joomla\CMS\Toolbar\Button\SeparatorButton;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\CMS\User\User;
+use Joomla\CMS\WebAsset\WebAssetManager;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -37,6 +39,15 @@ final class DraftView
     /**
      * Open a private instance against canonical data while keeping prepared error-form values.
      *
+     * @param   CMSApplicationInterface  $application  The native administrator application.
+     * @param   HtmlDocument             $document     The native edit document.
+     * @param   User                     $user         The authenticated native editor.
+     * @param   Form                     $form         The finalized native form.
+     * @param   object                   $item         The canonical item, separate from error-form values.
+     * @param   array                    $integration  Context, asset, form/status IDs, options key and committing tasks.
+     *
+     * @return  boolean  Whether optional draft controls can be mounted.
+     *
      * @since  __DEPLOY_VERSION__
      */
     public static function configure(
@@ -47,12 +58,21 @@ final class DraftView
         object $item,
         array $integration
     ): bool {
-        $params = ComponentHelper::getParams('com_autosave');
-        $application->getLanguage()->load('com_autosave', JPATH_ADMINISTRATOR);
-        $document->getWebAssetManager()->getRegistry()->addExtensionRegistryFile('com_autosave');
-        $document->getWebAssetManager()->useScript($integration['script']);
-        Text::script('JYES');
-        Text::script('JNO');
+        try {
+            $params = ComponentHelper::getParams('com_autosave');
+            $application->getLanguage()->load('com_autosave', JPATH_ADMINISTRATOR);
+            $assets = $document->getWebAssetManager();
+            $assets->getRegistry()->addExtensionRegistryFile('com_autosave');
+            // Resolve only the optional asset graph before activating it on the native document.
+            $validation = new WebAssetManager($assets->getRegistry());
+            $validation->useScript($integration['script'])->getAssets('script', true);
+            $assets->useScript($integration['script']);
+            Text::script('JYES');
+            Text::script('JNO');
+        } catch (\Throwable) {
+            // Without the optional assets, continue the native view without mounting draft controls.
+            return false;
+        }
         $configuration = [
             'available' => false,
             'formId'    => $integration['formId'],
@@ -65,12 +85,8 @@ final class DraftView
             $component = AutosaveContext::getComponentName($integration['context']);
             $provider  = $application->bootComponent($component)->getAutosaveProvider($integration['context']);
 
-            if (!$provider instanceof DraftProviderInterface) {
-                throw new \RuntimeException('The native draft provider is unavailable.');
-            }
-
             $descriptor = $provider->describe($form, $item, $user);
-            $binding    = $application->bootComponent('com_autosave')->getDraftService()->open($user, $descriptor, new Date('now', 'UTC'), $application->getSession());
+            $binding    = Factory::getContainer()->get(DraftService::class)->open($user, $descriptor, new Date('now', 'UTC'), $application->getSession());
             $configuration += [
                 'draftId'     => $binding['draft_id'],
                 'version'     => $descriptor['version'],
@@ -101,6 +117,11 @@ final class DraftView
 
     /**
      * Place compact status after native actions and before utility buttons.
+     *
+     * @param   Toolbar  $toolbar  The native edit toolbar.
+     * @param   string   $id       The status layout ID.
+     *
+     * @return  void
      *
      * @since  __DEPLOY_VERSION__
      */

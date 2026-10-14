@@ -36,12 +36,24 @@ class HtmlView extends FormView
      *
      * @since __DEPLOY_VERSION__
      */
+    /**
+     * Whether optional draft controls are mounted for this native form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
     public bool $autosaveEnabled = false;
 
     /**
      * Native toolbar status binding for this form.
      *
      * @since __DEPLOY_VERSION__
+     */
+    /**
+     * Native layout ID for the compact draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
      */
     public string $autosaveStatusId = 'article-autosave-status';
 
@@ -160,7 +172,7 @@ class HtmlView extends FormView
                 'statusId'   => $this->autosaveStatusId,
                 'optionsKey' => 'com_content.autosave.article',
                 'script'     => 'com_content.article-autosave',
-                'saveTasks'  => ['article.apply', 'article.save', 'article.save2new', 'article.save2copy', 'article.save2menu'],
+                'saveTasks'  => ['article.apply', 'article.save', 'article.save2new', 'article.save2copy', 'article.save2menu', 'article.editAssociations'],
             ]
         );
     }
@@ -205,9 +217,7 @@ class HtmlView extends FormView
     private function addAutosaveStatus(): void
     {
         if ($this->autosaveEnabled) {
-            if ($this->autosaveEnabled) {
-                DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
-            }
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
     }
 

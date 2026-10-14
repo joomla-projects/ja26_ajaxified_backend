@@ -26,14 +26,14 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
 
     public function getSchemasToLoad(): array
     {
-        return [];
+        return ['autosave.sql'];
     }
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->db = $this->getDBDriver();
-        $this->installSchema($this->db->getServerType() === 'mysql' ? 'mysql' : 'postgresql');
+        $this->initializeStore();
     }
     public static function competingOperations(): array
     {

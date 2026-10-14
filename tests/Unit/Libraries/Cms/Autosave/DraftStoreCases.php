@@ -249,6 +249,16 @@ trait DraftStoreCases
         $this->failure('draft_not_found', fn () => $this->preserve($draft, 2, 'cannot upsert', $expired));
     }
 
+    public function testExpiredCleanupBudgetLeavesWorkForNativeContinuation(): void
+    {
+        $draft = $this->store->open(7, $this->descriptor(), $this->now);
+        $later = new Date('2026-10-19 00:00:00', 'UTC');
+        $this->assertSame(0, $this->store->purge($later, DraftStore::PURGE_BATCH_SIZE, hrtime(true) - 1));
+        $this->assertTrue($this->store->hasExpired($later));
+        $this->assertSame(1, $this->store->purge($later));
+        $this->failure('draft_not_found', fn () => $this->store->read(7, $draft['draft_id'], $later));
+    }
+
     public function testCleanupRemovesExpiredDraftsOfDeletedOwners(): void
     {
         $this->store->open(8, $this->descriptor(), $this->now);

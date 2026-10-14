@@ -70,10 +70,8 @@ final class ClientAutosaveProvider implements DraftProviderInterface
             throw new AutosaveException('target_not_found', 'The native record was not found.');
         }
 
-        $category = 0;
-        $this->authorize($user, $item, $category);
-        $data       = [];
-        $form       = DraftModel::form($model, 'com_banners', $item, $data);
+        $this->authorize($user, $item);
+        $form       = DraftModel::form($model, 'com_banners', $item);
         $descriptor = $this->describe($form, $item, $user);
         if ($descriptor['scope'] !== $binding['scope']) {
             throw new AutosaveException('scope_conflict', 'The native form scope changed.');
@@ -81,7 +79,7 @@ final class ClientAutosaveProvider implements DraftProviderInterface
         return $descriptor;
     }
 
-    private function authorize(User $user, object $item, int $category): void
+    private function authorize(User $user, object $item): void
     {
         if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', 'com_banners')) {
             throw new AutosaveException('forbidden', 'Native component access is denied.');

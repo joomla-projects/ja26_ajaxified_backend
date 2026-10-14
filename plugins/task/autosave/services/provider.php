@@ -14,7 +14,6 @@ use Joomla\CMS\Autosave\DraftStore;
 use Joomla\CMS\Extension\PluginInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Plugin\PluginHelper;
-use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
 use Joomla\Plugin\Task\Autosave\Extension\Autosave;
@@ -30,11 +29,9 @@ return new class () implements ServiceProviderInterface {
         $container->set(
             PluginInterface::class,
             $container->lazy(Autosave::class, function (Container $container) {
-                $db = $container->get(DatabaseInterface::class);
-
                 $plugin = new Autosave(
                     (array) PluginHelper::getPlugin('task', 'autosave'),
-                    new DraftStore($db)
+                    $container->get(DraftStore::class)
                 );
                 $plugin->setApplication(Factory::getApplication());
 
