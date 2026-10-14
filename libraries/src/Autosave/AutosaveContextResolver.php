@@ -53,13 +53,13 @@ final class AutosaveContextResolver
      *
      * @param   string  $context  The requested exact context.
      *
-     * @return  AutosaveProviderInterface
+     * @return  DraftProviderInterface
      *
      * @throws  AutosaveException
      *
      * @since   __DEPLOY_VERSION__
      */
-    public function resolve(string $context): AutosaveProviderInterface
+    public function resolve(string $context): DraftProviderInterface
     {
         $componentName = AutosaveContext::getComponentName($context);
 

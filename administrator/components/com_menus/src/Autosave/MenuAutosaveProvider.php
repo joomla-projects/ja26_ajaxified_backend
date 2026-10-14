@@ -1,184 +1,113 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_menus
- *
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @package Joomla.Administrator
+ * @subpackage com_menus
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Menus\Administrator\Autosave;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
+use Joomla\CMS\Autosave\DraftModel;
+use Joomla\CMS\Autosave\DraftProjection;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Form\Form;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
-use Joomla\Database\DatabaseInterface;
-use Joomla\Database\ParameterType;
-use Joomla\String\StringHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Component-owned Autosave contract for Menu metadata records.
+ * Native Menu identity, prepared form and selected private values.
  *
  * @since  __DEPLOY_VERSION__
  */
-final class MenuAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
+final class MenuAutosaveProvider implements DraftProviderInterface
 {
-    private const CONTEXT                = 'com_menus.menu';
-    private const MAXIMUM_ID             = '4294967295';
-    private const PAYLOAD_SCHEMA_VERSION = 1;
-    private const BASE_REVISION_DOMAIN   = 'autosave:com_menus.menu:base-revision:v1';
-    private const STRING_LIMITS          = ['title' => 48, 'description' => 255];
+    private const KEYS = ['title', 'description'];
 
-    public function __construct(private readonly DatabaseInterface $db)
+    /**
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
+    /** @inheritDoc */
     public function getContext(): string
     {
-        return self::CONTEXT;
+        return 'com_menus.menu';
     }
 
-    public function getCreateContractVersion(): string
+    /** @inheritDoc */
+    public function describe(Form $form, object $item, User $user): array
     {
-        return 'menu-create-v1';
-    }
+        $scope = $this->scope($item);
+        $this->authorize($user, $item, $scope);
 
-    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
-    {
-        // Mirrors FormController::allowAdd(); ContentHelper::getActions('com_menus', 'menu', 0)
-        // also resolves to the plain com_menus asset for a new Menu, so there is no
-        // per-menu asset to scope against yet.
-        //
-        // client_id is immutable creation scope and stays out of the draft payload: the
-        // native MenuModel reconstructs it from com_menus.menus.client_id server-side
-        // state, and menutype (the natural key MenuController::executeMenuSave() guards
-        // for the protected 'main' menu) is likewise not authored through Autosave.
-        if (
-            !$user->authorise('core.create', 'com_menus')
-            && \count($user->getAuthorisedCategories('com_menus', 'core.create')) === 0
-        ) {
-            throw new AutosaveException('forbidden', 'A Menu cannot be created by this user.');
-        }
-    }
+        $keys = self::KEYS;
 
-    public function canonicalizeTargetId(string $targetId): string
-    {
-        if (
-            preg_match('/^[1-9][0-9]{0,9}$/D', $targetId) !== 1
-            || (\strlen($targetId) === 10 && strcmp($targetId, self::MAXIMUM_ID) > 0)
-        ) {
-            throw new AutosaveException('invalid_target', 'The Menu target is invalid.');
-        }
-
-        return $targetId;
-    }
-
-    public function targetExists(string $targetId): bool
-    {
-        return $this->loadMenu($this->canonicalizeTargetId($targetId)) !== null;
-    }
-
-    public function authorize(User $user, string $targetId, AutosaveOperation $operation): void
-    {
-        $targetId = $this->canonicalizeTargetId($targetId);
-
-        match ($operation) {
-            AutosaveOperation::InitializeCreate,
-            AutosaveOperation::Initialize,
-            AutosaveOperation::Preserve,
-            AutosaveOperation::Detect,
-            AutosaveOperation::Read,
-            AutosaveOperation::PrepareCanonicalAction,
-            AutosaveOperation::QueryCanonicalAction => null,
-        };
-
-        $menu = $this->loadMenu($targetId);
-
-        if ($menu === null) {
-            throw new AutosaveException('target_not_found', 'The Menu was not found.');
-        }
-
-        if (!$user->authorise('core.edit', 'com_menus.menu.' . (int) $menu->id)) {
-            throw new AutosaveException('forbidden', 'The Menu cannot be edited by this user.');
-        }
-    }
-
-    public function getBaseRevision(string $targetId): string
-    {
-        $menu = $this->loadMenu($this->canonicalizeTargetId($targetId));
-
-        if ($menu === null) {
-            throw new AutosaveException('target_not_found', 'The Menu was not found.');
-        }
-
-        $canonical = json_encode(
-            [
-                'id'          => (int) $menu->id,
-                'menutype'    => $menu->menutype,
-                'title'       => $menu->title,
-                'description' => $menu->description,
-                'client_id'   => (int) $menu->client_id,
-            ],
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        $descriptor = DraftProjection::descriptor(
+            $form,
+            $item,
+            $this->getContext(),
+            empty($item->id) ? null : (string) $item->id,
+            $scope,
+            $keys,
+            []
         );
 
-        return self::BASE_REVISION_DOMAIN . ':' . hash('sha256', self::BASE_REVISION_DOMAIN . "\0" . $canonical);
+
+        return $descriptor;
     }
 
-    public function getPayloadSchemaVersion(): int
+    /** @inheritDoc */
+    public function read(array $binding, User $user, ?array $payload = null): array
     {
-        return self::PAYLOAD_SCHEMA_VERSION;
-    }
-
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
-    {
-        if ($schemaVersion !== self::PAYLOAD_SCHEMA_VERSION) {
-            throw new AutosaveException('unsupported_schema_version', 'The payload schema version is not supported.');
+        $target = DraftModel::target($binding, $this->getContext());
+        if (array_keys($binding['scope']) !== ['client_id', 'menutype']) {
+            throw new AutosaveException('scope_conflict', 'The native scope shape changed.');
         }
 
-        $required = array_fill_keys(array_keys(self::STRING_LIMITS), true);
-
-        if (
-            !\is_array($payload) || array_is_list($payload) || \count($payload) !== \count($required)
-            || array_diff_key($payload, $required) !== [] || array_diff_key($required, $payload) !== []
-        ) {
-            throw $this->invalidPayload();
+        $model = $this->factory->createModel('Menu', 'Administrator', ['ignore_request' => true]);
+        $model->setState('menu.id', $target === null ? 0 : (int) $target);
+        $model->setState('client_id', (int) $binding['scope']['client_id']);
+        $item = $model->getItem($target === null ? 0 : (int) $target);
+        if (!$item || ($target !== null && (string) $item->id !== $target)) {
+            throw new AutosaveException('target_not_found', 'The native record was not found.');
         }
-
-        foreach (self::STRING_LIMITS as $key => $limit) {
-            if (
-                !\is_string($payload[$key]) || preg_match('//u', $payload[$key]) !== 1
-                || StringHelper::strlen($payload[$key]) > $limit
-            ) {
-                throw $this->invalidPayload();
-            }
+        if ($target === null) {
+            $item->client_id = (int) $binding['scope']['client_id'];
+            $item->menutype  = $binding['scope']['menutype'];
         }
-
-        return ['title' => $payload['title'], 'description' => $payload['description']];
+        $this->authorize($user, $item, $binding['scope']);
+        $form       = DraftModel::form($model, 'com_menus', $item);
+        $descriptor = $this->describe($form, $item, $user);
+        if ($descriptor['scope'] !== $binding['scope']) {
+            throw new AutosaveException('scope_conflict', 'The native extension, route or client changed.');
+        }
+        return $descriptor;
     }
 
-    private function loadMenu(string $targetId): ?object
+    private function scope(object $item): array
     {
-        $id     = (int) $targetId;
-        $fields = ['id', 'menutype', 'title', 'description', 'client_id'];
-        $query  = $this->db->createQuery()
-            ->select(array_map(fn ($field) => $this->db->quoteName($field), $fields))
-            ->from($this->db->quoteName('#__menu_types'))
-            ->where($this->db->quoteName('id') . ' = :id')
-            ->bind(':id', $id, ParameterType::INTEGER);
-
-        return $this->db->setQuery($query)->loadObject() ?: null;
+        return ['client_id' => (string) $item->client_id, 'menutype' => (string) ($item->menutype ?? '')];
     }
 
-    private function invalidPayload(): AutosaveException
+    private function authorize(User $user, object $item, array $scope): void
     {
-        return new AutosaveException('invalid_payload', 'The Menu draft payload is invalid.');
+        if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', 'com_menus')) {
+            throw new AutosaveException('forbidden', 'Native component access is denied.');
+        }
+        if (!(empty($item->id) ? ($user->authorise('core.create', 'com_menus') || \count($user->getAuthorisedCategories('com_menus', 'core.create')) > 0) : $user->authorise('core.edit', 'com_menus'))) {
+            throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
+        }
+        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
+            throw new AutosaveException('checkout_conflict', 'The native record is checked out by another user.');
+        }
     }
 }

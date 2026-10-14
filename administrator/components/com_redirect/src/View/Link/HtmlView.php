@@ -10,9 +10,7 @@
 
 namespace Joomla\Component\Redirect\Administrator\View\Link;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -41,6 +39,8 @@ class HtmlView extends BaseHtmlView
      * @since __DEPLOY_VERSION__
      */
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'link-autosave-status';
 
     /**
      * The active item
@@ -90,8 +90,8 @@ class HtmlView extends BaseHtmlView
         $this->form
             ->addControlField('task');
 
-        $this->prepareAutosave();
         $this->addToolbar();
+        $this->prepareAutosave();
         parent::display($tpl);
     }
 
@@ -104,57 +104,17 @@ class HtmlView extends BaseHtmlView
      */
     private function prepareAutosave(): void
     {
-        $application           = Factory::getApplication();
-        $document              = $this->getDocument();
-        $configurator          = new AutosaveViewConfigurator($application, $document, $application->getIdentity());
-        $this->autosaveEnabled = false;
-        $configurator->disable('com_redirect.autosave.link');
-
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-
-        try {
-            $provider = $application
-                ->bootComponent('com_redirect')
-                ->getAutosaveProvider('com_redirect.link');
-            $itemId   = (int) $this->item->id;
-            $targetId = null;
-
-            if ($itemId > 0) {
-                $targetId = $provider->canonicalizeTargetId((string) $itemId);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } else {
-                $provider->authorizeCreate($application->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-
-            if ($targetId !== null && !$provider->targetExists($targetId)) {
-                return;
-            }
-        } catch (\Throwable) {
-            return;
+        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
+            'context'    => 'com_redirect.link', 'formId' => 'link-form', 'statusId' => $this->autosaveStatusId,
+            'optionsKey' => 'com_redirect.autosave.link', 'script' => 'com_redirect.link-autosave',
+            'saveTasks'  => ['link.apply', 'link.save', 'link.save2new', 'link.save2copy'],
+        ]);
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
-
-        $fieldIds = [];
-        foreach (['old_url', 'new_url', 'comment'] as $fieldName) {
-            $field = $this->form->getField($fieldName);
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            }
-
-            $fieldIds[$fieldName] = $field->id;
-        }
-
-        $configurator->configure(
-            $provider,
-            $targetId,
-            'com_redirect.autosave.link',
-            'link-form',
-            $fieldIds,
-            'com_redirect.link-autosave'
-        );
-        $this->autosaveEnabled = true;
     }
 
     /**

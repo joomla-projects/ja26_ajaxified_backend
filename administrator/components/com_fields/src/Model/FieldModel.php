@@ -942,6 +942,11 @@ class FieldModel extends AdminModel
      */
     protected function loadFormData()
     {
+        $draftData = $this->getState('autosave.form_data');
+        if (\is_array($draftData)) {
+            return $draftData;
+        }
+
         // Check the session for previously entered form data.
         $app   = Factory::getApplication();
         $input = $app->getInput();

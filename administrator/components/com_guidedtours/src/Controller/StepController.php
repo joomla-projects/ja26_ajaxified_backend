@@ -10,7 +10,7 @@
 
 namespace Joomla\Component\Guidedtours\Administrator\Controller;
 
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
@@ -25,21 +25,6 @@ use Joomla\CMS\MVC\Model\BaseDatabaseModel;
  */
 class StepController extends FormController
 {
-    use AutosaveFormControllerTrait;
-
-    private const AUTOSAVE_CONTEXT      = 'com_guidedtours.step';
-    private const AUTOSAVE_TASK_INTENTS = [
-        'apply'     => 'apply',
-        'save'      => 'save-exit',
-        'save2new'  => 'save-new',
-        'save2copy' => 'save-copy',
-    ];
-
-    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
-    {
-        $this->captureAutosaveCanonicalResult($model, 'step.id');
-    }
-
     /**
      * Gets the URL arguments to append to a list redirect.
      *
@@ -56,5 +41,12 @@ class StepController extends FormController
         }
 
         return $append;
+    }
+    /** Optional draft retirement after the authoritative native success hook. */
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_guidedtours.step', $this->getTask(), 'id', []);
     }
 }

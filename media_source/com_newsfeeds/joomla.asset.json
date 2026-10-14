@@ -9,8 +9,14 @@
       "name": "com_newsfeeds.newsfeed-autosave",
       "type": "script",
       "uri": "com_newsfeeds/newsfeed-autosave.min.js",
-      "dependencies": ["com_autosave.create-binding", "com_autosave.integration-controller", "editor-api"],
-      "attributes": {"type": "module"}
+      "dependencies": [
+        "core",
+        "editors",
+        "com_autosave.drafts"
+      ],
+      "attributes": {
+        "type": "module"
+      }
     }
   ]
 }

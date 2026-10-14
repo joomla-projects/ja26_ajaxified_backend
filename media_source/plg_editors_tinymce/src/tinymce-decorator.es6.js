@@ -8,6 +8,11 @@ import JoomlaEditorDecorator from 'editor-decorator';
  * TinyMCE decorator for JoomlaEditor.
  */
 export default class TinyMCEDecorator extends JoomlaEditorDecorator {
+  /** @returns {HTMLTextAreaElement} */
+  getElement() {
+    return this.instance.getElement();
+  }
+
   /**
    * @returns {string}
    */

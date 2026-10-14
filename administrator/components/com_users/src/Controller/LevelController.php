@@ -12,7 +12,7 @@ namespace Joomla\Component\Users\Administrator\Controller;
 
 use Joomla\CMS\Access\Access;
 use Joomla\CMS\Access\Exception\NotAllowed;
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
@@ -29,15 +29,6 @@ use Joomla\CMS\Router\Route;
  */
 class LevelController extends FormController
 {
-    use AutosaveFormControllerTrait;
-
-
-    private const AUTOSAVE_CONTEXT      = 'com_users.level';
-    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'];
-    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
-    {
-        $this->captureAutosaveCanonicalResult($model, 'level.id');
-    }
     /**
      * @var     string  The prefix to use with controller messages.
      * @since   1.6
@@ -132,5 +123,12 @@ class LevelController extends FormController
         }
 
         $this->setRedirect('index.php?option=com_users&view=levels');
+    }
+    /** Optional draft retirement after the authoritative native success hook. */
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_users.level', $this->getTask(), 'id', []);
     }
 }

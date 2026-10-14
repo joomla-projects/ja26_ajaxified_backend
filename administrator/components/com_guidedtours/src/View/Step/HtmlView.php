@@ -10,9 +10,7 @@
 
 namespace Joomla\Component\Guidedtours\Administrator\View\Step;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -33,6 +31,8 @@ use Joomla\Registry\Registry;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'step-autosave-status';
 
     /**
      * The \JForm object
@@ -94,53 +94,19 @@ class HtmlView extends BaseHtmlView
 
     private function prepareAutosave(): void
     {
-        $application  = Factory::getApplication();
-        $configurator = new AutosaveViewConfigurator($application, $this->getDocument(), $application->getIdentity());
-        $configurator->disable('com_guidedtours.autosave.step');
-
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-
-        try {
-            $provider = $application->bootComponent('com_guidedtours')->getAutosaveProvider('com_guidedtours.step');
-            $itemId   = (int) $this->item->id;
-            $targetId = null;
-
-            if ($itemId > 0) {
-                $targetId = $provider->canonicalizeTargetId((string) $itemId);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } else {
-                $provider->authorizeCreate($application->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-
-            if ($targetId !== null && !$provider->targetExists($targetId)) {
-                return;
-            }
-        } catch (\Throwable) {
-            return;
+        $item                  = clone $this->item;
+        $this->form->addControlField('tour_id', (string) $item->tour_id);
+        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+            'context'    => 'com_guidedtours.step', 'formId' => 'guidedtour-dates-form', 'statusId' => $this->autosaveStatusId,
+            'optionsKey' => 'com_guidedtours.autosave.step', 'script' => 'com_guidedtours.step-autosave',
+            'saveTasks'  => ['step.apply', 'step.save', 'step.save2new', 'step.save2copy'],
+        ]);
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
-
-        $fieldIds = [];
-        foreach (['position', 'target', 'title', 'description', 'type', 'url', 'interactive_type', 'note'] as $fieldName) {
-            $field = $this->form->getField($fieldName);
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            }
-            $fieldIds[$fieldName] = $field->id;
-        }
-
-        foreach (['required', 'requiredvalue'] as $fieldName) {
-            $field = $this->form->getField($fieldName, 'params');
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            }
-            $fieldIds[$fieldName] = $field->id;
-        }
-
-        $configurator->configure($provider, $targetId, 'com_guidedtours.autosave.step', 'guidedtour-dates-form', $fieldIds, 'com_guidedtours.step-autosave');
-        $this->autosaveEnabled = true;
     }
 
     /**

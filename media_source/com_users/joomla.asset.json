@@ -9,22 +9,40 @@
       "name": "com_users.group-autosave",
       "type": "script",
       "uri": "com_users/group-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller", "com_autosave.create-binding"],
-      "attributes": {"type": "module"}
+      "dependencies": [
+        "core",
+        "editors",
+        "com_autosave.drafts"
+      ],
+      "attributes": {
+        "type": "module"
+      }
     },
     {
       "name": "com_users.level-autosave",
       "type": "script",
       "uri": "com_users/level-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller", "com_autosave.create-binding"],
-      "attributes": {"type": "module"}
+      "dependencies": [
+        "core",
+        "editors",
+        "com_autosave.drafts"
+      ],
+      "attributes": {
+        "type": "module"
+      }
     },
     {
       "name": "com_users.note-autosave",
       "type": "script",
       "uri": "com_users/note-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller", "com_autosave.create-binding", "editor-api"],
-      "attributes": {"type": "module"}
+      "dependencies": [
+        "core",
+        "editors",
+        "com_autosave.drafts"
+      ],
+      "attributes": {
+        "type": "module"
+      }
     },
     {
       "name": "com_users.admin-users-groups",

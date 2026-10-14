@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<access component="com_autosave">
+	<section name="component">
+		<action name="core.admin" title="JACTION_ADMIN" description="JACTION_ADMIN_COMPONENT_DESC"/>
+		<action name="core.options" title="JACTION_OPTIONS" description="JACTION_OPTIONS_COMPONENT_DESC"/>
+	</section>
+</access>

@@ -11,7 +11,7 @@
 namespace Joomla\Component\Templates\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSWebApplicationInterface;
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
@@ -28,10 +28,6 @@ use Joomla\CMS\MVC\Model\BaseDatabaseModel;
  */
 class StyleController extends FormController
 {
-    use AutosaveFormControllerTrait;
-
-    private const AUTOSAVE_CONTEXT      = 'com_templates.style';
-    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2copy' => 'save-copy'];
     /**
      * The prefix to use with controller messages.
      *
@@ -51,11 +47,6 @@ class StyleController extends FormController
      * @since   1.6
      */
     public function save($key = null, $urlVar = null)
-    {
-        return $this->executeAutosaveCanonicalSave(fn () => $this->executeStyleSave($key, $urlVar), $urlVar);
-    }
-
-    private function executeStyleSave($key = null, $urlVar = null)
     {
         $this->checkToken();
 
@@ -157,10 +148,11 @@ class StyleController extends FormController
 
         return parent::save($key, $urlVar);
     }
-
+    /** Optional draft retirement after the authoritative native success hook. */
     protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
     {
         parent::postSaveHook($model, $validData);
-        $this->captureAutosaveCanonicalResult($model, $this->context . '.id');
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_templates.style', $this->getTask(), 'id', []);
     }
 }

@@ -9,22 +9,40 @@
       "name": "com_workflow.workflow-autosave",
       "type": "script",
       "uri": "com_workflow/workflow-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller", "com_autosave.create-binding"],
-      "attributes": {"type": "module"}
+      "dependencies": [
+        "core",
+        "editors",
+        "com_autosave.drafts"
+      ],
+      "attributes": {
+        "type": "module"
+      }
     },
     {
       "name": "com_workflow.stage-autosave",
       "type": "script",
       "uri": "com_workflow/stage-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller", "com_autosave.create-binding"],
-      "attributes": {"type": "module"}
+      "dependencies": [
+        "core",
+        "editors",
+        "com_autosave.drafts"
+      ],
+      "attributes": {
+        "type": "module"
+      }
     },
     {
       "name": "com_workflow.transition-autosave",
       "type": "script",
       "uri": "com_workflow/transition-autosave.min.js",
-      "dependencies": ["com_autosave.integration-controller", "com_autosave.create-binding"],
-      "attributes": {"type": "module"}
+      "dependencies": [
+        "core",
+        "editors",
+        "com_autosave.drafts"
+      ],
+      "attributes": {
+        "type": "module"
+      }
     },
     {
       "name": "com_workflow.admin-items-workflow-buttons",
@@ -54,7 +72,7 @@
       }
     },
     {
-      "name" : "com_workflow.workflowgraphclient",
+      "name": "com_workflow.workflowgraphclient",
       "type": "style",
       "uri": "com_workflow/workflow-graph-client.min.css"
     },

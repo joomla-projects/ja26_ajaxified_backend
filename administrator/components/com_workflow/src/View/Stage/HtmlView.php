@@ -10,9 +10,7 @@
 
 namespace Joomla\Component\Workflow\Administrator\View\Stage;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -33,6 +31,8 @@ use Joomla\Component\Workflow\Administrator\Model\StageModel;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'stage-autosave-status';
     /**
      * The model state
      *
@@ -117,38 +117,24 @@ class HtmlView extends BaseHtmlView
 
     private function prepareAutosave(): void
     {
-        $app          = Factory::getApplication();
-        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
-        $configurator->disable('com_workflow.autosave.stage');
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-        try {
-            $provider = $app->bootComponent('com_workflow')->getAutosaveProvider('com_workflow.stage');
-            $itemId   = (int) $this->item->id;
-            $target   = null;
-            if ($itemId > 0) {
-                $target = $provider->canonicalizeTargetId((string) $itemId);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } else {
-                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-            if ($target !== null && !$provider->targetExists($target)) {
-                return;
-            }
-        } catch (\Throwable) {
-            return;
+        $item                  = clone $this->item;
+        $item->draftExtension  = (string) $this->state->get('filter.extension');
+        if (empty($item->id)) {
+            $item->workflow_id = Factory::getApplication()->getInput()->getInt('workflow_id');
         }
-        $ids = [];
-        foreach (['title', 'description'] as $name) {
-            $field = $this->form->getField($name);
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            } $ids[$name] = $field->id;
+        $this->form->addControlField('workflow_id', (string) $item->workflow_id);
+        $this->form->addControlField('extension', $item->draftExtension);
+        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+            'context'    => 'com_workflow.stage', 'formId' => 'workflow-form', 'statusId' => $this->autosaveStatusId,
+            'optionsKey' => 'com_workflow.autosave.stage', 'script' => 'com_workflow.stage-autosave',
+            'saveTasks'  => ['stage.apply', 'stage.save', 'stage.save2new', 'stage.save2copy'],
+        ]);
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
-        $configurator->configure($provider, $target, 'com_workflow.autosave.stage', 'workflow-form', $ids, 'com_workflow.stage-autosave');
-        $this->autosaveEnabled = true;
     }
     /**
      * Add the page title and toolbar.

@@ -10,9 +10,7 @@
 
 namespace Joomla\Component\Workflow\Administrator\View\Transition;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -33,6 +31,8 @@ use Joomla\Component\Workflow\Administrator\Model\TransitionModel;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'transition-autosave-status';
     /**
      * The model state
      *
@@ -156,48 +156,24 @@ class HtmlView extends BaseHtmlView
 
     private function prepareAutosave(): void
     {
-        $app          = Factory::getApplication();
-        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
-        $configurator->disable('com_workflow.autosave.transition');
-
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-
-        try {
-            $provider = $app->bootComponent('com_workflow')->getAutosaveProvider('com_workflow.transition');
-            $itemId   = (int) $this->item->id;
-            $target   = null;
-
-            if ($itemId > 0) {
-                $target = $provider->canonicalizeTargetId((string) $itemId);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } else {
-                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-
-            if ($target !== null && !$provider->targetExists($target)) {
-                return;
-            }
-        } catch (\Throwable) {
-            return;
+        $item                  = clone $this->item;
+        $item->draftExtension  = (string) $this->state->get('filter.extension');
+        if (empty($item->id)) {
+            $item->workflow_id = Factory::getApplication()->getInput()->getInt('workflow_id');
         }
-
-        $ids = [];
-
-        foreach (['title', 'description', 'from_stage_id', 'to_stage_id'] as $name) {
-            $field = $this->form->getField($name);
-
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            }
-
-            $ids[$name] = $field->id;
+        $this->form->addControlField('workflow_id', (string) $item->workflow_id);
+        $this->form->addControlField('extension', $item->draftExtension);
+        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+            'context'    => 'com_workflow.transition', 'formId' => 'workflow-form', 'statusId' => $this->autosaveStatusId,
+            'optionsKey' => 'com_workflow.autosave.transition', 'script' => 'com_workflow.transition-autosave',
+            'saveTasks'  => ['transition.apply', 'transition.save', 'transition.save2new', 'transition.save2copy'],
+        ]);
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
-
-        $configurator->configure($provider, $target, 'com_workflow.autosave.transition', 'workflow-form', $ids, 'com_workflow.transition-autosave');
-        $this->autosaveEnabled = true;
     }
 
     /**

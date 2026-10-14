@@ -75,6 +75,7 @@ class CodemirrorEditor extends HTMLElement {
       'codemirror',
       element.id,
       changeObserver.subscribe,
+      element,
     );
     JoomlaEditor.register(this.jEditor);
 
@@ -85,6 +86,11 @@ class CodemirrorEditor extends HTMLElement {
   disconnectedCallback() {
     this.initialization = null;
     this.removeEventListener('click', this.interactionCallback);
+
+    // Preserve the native textarea value before unregistering the provider.
+    if (this.instance && this.element && this.jEditor && this.jEditor.getValue) {
+      this.element.value = this.jEditor.getValue();
+    }
 
     // Remove subscriptions while the provider instance is still available.
     if (this.jEditor) {

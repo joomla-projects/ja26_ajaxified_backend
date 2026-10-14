@@ -10,7 +10,7 @@
 
 namespace Joomla\Component\Guidedtours\Administrator\Controller;
 
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
@@ -25,28 +25,11 @@ use Joomla\CMS\MVC\Model\BaseDatabaseModel;
  */
 class TourController extends FormController
 {
-    use AutosaveFormControllerTrait;
-
-    private const AUTOSAVE_CONTEXT      = 'com_guidedtours.tour';
-    private const AUTOSAVE_TASK_INTENTS = [
-        'apply'     => 'apply',
-        'save'      => 'save-exit',
-        'save2new'  => 'save-new',
-        'save2copy' => 'save-copy',
-    ];
-
-    /**
-     * Capture the authoritative Tour identity after Joomla saves it.
-     *
-     * @param   BaseDatabaseModel  $model      The saved model.
-     * @param   array              $validData  The validated form data.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
+    /** Optional draft retirement after the authoritative native success hook. */
     protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
     {
-        $this->captureAutosaveCanonicalResult($model, 'tour.id');
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_guidedtours.tour', $this->getTask(), 'id', []);
     }
 }

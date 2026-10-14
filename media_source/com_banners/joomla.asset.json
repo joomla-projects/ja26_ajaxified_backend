@@ -11,8 +11,8 @@
       "uri": "com_banners/client-autosave.min.js",
       "dependencies": [
         "core",
-        "com_autosave.create-binding",
-        "com_autosave.integration-controller"
+        "editors",
+        "com_autosave.drafts"
       ],
       "attributes": {
         "type": "module"
@@ -24,10 +24,8 @@
       "uri": "com_banners/banner-autosave.min.js",
       "dependencies": [
         "core",
-        "com_autosave.create-binding",
-        "com_autosave.integration-controller",
-        "editor-api",
-        "webcomponent.field-media"
+        "editors",
+        "com_autosave.drafts"
       ],
       "attributes": {
         "type": "module"

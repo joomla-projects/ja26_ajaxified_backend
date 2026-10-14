@@ -10,7 +10,7 @@
 
 namespace Joomla\Component\Banners\Administrator\Controller;
 
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Versioning\VersionableControllerTrait;
@@ -26,16 +26,7 @@ use Joomla\CMS\Versioning\VersionableControllerTrait;
  */
 class ClientController extends FormController
 {
-    use AutosaveFormControllerTrait;
     use VersionableControllerTrait;
-
-    private const AUTOSAVE_CONTEXT      = 'com_banners.client';
-    private const AUTOSAVE_TASK_INTENTS = [
-        'apply'     => 'apply',
-        'save'      => 'save-exit',
-        'save2new'  => 'save-new',
-        'save2copy' => 'save-copy',
-    ];
 
     /**
      * The prefix to use with controller messages.
@@ -44,19 +35,11 @@ class ClientController extends FormController
      * @since  1.6
      */
     protected $text_prefix = 'COM_BANNERS_CLIENT';
-
-    /**
-     * Capture the authoritative Client identity after Joomla saves it.
-     *
-     * @param   BaseDatabaseModel  $model      The saved model.
-     * @param   array              $validData  The validated form data.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
+    /** Optional draft retirement after the authoritative native success hook. */
     protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
     {
-        $this->captureAutosaveCanonicalResult($model, 'client.id');
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_banners.client', $this->getTask(), 'id', []);
     }
 }

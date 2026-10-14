@@ -10,9 +10,7 @@
 
 namespace Joomla\Component\Content\Administrator\View\Article;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -39,6 +37,13 @@ class HtmlView extends FormView
      * @since __DEPLOY_VERSION__
      */
     public bool $autosaveEnabled = false;
+
+    /**
+     * Native toolbar status binding for this form.
+     *
+     * @since __DEPLOY_VERSION__
+     */
+    public string $autosaveStatusId = 'article-autosave-status';
 
     /**
      * Pagebreak TOC alias
@@ -96,7 +101,6 @@ class HtmlView extends FormView
         parent::initializeView();
 
         $this->canDo = ContentHelper::getActions('com_content', 'article', $this->item->id);
-        $this->prepareAutosave();
 
         $url = RouteHelper::getArticleRoute($this->item->id . ':' . $this->item->alias, $this->item->catid, $this->item->language);
 
@@ -128,10 +132,12 @@ class HtmlView extends FormView
             ->addControlField('task')
             ->addControlField('return', $input->getBase64('return', ''))
             ->addControlField('forcedLanguage', $forcedLanguage);
+
+        $this->prepareAutosave();
     }
 
     /**
-     * Configure the headless Autosave integration for one canonical Article.
+     * Admit a private draft against the canonical Article and its prepared native form.
      *
      * @return  void
      *
@@ -139,65 +145,24 @@ class HtmlView extends FormView
      */
     private function prepareAutosave(): void
     {
-        $document              = $this->getDocument();
-        $this->autosaveEnabled = false;
-        $application           = Factory::getApplication();
-        $configurator          = new AutosaveViewConfigurator(
-            $application,
-            $document,
-            $this->getCurrentUser()
-        );
-        $configurator->disable('com_content.autosave.article');
-
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-
-        try {
-            $provider = Factory::getApplication()
-                ->bootComponent('com_content')
-                ->getAutosaveProvider('com_content.article');
-            $targetId = null;
-            $itemId   = (int) $this->item->id;
-
-            if ($itemId > 0) {
-                $targetId = $provider->canonicalizeTargetId((string) $itemId);
-
-                if (!$provider->targetExists($targetId)) {
-                    return;
-                }
-            } elseif ($itemId !== 0) {
-                return;
-            } elseif (!$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } else {
-                $provider->authorizeCreate($this->getCurrentUser(), AutosaveOperation::InitializeCreate, null);
-            }
-        } catch (\Throwable) {
-            return;
-        }
-
-        $fieldIds = [];
-
-        foreach (['title', 'alias', 'articletext', 'catid'] as $fieldName) {
-            $field = $this->form->getField($fieldName);
-
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            }
-
-            $fieldIds[$fieldName] = $field->id;
-        }
-
-        $configurator->configure(
-            $provider,
-            $targetId,
-            'com_content.autosave.article',
-            'item-form',
-            $fieldIds,
-            'com_content.article-autosave'
+        $this->autosaveEnabled = DraftView::configure(
+            Factory::getApplication(),
+            $this->getDocument(),
+            $this->getCurrentUser(),
+            $this->form,
+            $this->item,
+            [
+                'context'    => 'com_content.article',
+                'formId'     => 'item-form',
+                'statusId'   => $this->autosaveStatusId,
+                'optionsKey' => 'com_content.autosave.article',
+                'script'     => 'com_content.article-autosave',
+                'saveTasks'  => ['article.apply', 'article.save', 'article.save2new', 'article.save2copy', 'article.save2menu'],
+            ]
         );
-        $this->autosaveEnabled = true;
     }
 
     /**
@@ -216,6 +181,7 @@ class HtmlView extends FormView
         }
         if ($this->getLayout() === 'modal') {
             $this->addModalToolbar();
+            $this->addAutosaveStatus();
 
             return;
         }
@@ -228,6 +194,21 @@ class HtmlView extends FormView
         $this->toolbarTitle = Text::_('COM_CONTENT_PAGE_' . ($checkedOut ? 'VIEW_ARTICLE' : ($isNew ? 'ADD_ARTICLE' : 'EDIT_ARTICLE')));
 
         parent::addToolbar();
+        $this->addAutosaveStatus();
+    }
+
+    /**
+     * Insert status after native actions, before the toolbar's utility divider.
+     *
+     * @since __DEPLOY_VERSION__
+     */
+    private function addAutosaveStatus(): void
+    {
+        if ($this->autosaveEnabled) {
+            if ($this->autosaveEnabled) {
+                DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+            }
+        }
     }
 
     /**

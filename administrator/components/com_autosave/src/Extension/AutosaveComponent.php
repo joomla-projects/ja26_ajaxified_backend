@@ -11,12 +11,9 @@
 namespace Joomla\Component\Autosave\Administrator\Extension;
 
 use Joomla\CMS\Application\CMSApplicationInterface;
-use Joomla\CMS\Autosave\AutosaveCreateCanonicalActionServiceInterface;
-use Joomla\CMS\Autosave\AutosaveLifecycle;
-use Joomla\CMS\Date\Date;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Dispatcher\DispatcherInterface;
 use Joomla\CMS\Extension\ComponentInterface;
-use Joomla\CMS\User\User;
 use Joomla\Component\Autosave\Administrator\Dispatcher\Dispatcher;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -28,120 +25,34 @@ use Joomla\Component\Autosave\Administrator\Dispatcher\Dispatcher;
  *
  * @since  __DEPLOY_VERSION__
  */
-final class AutosaveComponent implements ComponentInterface, AutosaveCreateCanonicalActionServiceInterface
+final class AutosaveComponent implements ComponentInterface
 {
-    /**
-     * Deployment policy for component-neutral draft persistence.
-     *
-     * @var array{
-     *     idle_ttl: int,
-     *     max_lifetime: int,
-     *     tombstone_retention: int,
-     *     max_active_generations: int,
-     *     max_payload_bytes: int
-     * }
-     */
-    public const STORAGE_POLICY = [
-        'idle_ttl'               => 604800,
-        'max_lifetime'           => 2592000,
-        'tombstone_retention'    => 86400,
-        'max_active_generations' => 20,
-        'max_payload_bytes'      => 4194304,
-    ];
-
     /**
      * Constructor.
      *
      * @since  __DEPLOY_VERSION__
      */
-    public function __construct(private readonly AutosaveLifecycle $lifecycle)
+    public function __construct(private readonly DraftService $drafts)
     {
     }
 
     /**
-     * Return the component's fixed protected dispatcher.
+     * Return the component's protected draft dispatcher.
      *
      * @since  __DEPLOY_VERSION__
      */
     public function getDispatcher(CMSApplicationInterface $application): DispatcherInterface
     {
-        return new Dispatcher($application, $application->getInput(), $this->lifecycle);
+        return new Dispatcher($application, $application->getInput(), $this->drafts);
     }
 
     /**
-     * {@inheritDoc}
+     * Return draft operations for optional native-save reconciliation.
+     *
+     * @since  __DEPLOY_VERSION__
      */
-    public function verifyCanonicalAction(
-        User $user,
-        string $operationId,
-        string $context,
-        string $targetId,
-        string $intent,
-        Date $now
-    ): array {
-        return $this->lifecycle->verifyCanonicalAction(
-            $user,
-            $operationId,
-            $context,
-            $targetId,
-            $intent,
-            $now
-        );
-    }
-
-    public function verifyCreateCanonicalAction(
-        User $user,
-        string $operationId,
-        string $context,
-        string $intent,
-        Date $now
-    ): array {
-        return $this->lifecycle->verifyCreateCanonicalAction($user, $operationId, $context, $intent, $now);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public function finalizeCanonicalActionSuccess(
-        User $user,
-        string $operationId,
-        string $context,
-        string $targetId,
-        string $intent,
-        string $finalTargetId,
-        Date $now
-    ): array {
-        return $this->lifecycle->finalizeCanonicalActionSuccess(
-            $user,
-            $operationId,
-            $context,
-            $targetId,
-            $intent,
-            $finalTargetId,
-            $now
-        );
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public function finalizeCanonicalActionFailure(
-        User $user,
-        string $operationId,
-        string $context,
-        string $targetId,
-        string $intent,
-        string $failureCode,
-        Date $now
-    ): array {
-        return $this->lifecycle->finalizeCanonicalActionFailure(
-            $user,
-            $operationId,
-            $context,
-            $targetId,
-            $intent,
-            $failureCode,
-            $now
-        );
+    public function getDraftService(): DraftService
+    {
+        return $this->drafts;
     }
 }

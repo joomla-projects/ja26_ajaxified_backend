@@ -10,9 +10,7 @@
 
 namespace Joomla\Component\Menus\Administrator\View\Menu;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -34,6 +32,8 @@ use Joomla\Component\Menus\Administrator\Model\MenuModel;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'menu-autosave-status';
 
     /**
      * The Form object
@@ -94,59 +94,27 @@ class HtmlView extends BaseHtmlView
         $this->prepareAutosave();
         parent::display($tpl);
         $this->addToolbar();
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+        }
     }
 
     private function prepareAutosave(): void
     {
-        $application  = Factory::getApplication();
-        $configurator = new AutosaveViewConfigurator($application, $this->getDocument(), $application->getIdentity());
-        $configurator->disable('com_menus.autosave.menu');
-
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-
-        try {
-            $provider = $application->bootComponent('com_menus')->getAutosaveProvider('com_menus.menu');
-            $itemId   = (int) $this->item->id;
-            $targetId = null;
-
-            if ($itemId > 0) {
-                $targetId = $provider->canonicalizeTargetId((string) $itemId);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } else {
-                $provider->authorizeCreate($application->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-
-            if ($targetId !== null && !$provider->targetExists($targetId)) {
-                return;
-            }
-        } catch (\Throwable) {
-            return;
+        $item                  = clone $this->item;
+        if (empty($item->id)) {
+            $item->client_id = (int) $this->state->get('client_id', 0);
+            $item->menutype  = (string) $this->form->getValue('menutype', null, '');
         }
-
-        $fieldIds = [];
-
-        foreach (['title', 'description'] as $fieldName) {
-            $field = $this->form->getField($fieldName);
-
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            }
-
-            $fieldIds[$fieldName] = $field->id;
-        }
-
-        $configurator->configure(
-            $provider,
-            $targetId,
-            'com_menus.autosave.menu',
-            'item-form',
-            $fieldIds,
-            'com_menus.menu-autosave'
-        );
-        $this->autosaveEnabled = true;
+        $this->form->addControlField('client_id', (string) $item->client_id);
+        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+            'context'    => 'com_menus.menu', 'formId' => 'item-form', 'statusId' => $this->autosaveStatusId,
+            'optionsKey' => 'com_menus.autosave.menu', 'script' => 'com_menus.menu-autosave',
+            'saveTasks'  => ['menu.apply', 'menu.save', 'menu.save2new', 'menu.save2copy'],
+        ]);
     }
 
     /**

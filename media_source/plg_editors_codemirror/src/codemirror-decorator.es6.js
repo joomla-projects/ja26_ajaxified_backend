@@ -48,7 +48,7 @@ class CodemirrorDecorator extends JoomlaEditorDecorator {
    * @param {string} id Editor ID.
    * @param {Function} changeObserver Instance-local change subscription function.
    */
-  constructor(instance, type, id, changeObserver) {
+  constructor(instance, type, id, changeObserver, element = null) {
     super(instance, type, id);
 
     if (typeof changeObserver !== 'function') {
@@ -56,6 +56,12 @@ class CodemirrorDecorator extends JoomlaEditorDecorator {
     }
 
     this.changeObserver = changeObserver;
+    this.element = element;
+  }
+
+  /** @returns {HTMLTextAreaElement|null} */
+  getElement() {
+    return this.element;
   }
 
   /**

@@ -13,7 +13,6 @@ use Doctrine\Inflector\InflectorFactory;
 use Joomla\CMS\Application\CMSApplicationInterface;
 use Joomla\CMS\Application\CMSWebApplicationInterface;
 use Joomla\CMS\Component\ComponentHelper;
-use Joomla\CMS\Event\Controller\FormTaskSuccessEvent;
 use Joomla\CMS\Event\Model;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Form\FormFactoryAwareInterface;
@@ -331,8 +330,6 @@ class FormController extends BaseController implements FormFactoryAwareInterface
             $this->setRedirect($this->getRedirectUrlToList());
         }
 
-        $this->dispatchFormTaskSuccess($this->getTask(), $recordId ?: null);
-
         return true;
     }
 
@@ -542,57 +539,6 @@ class FormController extends BaseController implements FormFactoryAwareInterface
     }
 
     /**
-     * Dispatch the confirmed form task success notification.
-     *
-     * The canonical controller operation has already completed when this method
-     * is called. Notification failures are deliberately non-fatal.
-     *
-     * @param   string              $task        The completed Joomla task.
-     * @param   ?integer            $originalId  The submitted record identity.
-     * @param   ?BaseDatabaseModel  $model       The model containing the resulting identity.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    protected function dispatchFormTaskSuccess(string $task, ?int $originalId, ?BaseDatabaseModel $model = null): void
-    {
-        $context = $this->option . '.' . $this->context;
-
-        try {
-            $resultingId = null;
-
-            if ($model !== null) {
-                $modelId     = $model->getState($model->getName() . '.id');
-                $resultingId = $modelId ? (int) $modelId : null;
-            }
-
-            $event = new FormTaskSuccessEvent('onControllerFormTaskSuccess', [
-                'context'     => $context,
-                'task'        => $task,
-                'originalId'  => $originalId,
-                'resultingId' => $resultingId,
-            ]);
-
-            $this->getDispatcher()->dispatch($event->getName(), $event);
-        } catch (\Throwable $exception) {
-            try {
-                $this->getLogger()->warning(
-                    \sprintf(
-                        'Failed to dispatch onControllerFormTaskSuccess for %s task %s (%s).',
-                        $context,
-                        $task,
-                        \get_class($exception)
-                    ),
-                    ['category' => 'controller']
-                );
-            } catch (\Throwable) {
-                // Notification and logging failures cannot change the completed controller result.
-            }
-        }
-    }
-
-    /**
      * Method to save a record.
      *
      * @param   string  $key     The name of the primary key of the URL variable.
@@ -607,13 +553,12 @@ class FormController extends BaseController implements FormFactoryAwareInterface
         // Check for request forgeries.
         $this->checkToken();
 
-        $model    = $this->getModel();
-        $table    = $model->getTable();
-        $data     = $this->input->post->get('jform', [], 'array');
-        $checkin  = $table->hasField('checked_out') && $table->hasField('checked_out_time');
-        $context  = "$this->option.edit.$this->context";
-        $task     = $this->getTask();
-        $saveTask = $task;
+        $model   = $this->getModel();
+        $table   = $model->getTable();
+        $data    = $this->input->post->get('jform', [], 'array');
+        $checkin = $table->hasField('checked_out') && $table->hasField('checked_out_time');
+        $context = "$this->option.edit.$this->context";
+        $task    = $this->getTask();
 
         // Determine the name of the primary key for the data.
         if (empty($key)) {
@@ -625,8 +570,7 @@ class FormController extends BaseController implements FormFactoryAwareInterface
             $urlVar = $key;
         }
 
-        $recordId         = (int) $this->input->getInt($urlVar);
-        $originalRecordId = $recordId ?: null;
+        $recordId = (int) $this->input->getInt($urlVar);
 
         // Populate the row id from the session.
         $data[$key] = $recordId;
@@ -766,8 +710,6 @@ class FormController extends BaseController implements FormFactoryAwareInterface
 
         // Invoke the postSave method to allow for the child class to access the model.
         $this->postSaveHook($model, $validData);
-
-        $this->dispatchFormTaskSuccess($saveTask, $originalRecordId, $model);
 
         return true;
     }

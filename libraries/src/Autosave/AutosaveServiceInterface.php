@@ -37,9 +37,9 @@ interface AutosaveServiceInterface
      *
      * @param   string  $context  The exact qualified context.
      *
-     * @return  AutosaveProviderInterface
+     * @return  DraftProviderInterface
      *
      * @since   __DEPLOY_VERSION__
      */
-    public function getAutosaveProvider(string $context): AutosaveProviderInterface;
+    public function getAutosaveProvider(string $context): DraftProviderInterface;
 }

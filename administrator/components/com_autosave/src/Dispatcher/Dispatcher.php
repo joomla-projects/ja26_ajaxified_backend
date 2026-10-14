@@ -13,10 +13,9 @@ namespace Joomla\Component\Autosave\Administrator\Dispatcher;
 use Joomla\CMS\Application\CMSApplication;
 use Joomla\CMS\Application\CMSApplicationInterface;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveLifecycle;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Date\Date;
 use Joomla\CMS\Dispatcher\Dispatcher as BaseDispatcher;
-use Joomla\Component\Autosave\Administrator\Controller\AutosaveController;
 use Joomla\Input\Input;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -32,57 +31,38 @@ final class Dispatcher extends BaseDispatcher
 {
     private const MAX_REQUEST_BYTES = 5242880;
     private const TASKS             = [
-        'autosave.initialize'                => 'initialize',
-        'autosave.initializeCreate'          => 'initializeCreate',
-        'autosave.preserve'                  => 'preserve',
-        'autosave.detect'                    => 'detect',
-        'autosave.read'                      => 'read',
-        'autosave.discard'                   => 'discard',
-        'autosave.prepareCanonicalAction'    => 'prepareCanonicalAction',
-        'autosave.getCanonicalActionOutcome' => 'getCanonicalActionOutcome',
+        'draft.preserve' => 'preserve',
+        'draft.resume'   => 'resume',
+        'draft.detect'   => 'detect',
+        'draft.read'     => 'read',
+        'draft.discard'  => 'discard',
     ];
     private const DOMAIN_STATUS = [
-        'malformed_context'               => 400,
-        'unsupported_context'             => 422,
-        'invalid_target'                  => 422,
-        'invalid_initialization_key'      => 422,
-        'invalid_payload'                 => 422,
-        'unsupported_schema_version'      => 422,
-        'create_unsupported'              => 422,
-        'invalid_create_contract'         => 422,
-        'scope_required'                  => 422,
-        'scope_unsupported'               => 422,
-        'invalid_scope'                   => 422,
-        'static_scope_unsupported'        => 422,
-        'scope_conflict'                  => 409,
-        'scope_mismatch'                  => 409,
-        'descriptor_stale'                => 409,
-        'create_contract_conflict'        => 409,
-        'target_not_found'                => 404,
-        'draft_not_found'                 => 404,
-        'forbidden'                       => 403,
-        'checkout_conflict'               => 409,
-        'initialization_conflict'         => 409,
-        'base_revision_conflict'          => 409,
-        'stale_client_revision'           => 409,
-        'revision_conflict'               => 409,
-        'schema_version_conflict'         => 409,
-        'draft_terminal'                  => 409,
-        'draft_closed'                    => 409,
-        'draft_expired'                   => 410,
-        'canonical_action_not_found'      => 404,
-        'canonical_action_conflict'       => 409,
-        'canonical_intent_conflict'       => 409,
-        'canonical_action_consumed'       => 409,
-        'canonical_generation_not_closed' => 409,
-        'payload_too_large'               => 413,
-        'draft_limit_reached'             => 429,
+        'malformed_context'          => 400,
+        'unsupported_context'        => 422,
+        'invalid_target'             => 422,
+        'invalid_payload'            => 422,
+        'unsupported_schema_version' => 422,
+        'scope_conflict'             => 409,
+        'target_not_found'           => 404,
+        'draft_not_found'            => 404,
+        'forbidden'                  => 403,
+        'checkout_conflict'          => 409,
+        'base_revision_conflict'     => 409,
+        'revision_conflict'          => 409,
+        'schema_version_conflict'    => 409,
+        'draft_expired'              => 410,
+        'payload_too_large'          => 413,
+        'draft_retired'              => 409,
+        'service_unavailable'        => 503,
+        'render_admission_missing'    => 410,
+        'render_admission_expired'    => 410,
     ];
 
     public function __construct(
         CMSApplicationInterface $app,
         Input $input,
-        private readonly AutosaveLifecycle $lifecycle
+        private readonly DraftService $drafts
     ) {
         parent::__construct($app, $input);
     }
@@ -182,13 +162,10 @@ final class Dispatcher extends BaseDispatcher
                 return;
             }
 
+            $admissions = $this->app->getSession()->get(DraftService::RENDER_ADMISSIONS, []);
+            $admission = \is_string($request['draft_id'] ?? null) ? ($admissions[$request['draft_id']] ?? null) : null;
             $this->app->getSession()->close();
-            $result = (new AutosaveController($this->lifecycle))->execute(
-                self::TASKS[$task],
-                $request,
-                $user,
-                new Date('now', 'UTC')
-            );
+            $result = $this->drafts->execute(self::TASKS[$task], $request, $user, new Date('now', 'UTC'), $admission);
             $this->success($this->formatResult($result));
         } catch (\InvalidArgumentException $exception) {
             $this->failure('invalid_request', 'The Autosave request is invalid.', 400);
@@ -199,7 +176,7 @@ final class Dispatcher extends BaseDispatcher
                 self::DOMAIN_STATUS[$exception->getErrorCode()] ?? 422
             );
         } catch (\Throwable $exception) {
-            $this->app->getLogger()->error('An unexpected Autosave request failure occurred.', ['exception' => $exception]);
+            $this->app->getLogger()->error('An unexpected Autosave request failure occurred.', ['exception_class' => $exception::class]);
             $this->failure('internal_error', 'The Autosave request could not be completed.', 500);
         }
     }
@@ -275,7 +252,7 @@ final class Dispatcher extends BaseDispatcher
             return null;
         }
 
-        foreach (['created_at', 'updated_at', 'expires_at', 'completed_at'] as $key) {
+        foreach (['created_at', 'updated_at', 'expires_at'] as $key) {
             if (isset($result[$key]) && \is_string($result[$key])) {
                 $result[$key] = (new Date($result[$key], 'UTC'))->format('Y-m-d\\TH:i:s\\Z');
             }

@@ -1,166 +1,125 @@
 <?php
 
-/** @package Joomla.Administrator @subpackage com_users */
+/**
+ * @package Joomla.Administrator
+ * @subpackage com_users
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
+ */
 
 namespace Joomla\Component\Users\Administrator\Autosave;
 
 use Joomla\CMS\Access\Access;
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
+use Joomla\CMS\Autosave\DraftModel;
+use Joomla\CMS\Autosave\DraftProjection;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Form\Form;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
-use Joomla\Database\DatabaseInterface;
-use Joomla\Database\ParameterType;
-use Joomla\String\StringHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class LevelAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
+/**
+ * Native Level scope, authority and selected values; no canonical persistence.
+ *
+ * @since  __DEPLOY_VERSION__
+ */
+final class LevelAutosaveProvider implements DraftProviderInterface
 {
-    /**
-     * An Access Level draft may name at most this many user groups. The native
-     * form renders one checkbox per existing group and the rules column stores
-     * a JSON array, so the bound is a sanity ceiling rather than a native limit.
-     */
-    private const MAXIMUM_GROUPS = 100;
+    private const KEYS = ['title', 'rules'];
 
-    public function __construct(private readonly DatabaseInterface $db)
+    /**
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
+
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_users.level';
     }
-    public function getCreateContractVersion(): string
+
+    /** @inheritDoc */
+    public function describe(Form $form, object $item, User $user): array
     {
-        return 'user-level-create-v1';
+        $scope = $this->scope($form, $item);
+        $this->authorize($user, $item, $scope);
+        $keys = self::KEYS;
+
+        $descriptor = DraftProjection::descriptor(
+            $form,
+            $item,
+            $this->getContext(),
+            empty($item->id) ? null : (string) $item->id,
+            $scope,
+            $keys,
+            [$item->modified ?? null, $item->modified_time ?? null, $item->modified_user_id ?? null]
+        );
+        $descriptor['fields']['rules'] = ['id' => 'level-rules', 'name' => 'jform[rules][]', 'control' => 'checkboxes', 'label' => 'COM_USERS_USER_GROUPS_HAVING_ACCESS'];
+        $rules                         = array_values(array_unique(array_map('strval', $item->rules ?? [])));
+        sort($rules, SORT_NUMERIC);
+        $descriptor['values']['rules'] = $rules;
+        if ($descriptor['target'] !== null) {
+            $descriptor['revision'] = hash('sha256', json_encode([$descriptor['context'], $descriptor['target'], $descriptor['scope'], $descriptor['values']], JSON_THROW_ON_ERROR));
+        }
+        $descriptor['excluded'] = array_values(array_diff($descriptor['excluded'], ['rules']));
+
+        return $descriptor;
     }
-    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+
+    /** @inheritDoc */
+    public function read(array $binding, User $user, ?array $payload = null): array
     {
-        // Mirrors LevelController::allowSave() for a new record: the com_users
-        // core.admin gate plus FormController::allowAdd().
-        if (
-            !$user->authorise('core.admin', 'com_users')
-            || (!$user->authorise('core.create', 'com_users') && \count($user->getAuthorisedCategories('com_users', 'core.create')) === 0)
-        ) {
-            throw new AutosaveException('forbidden', 'An Access Level cannot be created by this user.');
+        $target = DraftModel::target($binding, $this->getContext());
+        if (array_keys($binding['scope']) !== []) {
+            throw new AutosaveException('scope_conflict', 'The native scope shape changed.');
+        }
+        $model = $this->factory->createModel('Level', 'Administrator', ['ignore_request' => true]);
+        $model->setState('level.id', $target === null ? 0 : (int) $target);
+
+        $item = $model->getItem($target === null ? 0 : (int) $target);
+        if (!$item || ($target !== null && (string) $item->id !== $target)) {
+            throw new AutosaveException('target_not_found', 'The native record was not found.');
         }
 
-        if ($normalizedPayload === null) {
-            return;
+        $this->authorize($user, $item, $binding['scope']);
+        $form       = DraftModel::form($model, 'com_users', $item);
+        $descriptor = $this->describe($form, $item, $user);
+        if ($descriptor['scope'] !== $binding['scope']) {
+            throw new AutosaveException('scope_conflict', 'The native identity or owning relation changed.');
         }
+        return $descriptor;
+    }
 
-        $rules = $normalizedPayload['rules'];
+    private function scope(Form $form, object $item): array
+    {
+        return [];
+    }
 
-        // Every authored group must resolve to a real user group. The browser's
-        // group ids are never authority.
-        foreach ($rules as $groupId) {
-            if (!$this->groupExists((int) $groupId)) {
-                throw $this->invalidPayload();
+    private function authorize(User $user, object $item, array $scope): void
+    {
+        $component = 'com_users';
+        if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', $component)) {
+            throw new AutosaveException('forbidden', 'The native component access is denied.');
+        }
+        if (!$user->authorise('core.admin', 'com_users')) {
+            throw new AutosaveException('forbidden', 'Native administrator access is denied.');
+        }
+        foreach ($item->rules ?? [] as $id) {
+            if (!$user->authorise('core.admin') && Access::checkGroup((int) $id, 'core.admin')) {
+                throw new AutosaveException('forbidden', 'A protected administrator group is unavailable.');
             }
         }
-
-        // Mirrors LevelModel::validate(): a user who is not a global super user
-        // may not author a level that assigns a super-user group.
-        if (
-            !$user->authorise('core.admin')
-            && \count(array_filter($rules, static fn ($groupId) => Access::checkGroup((int) $groupId, 'core.admin'))) > 0
-        ) {
-            throw new AutosaveException('forbidden', 'An Access Level cannot assign super-user groups by this user.');
+        if (!(empty($item->id) ? ($user->authorise('core.create', $component) || \count($user->getAuthorisedCategories($component, 'core.create')) > 0) : $user->authorise('core.edit', $component))) {
+            throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
         }
-    }
-    public function getPayloadSchemaVersion(): int
-    {
-        return 2;
-    }
-    public function canonicalizeTargetId(string $id): string
-    {
-        if (preg_match('/^[1-9][0-9]{0,9}$/D', $id) !== 1 || (\strlen($id) === 10 && strcmp($id, '4294967295') > 0)) {
-            throw new AutosaveException('invalid_target', 'The Access Level target is invalid.');
+        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
+            throw new AutosaveException('checkout_conflict', 'The record is checked out by another user.');
         }
-        return $id;
-    }
-    public function targetExists(string $id): bool
-    {
-        return $this->load($this->canonicalizeTargetId($id)) !== null;
-    }
-    public function authorize(User $user, string $id, AutosaveOperation $operation): void
-    {
-        $record = $this->load($this->canonicalizeTargetId($id));
-
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Access Level was not found.');
-        }
-
-        $rules = json_decode($record->rules, true);
-        $first = \is_array($rules) && isset($rules[0]) ? (int) $rules[0] : 0;
-
-        if (
-            !$user->authorise('core.admin', 'com_users')
-            || !$user->authorise('core.edit', 'com_users')
-            || ($first > 0 && !$user->authorise('core.admin') && Access::checkGroup($first, 'core.admin'))
-        ) {
-            throw new AutosaveException('forbidden', 'The Access Level cannot be edited by this user.');
-        }
-    }
-    public function getBaseRevision(string $id): string
-    {
-        $record = $this->load($this->canonicalizeTargetId($id));
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Access Level was not found.');
-        }
-        $domain = 'autosave:com_users.level:base-revision:v1';
-        return $domain . ':' . hash('sha256', $domain . "\0" . json_encode($record, JSON_THROW_ON_ERROR));
-    }
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
-    {
-        if ($schemaVersion !== 2) {
-            throw new AutosaveException('unsupported_schema_version', 'The Autosave payload schema version is not supported.');
-        }
-
-        if (
-            !\is_array($payload) || array_is_list($payload)
-            || array_keys($payload) !== ['title', 'rules']
-            || !\is_string($payload['title']) || preg_match('//u', $payload['title']) !== 1
-            || StringHelper::strlen($payload['title']) > 100
-            || !\is_array($payload['rules']) || !array_is_list($payload['rules'])
-            || \count($payload['rules']) > self::MAXIMUM_GROUPS
-        ) {
-            throw new AutosaveException('invalid_payload', 'The Access Level draft payload is invalid.');
-        }
-
-        $rules = [];
-
-        foreach ($payload['rules'] as $groupId) {
-            if (!\is_int($groupId) || $groupId < 1 || $groupId > 2147483647) {
-                throw new AutosaveException('invalid_payload', 'The Access Level draft payload is invalid.');
-            }
-
-            $rules[] = $groupId;
-        }
-
-        return ['title' => $payload['title'], 'rules' => $rules];
-    }
-    private function groupExists(int $groupId): bool
-    {
-        $query = $this->db->createQuery()
-            ->select('COUNT(*)')
-            ->from($this->db->quoteName('#__usergroups'))
-            ->where($this->db->quoteName('id') . ' = :groupId')
-            ->bind(':groupId', $groupId, ParameterType::INTEGER);
-
-        return (int) $this->db->setQuery($query)->loadResult() === 1;
-    }
-    private function load(string $id): ?object
-    {
-        $query = $this->db->createQuery()->select(['id', 'title', 'ordering', 'rules'])->from($this->db->quoteName('#__viewlevels'))->where($this->db->quoteName('id') . ' = :id')->bind(':id', $id, ParameterType::INTEGER);
-        return $this->db->setQuery($query)->loadObject() ?: null;
-    }
-    private function invalidPayload(): AutosaveException
-    {
-        return new AutosaveException('invalid_payload', 'The Access Level draft payload is invalid.');
     }
 }

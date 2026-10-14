@@ -11,12 +11,10 @@
 namespace Joomla\Component\Languages\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSWebApplicationInterface;
-use Joomla\CMS\Autosave\AutosaveCompositeCanonicalIdentityInterface;
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\Router\Route;
-use Joomla\Component\Languages\Administrator\Autosave\OverrideAutosaveProvider;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -27,15 +25,8 @@ use Joomla\Component\Languages\Administrator\Autosave\OverrideAutosaveProvider;
  *
  * @since  2.5
  */
-class OverrideController extends FormController implements AutosaveCompositeCanonicalIdentityInterface
+class OverrideController extends FormController
 {
-    use AutosaveFormControllerTrait;
-
-    private const AUTOSAVE_CONTEXT      = 'com_languages.override';
-    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new'];
-
-    private bool $autosaveNativeSaveSucceeded = false;
-
     /**
      * Method to edit an existing override.
      *
@@ -80,17 +71,6 @@ class OverrideController extends FormController implements AutosaveCompositeCano
      * @since   2.5
      */
     public function save($key = null, $urlVar = null)
-    {
-        $this->executeAutosaveCanonicalSave(function () use ($key, $urlVar) {
-            $this->autosaveNativeSaveSucceeded = false;
-            $this->saveNative($key, $urlVar);
-
-            return $this->autosaveNativeSaveSucceeded;
-        }, 'id');
-    }
-
-    /** Execute Joomla's authoritative Language Override save workflow. */
-    private function saveNative($key = null, $urlVar = null)
     {
         // Check for request forgeries.
         $this->checkToken();
@@ -163,15 +143,6 @@ class OverrideController extends FormController implements AutosaveCompositeCano
             return;
         }
 
-        $this->autosaveNativeSaveSucceeded = true;
-        $client                            = $app->getUserState('com_languages.overrides.filter.client', 0) ? 'administrator' : 'site';
-        $language                          = (string) $app->getUserState('com_languages.overrides.filter.language', 'en-GB');
-        try {
-            $this->captureAutosaveCanonicalTarget(OverrideAutosaveProvider::target($client, $language, $validData['key']));
-        } catch (\InvalidArgumentException) {
-            // The native save remains authoritative if the resulting key is
-            // outside the deliberately bounded Autosave identity contract.
-        }
         // Add message of success.
         $this->setMessage(Text::_('COM_LANGUAGES_VIEW_OVERRIDE_SAVE_SUCCESS'));
 
@@ -205,27 +176,21 @@ class OverrideController extends FormController implements AutosaveCompositeCano
                 $this->setRedirect(Route::_('index.php?option=' . $this->option . '&view=' . $this->view_list . $this->getRedirectToListAppend(), false));
                 break;
         }
+
+        // This native custom save does not invoke FormController.postSaveHook.
+        DraftService::reconcileNativeSave(
+            $app,
+            $this->input,
+            'com_languages.override',
+            $recordId === null || $recordId === '' ? null : (string) $recordId,
+            ['client' => (string) $model->getState('filter.client'), 'language' => (string) $model->getState('filter.language')],
+            $task,
+            (string) $validData['key'],
+            null,
+            $recordId !== null && $recordId !== '' && (string) $recordId !== (string) $validData['key']
+        );
     }
 
-    protected function resolveAutosaveCanonicalTarget(?string $urlVar): string
-    {
-        $key = $this->input->getString($urlVar ?: 'id', '');
-        if ($key === '') {
-            return '';
-        }
-        $client   = $this->app->getUserState('com_languages.overrides.filter.client', 0) ? 'administrator' : 'site';
-        $language = (string) $this->app->getUserState('com_languages.overrides.filter.language', 'en-GB');
-        try {
-            return OverrideAutosaveProvider::target($client, $language, $key);
-        } catch (\InvalidArgumentException) {
-            return '';
-        }
-    }
-
-    protected function setAutosaveCanonicalFailureRedirect(string $targetId): void
-    {
-        $this->setRedirect(Route::_('index.php?option=com_languages&view=overrides', false));
-    }
     /**
      * Method to cancel an edit.
      *

@@ -9,8 +9,14 @@
       "name": "com_templates.style-autosave",
       "type": "script",
       "uri": "com_templates/style-autosave.min.js",
-      "attributes": { "type": "module" },
-      "dependencies": ["com_autosave.runtime", "com_autosave.integration-controller"]
+      "attributes": {
+        "type": "module"
+      },
+      "dependencies": [
+        "core",
+        "editors",
+        "com_autosave.drafts"
+      ]
     },
     {
       "name": "com_templates.admin-template-toggle-assignment",

@@ -17,6 +17,8 @@
 	<administration>
 		<files folder="admin">
 			<filename>autosave.xml</filename>
+			<filename>access.xml</filename>
+			<filename>config.xml</filename>
 			<folder>services</folder>
 			<folder>src</folder>
 		</files>

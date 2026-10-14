@@ -9,11 +9,13 @@
       "name": "com_modules.module-autosave",
       "type": "script",
       "uri": "com_modules/module-autosave.min.js",
-      "attributes": { "type": "module" },
+      "attributes": {
+        "type": "module"
+      },
       "dependencies": [
-        "com_autosave.runtime",
-        "com_autosave.integration-controller",
-        "com_autosave.create-binding"
+        "core",
+        "editors",
+        "com_autosave.drafts"
       ]
     },
     {

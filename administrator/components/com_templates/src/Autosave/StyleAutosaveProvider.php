@@ -1,173 +1,123 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_templates
- *
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @package Joomla.Administrator
+ * @subpackage com_templates
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Templates\Administrator\Autosave;
 
-use Joomla\CMS\Autosave\AutosaveDynamicSchema;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\TargetAwareAutosaveProviderInterface;
+use Joomla\CMS\Autosave\DraftModel;
+use Joomla\CMS\Autosave\DraftProjection;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Extension\ExtensionHelper;
+use Joomla\CMS\Filter\InputFilter;
 use Joomla\CMS\Form\Form;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
-use Joomla\Database\DatabaseInterface;
-use Joomla\Database\ParameterType;
-use Joomla\String\StringHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class StyleAutosaveProvider implements TargetAwareAutosaveProviderInterface
+/**
+ * Native Style identity, prepared form and selected private values.
+ *
+ * @since  __DEPLOY_VERSION__
+ */
+final class StyleAutosaveProvider implements DraftProviderInterface
 {
-    /** @var callable(object): AutosaveDynamicSchema */
-    private $schemaResolver;
+    private const KEYS = ['title'];
 
-    public function __construct(private readonly DatabaseInterface $db, callable $schemaResolver)
+    /**
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly MVCFactoryInterface $factory)
     {
-        $this->schemaResolver = $schemaResolver;
     }
 
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_templates.style';
     }
 
-    public function getPayloadSchemaVersion(): int
+    /** @inheritDoc */
+    public function describe(Form $form, object $item, User $user): array
     {
-        return 1;
-    }
+        $scope = $this->scope($item);
+        $this->authorize($user, $item, $scope);
 
-    public function canonicalizeTargetId(string $targetId): string
-    {
-        if (
-            preg_match('/^[1-9][0-9]{0,9}$/D', $targetId) !== 1
-            || (\strlen($targetId) === 10 && strcmp($targetId, '2147483647') > 0)
-        ) {
-            throw new AutosaveException('invalid_target', 'The Template Style target is invalid.');
-        }
-
-        return $targetId;
-    }
-
-    public function targetExists(string $targetId): bool
-    {
-        return $this->load($this->canonicalizeTargetId($targetId)) !== null;
-    }
-
-    public function authorize(User $user, string $targetId, AutosaveOperation $operation): void
-    {
-        $record = $this->load($this->canonicalizeTargetId($targetId));
-
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Template Style was not found.');
-        }
-
-        if (!$user->authorise('core.edit', 'com_templates')) {
-            throw new AutosaveException('forbidden', 'The Template Style cannot be edited.');
-        }
-    }
-
-    public function getBaseRevision(string $targetId): string
-    {
-        $record = $this->load($this->canonicalizeTargetId($targetId));
-
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Template Style was not found.');
-        }
-
-        $domain = 'autosave:com_templates.style:base-revision:v1';
-
-        return $domain . ':' . hash(
-            'sha256',
-            $domain . "\0" . json_encode(
-                $record,
-                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
-            )
+        $keys       = self::KEYS;
+        $keys       = array_merge($keys, DraftProjection::groupKeys($form, 'params'));
+        $descriptor = DraftProjection::descriptor(
+            $form,
+            $item,
+            $this->getContext(),
+            empty($item->id) ? null : (string) $item->id,
+            $scope,
+            $keys,
+            []
         );
+
+        $descriptor['unsupported'] = array_values(array_diff(DraftProjection::groupKeys($form, 'params', false), array_keys($descriptor['fields'])));
+        return $descriptor;
     }
 
-    public function getDynamicSchema(string $targetId): AutosaveDynamicSchema
+    /** @inheritDoc */
+    public function read(array $binding, User $user, ?array $payload = null): array
     {
-        $record = $this->load($this->canonicalizeTargetId($targetId));
+        $target = DraftModel::target($binding, $this->getContext());
+        if (array_keys($binding['scope']) !== ['client_id', 'template', 'extension_id', 'parent']) {
+            throw new AutosaveException('scope_conflict', 'The native scope shape changed.');
+        }
+        if ($target === null) {
+            throw new AutosaveException('unsupported_context', 'Template Style creation drafts are not supported.');
+        }
+        $model = $this->factory->createModel('Style', 'Administrator', ['ignore_request' => true]);
+        $model->setState('style.id', $target === null ? 0 : (int) $target);
 
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Template Style was not found.');
+        $item = $model->getItem($target === null ? 0 : (int) $target);
+        if (!$item || ($target !== null && (string) $item->id !== $target)) {
+            throw new AutosaveException('target_not_found', 'The native record was not found.');
         }
 
-        return ($this->schemaResolver)($record);
-    }
-
-    public function getDynamicSchemaForForm(string $targetId, Form $form): AutosaveDynamicSchema
-    {
-        if (!$this->targetExists($targetId)) {
-            throw new AutosaveException('target_not_found', 'The Template Style was not found.');
+        $this->authorize($user, $item, $binding['scope']);
+        $form       = DraftModel::form($model, 'com_templates', $item);
+        $descriptor = $this->describe($form, $item, $user);
+        if ($descriptor['scope'] !== $binding['scope']) {
+            throw new AutosaveException('scope_conflict', 'The native extension, route or client changed.');
         }
-
-        return (new StyleAutosaveSchemaFactory())->fromForm($form);
+        return $descriptor;
     }
 
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
+    private function scope(object $item): array
     {
-        throw $this->invalid();
-    }
-
-    public function normalizePayloadForTarget(string $targetId, mixed $payload, int $schemaVersion): array
-    {
-        $keys = ['title' => true, 'schemaFingerprint' => true, 'params' => true];
-
-        if (
-            $schemaVersion !== 1
-            || !\is_array($payload)
-            || array_is_list($payload)
-            || array_diff_key($payload, $keys)
-            || array_diff_key($keys, $payload)
-            || !\is_string($payload['title'])
-            || preg_match('//u', $payload['title']) !== 1
-            || StringHelper::strlen($payload['title']) > 255
-            || !\is_string($payload['schemaFingerprint'])
-        ) {
-            throw $this->invalid();
+        $client  = (int) $item->client_id;
+        $element = (string) $item->template;
+        if (!\in_array($client, [0, 1], true) || InputFilter::getInstance()->clean($element, 'cmd') !== $element || $element === '') {
+            throw new AutosaveException('scope_conflict', 'The native extension identity is invalid.');
         }
-
-        $schema = $this->getDynamicSchema($targetId);
-
-        if (!hash_equals($schema->fingerprint(), $payload['schemaFingerprint'])) {
-            throw $this->invalid();
+        $extension = ExtensionHelper::getExtensionRecord($element, 'template', $client);
+        if (!$extension || !(int) $extension->enabled || empty($item->xml)) {
+            throw new AutosaveException('unsupported_context', 'The installed native extension form is unavailable.');
         }
-
-        try {
-            $params = $schema->normalizePayload(['params' => $payload['params']])['params'] ?? [];
-        } catch (\InvalidArgumentException) {
-            throw $this->invalid();
-        }
-
-        return [
-            'title'             => $payload['title'],
-            'schemaFingerprint' => $schema->fingerprint(),
-            'params'            => $params,
-        ];
+        return ['client_id' => (string) $client, 'template' => $element, 'extension_id' => (string) $extension->extension_id, 'parent' => (string) ($item->xml->parent ?? '')];
     }
 
-    private function load(string $id): ?object
+    private function authorize(User $user, object $item, array $scope): void
     {
-        $query = $this->db->createQuery()
-            ->select(['id', 'template', 'client_id', 'title', 'home', 'params'])
-            ->from($this->db->quoteName('#__template_styles'))
-            ->where($this->db->quoteName('id') . ' = :id')
-            ->bind(':id', $id, ParameterType::INTEGER);
-
-        return $this->db->setQuery($query)->loadObject() ?: null;
-    }
-
-    private function invalid(): AutosaveException
-    {
-        return new AutosaveException('invalid_payload', 'The Template Style draft payload is invalid.');
+        if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', 'com_templates')) {
+            throw new AutosaveException('forbidden', 'Native component access is denied.');
+        }
+        if (!(empty($item->id) ? false : $user->authorise('core.edit', 'com_templates'))) {
+            throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
+        }
+        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
+            throw new AutosaveException('checkout_conflict', 'The native record is checked out by another user.');
+        }
     }
 }

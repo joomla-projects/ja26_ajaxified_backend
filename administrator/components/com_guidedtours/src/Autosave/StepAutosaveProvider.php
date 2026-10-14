@@ -1,255 +1,115 @@
 <?php
 
 /**
- * @package       Joomla.Administrator
- * @subpackage    com_guidedtours
- *
- * @copyright     (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license       GNU General Public License version 2 or later; see LICENSE.txt
+ * @package Joomla.Administrator
+ * @subpackage com_guidedtours
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Guidedtours\Administrator\Autosave;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
-use Joomla\CMS\Factory;
+use Joomla\CMS\Autosave\DraftModel;
+use Joomla\CMS\Autosave\DraftProjection;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Form\Form;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
-use Joomla\Database\DatabaseInterface;
-use Joomla\Database\ParameterType;
-use Joomla\String\StringHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Component-owned Autosave contract for Guided Tour Steps.
+ * Native Step scope, authority and selected values; no canonical persistence.
  *
  * @since  __DEPLOY_VERSION__
  */
-final class StepAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
+final class StepAutosaveProvider implements DraftProviderInterface
 {
-    private const CONTEXT                = 'com_guidedtours.step';
-    private const MAXIMUM_ID             = '4294967295';
-    private const PAYLOAD_SCHEMA_VERSION = 1;
-    private const BASE_REVISION_DOMAIN   = 'autosave:com_guidedtours.step:base-revision:v1';
-    private const STRING_LIMITS          = [
-        'position'      => 255,
-        'target'        => 255,
-        'title'         => 255,
-        'description'   => 65535,
-        'url'           => 255,
-        'note'          => 255,
-        'requiredvalue' => 65535,
-    ];
-    private const POSITION_VALUES        = ['bottom', 'center', 'left', 'right', 'top'];
-    private const TYPE_VALUES            = [0, 1, 2];
-    private const INTERACTIVE_VALUES     = [1, 2, 3, 4, 5, 6];
+    private const KEYS = ['position', 'target', 'title', 'description', 'url', 'note', 'params.required', 'params.requiredvalue', 'type', 'interactive_type'];
 
-    /** @var callable(): int */
-    private $tourIdResolver;
-
-    public function __construct(private readonly DatabaseInterface $db, ?callable $tourIdResolver = null)
+    /**
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly MVCFactoryInterface $factory)
     {
-        // The owning Tour is immutable creation scope: it is never read from the Autosave
-        // request. Joomla keeps it in server-side user state, written only by StepsModel.
-        $this->tourIdResolver = $tourIdResolver
-            ?? static fn (): int => (int) Factory::getApplication()->getUserState('com_guidedtours.tour_id');
     }
 
+    /** @inheritDoc */
     public function getContext(): string
     {
-        return self::CONTEXT;
+        return 'com_guidedtours.step';
     }
 
-    public function getCreateContractVersion(): string
+    /** @inheritDoc */
+    public function describe(Form $form, object $item, User $user): array
     {
-        return 'guided-tour-step-create-v1';
-    }
+        $scope = $this->scope($form, $item);
+        $this->authorize($user, $item, $scope);
+        $keys = self::KEYS;
 
-    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
-    {
-        // Mirrors FormController::allowAdd(); com_guidedtours has no per-Tour ACL section.
-        if (!$user->authorise('core.create', 'com_guidedtours')) {
-            throw new AutosaveException('forbidden', 'A Guided Tour Step cannot be created by this user.');
-        }
-
-        // A Step is only creatable inside a Tour the server itself resolved. A missing,
-        // malformed or deleted Tour fails closed on every provisional operation.
-        $tourId = ($this->tourIdResolver)();
-
-        if ($tourId <= 0 || $tourId > (int) self::MAXIMUM_ID || !$this->tourExists($tourId)) {
-            throw new AutosaveException('forbidden', 'A Guided Tour Step has no resolvable owning Tour.');
-        }
-    }
-
-    public function canonicalizeTargetId(string $targetId): string
-    {
-        if (
-            preg_match('/^[1-9][0-9]{0,9}$/D', $targetId) !== 1
-            || (\strlen($targetId) === 10 && strcmp($targetId, self::MAXIMUM_ID) > 0)
-        ) {
-            throw new AutosaveException('invalid_target', 'The Guided Tour Step target is invalid.');
-        }
-
-        return $targetId;
-    }
-
-    public function targetExists(string $targetId): bool
-    {
-        return $this->loadStep($this->canonicalizeTargetId($targetId)) !== null;
-    }
-
-    public function authorize(User $user, string $targetId, AutosaveOperation $operation): void
-    {
-        $targetId = $this->canonicalizeTargetId($targetId);
-
-        match ($operation) {
-            AutosaveOperation::InitializeCreate,
-            AutosaveOperation::Initialize,
-            AutosaveOperation::Preserve,
-            AutosaveOperation::Detect,
-            AutosaveOperation::Read,
-            AutosaveOperation::PrepareCanonicalAction,
-            AutosaveOperation::QueryCanonicalAction => null,
-        };
-
-        $step = $this->loadStep($targetId);
-
-        if ($step === null) {
-            throw new AutosaveException('target_not_found', 'The Guided Tour Step was not found.');
-        }
-
-        $canEdit    = $user->authorise('core.edit', 'com_guidedtours');
-        $canEditOwn = (int) $step->created_by === (int) $user->id
-            && $user->authorise('core.edit.own', 'com_guidedtours');
-
-        if (!$canEdit && !$canEditOwn) {
-            throw new AutosaveException('forbidden', 'The Guided Tour Step cannot be edited by this user.');
-        }
-
-        if ((int) $step->checked_out !== 0 && (int) $step->checked_out !== (int) $user->id) {
-            throw new AutosaveException('forbidden', 'The Guided Tour Step is checked out by another user.');
-        }
-    }
-
-    public function getBaseRevision(string $targetId): string
-    {
-        $step = $this->loadStep($this->canonicalizeTargetId($targetId));
-
-        if ($step === null) {
-            throw new AutosaveException('target_not_found', 'The Guided Tour Step was not found.');
-        }
-
-        $canonical = json_encode(
-            [
-                'id'               => (int) $step->id,
-                'tour_id'          => (int) $step->tour_id,
-                'title'            => $step->title,
-                'description'      => $step->description,
-                'position'         => $step->position,
-                'target'           => $step->target,
-                'type'             => (int) $step->type,
-                'interactive_type' => (int) $step->interactive_type,
-                'url'              => $step->url,
-                'note'             => $step->note,
-                'params'           => $step->params,
-                'published'        => (int) $step->published,
-                'language'         => $step->language,
-            ],
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        $descriptor = DraftProjection::descriptor(
+            $form,
+            $item,
+            $this->getContext(),
+            empty($item->id) ? null : (string) $item->id,
+            $scope,
+            $keys,
+            [$item->modified ?? null, $item->modified_time ?? null, $item->modified_user_id ?? null]
         );
 
-        return self::BASE_REVISION_DOMAIN . ':' . hash('sha256', self::BASE_REVISION_DOMAIN . "\0" . $canonical);
+
+        return $descriptor;
     }
 
-    public function getPayloadSchemaVersion(): int
+    /** @inheritDoc */
+    public function read(array $binding, User $user, ?array $payload = null): array
     {
-        return self::PAYLOAD_SCHEMA_VERSION;
-    }
-
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
-    {
-        if ($schemaVersion !== self::PAYLOAD_SCHEMA_VERSION) {
-            throw new AutosaveException('unsupported_schema_version', 'The payload schema version is not supported.');
+        $target = DraftModel::target($binding, $this->getContext());
+        if (array_keys($binding['scope']) !== ['tour_id']) {
+            throw new AutosaveException('scope_conflict', 'The native scope shape changed.');
+        }
+        $model = $this->factory->createModel('Step', 'Administrator', ['ignore_request' => true]);
+        $model->setState('step.id', $target === null ? 0 : (int) $target);
+        $model->setState('step.tour_id', (int) $binding['scope']['tour_id']);
+        $item = $model->getItem($target === null ? 0 : (int) $target);
+        if (!$item || ($target !== null && (string) $item->id !== $target)) {
+            throw new AutosaveException('target_not_found', 'The native record was not found.');
         }
 
-        $integerKeys = ['type', 'interactive_type', 'required'];
-        $required    = array_fill_keys([...array_keys(self::STRING_LIMITS), ...$integerKeys], true);
-
-        if (
-            !\is_array($payload) || array_is_list($payload) || \count($payload) !== \count($required)
-            || array_diff_key($payload, $required) !== [] || array_diff_key($required, $payload) !== []
-        ) {
-            throw $this->invalidPayload();
+        $this->authorize($user, $item, $binding['scope']);
+        $form       = DraftModel::form($model, 'com_guidedtours', $item);
+        $descriptor = $this->describe($form, $item, $user);
+        if ($descriptor['scope'] !== $binding['scope']) {
+            throw new AutosaveException('scope_conflict', 'The native identity or owning relation changed.');
         }
-
-        foreach (self::STRING_LIMITS as $key => $limit) {
-            if (
-                !\is_string($payload[$key]) || preg_match('//u', $payload[$key]) !== 1
-                || StringHelper::strlen($payload[$key]) > $limit
-            ) {
-                throw $this->invalidPayload();
-            }
-        }
-
-        if (
-            !\in_array($payload['position'], self::POSITION_VALUES, true)
-            || !\is_int($payload['type']) || !\in_array($payload['type'], self::TYPE_VALUES, true)
-            || !\is_int($payload['interactive_type'])
-            || !\in_array($payload['interactive_type'], self::INTERACTIVE_VALUES, true)
-            || !\is_int($payload['required']) || !\in_array($payload['required'], [0, 1], true)
-        ) {
-            throw $this->invalidPayload();
-        }
-
-        return [
-            'position'         => $payload['position'],
-            'target'           => $payload['target'],
-            'title'            => $payload['title'],
-            'description'      => $payload['description'],
-            'type'             => $payload['type'],
-            'url'              => $payload['url'],
-            'interactive_type' => $payload['interactive_type'],
-            'note'             => $payload['note'],
-            'required'         => $payload['required'],
-            'requiredvalue'    => $payload['requiredvalue'],
-        ];
+        return $descriptor;
     }
 
-    private function loadStep(string $targetId): ?object
+    private function scope(Form $form, object $item): array
     {
-        $id     = (int) $targetId;
-        $fields = [
-            's.id', 's.tour_id', 's.title', 's.description', 's.position', 's.target', 's.type',
-            's.interactive_type', 's.url', 's.note', 's.params', 's.published', 's.language',
-            's.created_by', 's.checked_out',
-        ];
-        $query = $this->db->createQuery()
-            ->select(array_map(fn ($field) => $this->db->quoteName($field), $fields))
-            ->from($this->db->quoteName('#__guidedtour_steps', 's'))
-            ->innerJoin($this->db->quoteName('#__guidedtours', 't'), $this->db->quoteName('t.id') . ' = ' . $this->db->quoteName('s.tour_id'))
-            ->where($this->db->quoteName('s.id') . ' = :id')
-            ->bind(':id', $id, ParameterType::INTEGER);
-
-        return $this->db->setQuery($query)->loadObject() ?: null;
+        $id   = (int) ($item->tour_id ?? 0);
+        $tour = $this->factory->createModel('Tour', 'Administrator', ['ignore_request' => true])->getItem($id);
+        if ($id <= 0 || !$tour || (int) $tour->id !== $id) {
+            throw new AutosaveException('target_not_found', 'The owning tour was not found.');
+        }
+        return ['tour_id' => (string) $id];
     }
 
-    private function tourExists(int $tourId): bool
+    private function authorize(User $user, object $item, array $scope): void
     {
-        $query = $this->db->createQuery()
-            ->select('COUNT(*)')
-            ->from($this->db->quoteName('#__guidedtours'))
-            ->where($this->db->quoteName('id') . ' = :tourId')
-            ->bind(':tourId', $tourId, ParameterType::INTEGER);
+        $component = 'com_guidedtours';
+        if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', $component)) {
+            throw new AutosaveException('forbidden', 'The native component access is denied.');
+        }
 
-        return (int) $this->db->setQuery($query)->loadResult() === 1;
-    }
-
-    private function invalidPayload(): AutosaveException
-    {
-        return new AutosaveException('invalid_payload', 'The Guided Tour Step draft payload is invalid.');
+        if (!(empty($item->id) ? ($user->authorise('core.create', $component) || \count($user->getAuthorisedCategories($component, 'core.create')) > 0) : $user->authorise('core.edit', $component))) {
+            throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
+        }
+        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
+            throw new AutosaveException('checkout_conflict', 'The record is checked out by another user.');
+        }
     }
 }

@@ -10,8 +10,8 @@
 
 namespace Joomla\Tests\Unit\Administrator\Components\Content\Extension;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\DraftProviderInterface;
 use Joomla\CMS\Categories\CategoryFactoryInterface;
 use Joomla\CMS\Component\Router\RouterFactoryInterface;
 use Joomla\CMS\Dispatcher\ComponentDispatcherFactoryInterface;
@@ -50,7 +50,7 @@ class ContentComponentAutosaveTest extends UnitTestCase
         $provider = $component->getAutosaveProvider('com_content.article');
 
         $this->assertInstanceOf(ArticleAutosaveProvider::class, $provider);
-        $this->assertInstanceOf(AutosaveCreateProviderInterface::class, $provider);
+        $this->assertInstanceOf(DraftProviderInterface::class, $provider);
         $this->assertSame('com_content.article', $provider->getContext());
     }
 

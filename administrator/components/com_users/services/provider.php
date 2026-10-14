@@ -22,7 +22,6 @@ use Joomla\Component\Users\Administrator\Autosave\GroupAutosaveProvider;
 use Joomla\Component\Users\Administrator\Autosave\LevelAutosaveProvider;
 use Joomla\Component\Users\Administrator\Autosave\NoteAutosaveProvider;
 use Joomla\Component\Users\Administrator\Extension\UsersComponent;
-use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
 
@@ -55,7 +54,7 @@ return new class () implements ServiceProviderInterface {
                 $component->setRouterFactory($container->get(RouterFactoryInterface::class));
                 $component->setRegistry($container->get(Registry::class));
                 foreach ([GroupAutosaveProvider::class, LevelAutosaveProvider::class, NoteAutosaveProvider::class] as $providerClass) {
-                    $provider = new $providerClass($container->get(DatabaseInterface::class));
+                    $provider = new $providerClass($container->get(MVCFactoryInterface::class));
                     $component->setAutosaveProvider($provider->getContext(), $provider);
                 }
                 return $component;

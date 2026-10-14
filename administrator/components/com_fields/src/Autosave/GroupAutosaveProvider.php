@@ -1,140 +1,125 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_fields
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @package Joomla.Administrator
+ * @subpackage com_fields
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Fields\Administrator\Autosave;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
-use Joomla\CMS\Factory;
+use Joomla\CMS\Autosave\DraftModel;
+use Joomla\CMS\Autosave\DraftProjection;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Filter\InputFilter;
+use Joomla\CMS\Form\Form;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
-use Joomla\Database\DatabaseInterface;
-use Joomla\Database\ParameterType;
-use Joomla\String\StringHelper;
+use Joomla\Component\Fields\Administrator\Helper\FieldsHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class GroupAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
+/**
+ * Native Group scope, authority and selected values; no canonical persistence.
+ *
+ * @since  __DEPLOY_VERSION__
+ */
+final class GroupAutosaveProvider implements DraftProviderInterface
 {
-    private const LIMITS = ['title' => 255, 'note' => 255, 'description' => 65535];
+    private const KEYS = ['title', 'note', 'description'];
 
-    /** @var callable(): string */
-    private $contextResolver;
-
-    public function __construct(private readonly DatabaseInterface $db, ?callable $contextResolver = null)
+    /**
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly MVCFactoryInterface $factory)
     {
-        // The owning fields context is immutable creation scope. It is never read from the
-        // Autosave request: GroupModel::populateState() stores it in server-side user state
-        // when the native form is built, and only that state is consulted here.
-        $this->contextResolver = $contextResolver
-            ?? static fn (): string => (string) Factory::getApplication()
-                ->getUserState('com_fields.groups.context');
     }
+
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_fields.group';
     }
-    public function getCreateContractVersion(): string
-    {
-        return 'field-group-create-v1';
-    }
-    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
-    {
-        // GroupController::__construct() plus allowAdd() authorise core.create on the
-        // component part of the fields context. The context is resolved from server-side
-        // state and must be a real "component.section" pair - the bare com_fields default
-        // is the "nonsense situation" the native view also refuses to render - so a forged
-        // "context" request variable can neither reach this check nor pick the component.
-        $context = ($this->contextResolver)();
 
-        if (preg_match('/^com_[a-z][a-z0-9_]{0,48}\.[A-Za-z0-9_.-]{1,64}$/D', $context) !== 1) {
-            throw new AutosaveException('forbidden', 'A Field Group has no resolvable owning context.');
+    /** @inheritDoc */
+    public function describe(Form $form, object $item, User $user): array
+    {
+        $scope = $this->scope($form, $item);
+        $this->authorize($user, $item, $scope);
+        $keys = self::KEYS;
+
+        $descriptor = DraftProjection::descriptor(
+            $form,
+            $item,
+            $this->getContext(),
+            empty($item->id) ? null : (string) $item->id,
+            $scope,
+            $keys,
+            [$item->modified ?? null, $item->modified_time ?? null, $item->modified_user_id ?? null]
+        );
+
+
+        return $descriptor;
+    }
+
+    /** @inheritDoc */
+    public function read(array $binding, User $user, ?array $payload = null): array
+    {
+        $target = DraftModel::target($binding, $this->getContext());
+        if (array_keys($binding['scope']) !== ['context']) {
+            throw new AutosaveException('scope_conflict', 'The native scope shape changed.');
+        }
+        $model = $this->factory->createModel('Group', 'Administrator', ['ignore_request' => true]);
+        $model->setState('group.id', $target === null ? 0 : (int) $target);
+        $model->setState('filter.context', $binding['scope']['context']);
+        $item = $model->getItem($target === null ? 0 : (int) $target);
+        if (!$item || ($target !== null && (string) $item->id !== $target)) {
+            throw new AutosaveException('target_not_found', 'The native record was not found.');
+        }
+        if ($target === null) {
+            $item->context = $binding['scope']['context'];
+        }
+        $this->authorize($user, $item, $binding['scope']);
+        $form       = DraftModel::form($model, 'com_fields', $item);
+        $descriptor = $this->describe($form, $item, $user);
+        if ($descriptor['scope'] !== $binding['scope']) {
+            throw new AutosaveException('scope_conflict', 'The native identity or owning relation changed.');
+        }
+        return $descriptor;
+    }
+
+    private function scope(Form $form, object $item): array
+    {
+        $context = (string) ($item->context ?? '');
+        $parts   = FieldsHelper::extract($context);
+        if (!$parts || InputFilter::getInstance()->clean($context, 'cmd') !== $context) {
+            throw new AutosaveException('scope_conflict', 'The native field context is invalid.');
+        }
+        if (isset($item->draftContext) && $item->draftContext !== $context) {
+            throw new AutosaveException('scope_conflict', 'The prepared field context changed.');
+        }
+        return ['context' => $context];
+    }
+
+    private function authorize(User $user, object $item, array $scope): void
+    {
+        $component = FieldsHelper::extract($scope['context'])[0];
+        if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', $component)) {
+            throw new AutosaveException('forbidden', 'The native component access is denied.');
         }
 
-        if (!$user->authorise('core.create', explode('.', $context, 2)[0])) {
-            throw new AutosaveException('forbidden', 'A Field Group cannot be created in this context.');
-        }
-    }
-    public function getPayloadSchemaVersion(): int
-    {
-        return 1;
-    }
-    public function canonicalizeTargetId(string $targetId): string
-    {
-        if (preg_match('/^[1-9][0-9]{0,9}$/D', $targetId) !== 1 || (\strlen($targetId) === 10 && strcmp($targetId, '2147483647') > 0)) {
-            throw new AutosaveException('invalid_target', 'The Field Group target is invalid.');
-        }
-        return $targetId;
-    }
-    public function targetExists(string $targetId): bool
-    {
-        return $this->load($this->canonicalizeTargetId($targetId)) !== null;
-    }
-    public function authorize(User $user, string $targetId, AutosaveOperation $operation): void
-    {
-        $record = $this->load($this->canonicalizeTargetId($targetId));
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Field Group was not found.');
-        }
-        $component = explode('.', $record->context, 2)[0];
-        $asset     = $component . '.fieldgroup.' . (int) $record->id;
         if (
-            !$user->authorise('core.edit', $asset)
-            && !(($user->authorise('core.edit.own', $asset) || $user->authorise('core.edit.own', $component))
-                && (int) $record->created_by === (int) $user->id)
+            !(empty($item->id) ? $user->authorise('core.create', $component) : ($user->authorise('core.edit', $component . '.fieldgroup.' . (int) $item->id)
+            || (($user->authorise('core.edit.own', $component . '.fieldgroup.' . (int) $item->id) || $user->authorise('core.edit.own', $component)) && (int) ($item->created_by ?? 0) === (int) $user->id)))
         ) {
-            throw new AutosaveException('forbidden', 'The Field Group cannot be edited by this user.');
+            throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
         }
-        if ((int) ($record->checked_out ?? 0) !== 0 && (int) $record->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checked_out', 'The Field Group is checked out by another user.');
+        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
+            throw new AutosaveException('checkout_conflict', 'The record is checked out by another user.');
         }
-    }
-    public function getBaseRevision(string $targetId): string
-    {
-        $record = $this->load($this->canonicalizeTargetId($targetId));
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Field Group was not found.');
-        }
-        unset($record->checked_out);
-        $domain = 'autosave:com_fields.group:base-revision:v1';
-        return $domain . ':' . hash('sha256', $domain . "\0" . json_encode($record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
-    }
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
-    {
-        $required = array_fill_keys(array_keys(self::LIMITS), true);
-        if ($schemaVersion !== 1 || !\is_array($payload) || array_is_list($payload) || array_diff_key($payload, $required) || array_diff_key($required, $payload)) {
-            throw $this->invalidPayload();
-        }
-        foreach (self::LIMITS as $key => $limit) {
-            if (!\is_string($payload[$key]) || preg_match('//u', $payload[$key]) !== 1 || StringHelper::strlen($payload[$key]) > $limit) {
-                throw $this->invalidPayload();
-            }
-        }
-        $normalized = [];
-
-        foreach (array_keys($required) as $key) {
-            $normalized[$key] = $payload[$key];
-        }
-
-        return $normalized;
-    }
-    private function load(string $targetId): ?object
-    {
-        $fields = ['id', 'asset_id', 'context', 'title', 'note', 'description', 'state', 'ordering', 'params', 'language', 'created', 'created_by', 'modified', 'modified_by', 'access', 'checked_out'];
-        $query  = $this->db->createQuery()->select(array_map(fn ($field) => $this->db->quoteName($field), $fields))->from($this->db->quoteName('#__fields_groups'))->where($this->db->quoteName('id') . ' = :id')->bind(':id', $targetId, ParameterType::INTEGER);
-        return $this->db->setQuery($query)->loadObject() ?: null;
-    }
-    private function invalidPayload(): AutosaveException
-    {
-        return new AutosaveException('invalid_payload', 'The Field Group draft payload is invalid.');
     }
 }

@@ -11,7 +11,7 @@
 namespace Joomla\Component\Content\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
@@ -31,16 +31,7 @@ use Joomla\Utilities\ArrayHelper;
  */
 class ArticleController extends FormController
 {
-    use AutosaveFormControllerTrait;
     use VersionableControllerTrait;
-
-    private const AUTOSAVE_CONTEXT         = 'com_content.article';
-    private const AUTOSAVE_TASK_INTENTS    = [
-        'apply'     => 'apply',
-        'save'      => 'save-exit',
-        'save2new'  => 'save-new',
-        'save2copy' => 'save-copy',
-    ];
 
     /**
      * Constructor.
@@ -133,7 +124,21 @@ class ArticleController extends FormController
             $this->setRedirect(Route::_($return, false));
         }
 
-        $this->captureAutosaveCanonicalResult($model, 'article.id');
+        $resultId = (int) $model->getState('article.id');
+
+        if ($resultId <= 0) {
+            return;
+        }
+
+        DraftService::reconcileNativeSave(
+            $this->app,
+            $this->input,
+            'com_content.article',
+            $this->input->getInt('id') > 0 ? (string) $this->input->getInt('id') : null,
+            [],
+            $this->getTask(),
+            (string) $resultId
+        );
     }
 
     /**

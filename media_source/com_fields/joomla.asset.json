@@ -10,18 +10,22 @@
       "type": "script",
       "uri": "com_fields/field-autosave.min.js",
       "dependencies": [
-        "com_autosave.integration-controller",
-        "com_autosave.create-binding"
+        "core",
+        "editors",
+        "com_autosave.drafts"
       ],
-      "attributes": {"type": "module"}
+      "attributes": {
+        "type": "module"
+      }
     },
     {
       "name": "com_fields.group-autosave",
       "type": "script",
       "uri": "com_fields/group-autosave.min.js",
       "dependencies": [
-        "com_autosave.integration-controller",
-        "com_autosave.create-binding"
+        "core",
+        "editors",
+        "com_autosave.drafts"
       ],
       "attributes": {
         "type": "module"

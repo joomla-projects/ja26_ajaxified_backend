@@ -1,11 +1,13 @@
 /**
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
-
-import ClientAutosaveController from '../src/client-autosave-controller.es6.js';
-
-const clientAutosaveController = new ClientAutosaveController();
-clientAutosaveController.start();
-
-export default clientAutosaveController;
+import mountDraftForm from '../../com_autosave/js/draft-form.es6.js';
+const start = () => {
+  const configuration = Joomla.getOptions('com_banners.autosave.client');
+  if (!configuration) return;
+  const form = document.getElementById(configuration.formId);
+  if (form) mountDraftForm(form, configuration);
+};
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+else start();

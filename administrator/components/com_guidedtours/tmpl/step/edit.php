@@ -35,13 +35,10 @@ $this->useCoreUI = true;
 
 <form action="<?php echo Route::_('index.php?option=com_guidedtours&view=step&layout=edit&id=' .
     (int) $this->item->id); ?>" method="post" name="adminForm" id="guidedtour-dates-form" class="form-validate">
-
-    <?php if ($this->autosaveEnabled) :
-        ?>
-        <?php echo LayoutHelper::render('joomla.autosave.status'); ?>
-        <?php echo LayoutHelper::render('joomla.autosave.recovery'); ?>
-        <?php
-    endif; ?>
+    <?php if ($this->autosaveEnabled) : ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'feedback', 'id' => $this->autosaveStatusId]); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'recovery', 'id' => $this->autosaveStatusId]); ?>
+    <?php endif; ?>
 
     <?php echo LayoutHelper::render('joomla.edit.title_alias', $this); ?>
 

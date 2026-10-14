@@ -3,9 +3,9 @@
 namespace Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub;
 
 use Joomla\CMS\Application\CMSApplicationInterface;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
 use Joomla\CMS\Autosave\AutosaveServiceInterface;
 use Joomla\CMS\Autosave\AutosaveServiceTrait;
+use Joomla\CMS\Autosave\DraftProviderInterface;
 use Joomla\CMS\Dispatcher\DispatcherInterface;
 use Joomla\CMS\Extension\ComponentInterface;
 
@@ -32,7 +32,7 @@ final class ResolverTestCapableComponent implements ComponentInterface, Autosave
         return $this->contexts;
     }
 
-    public function getAutosaveProvider(string $context): AutosaveProviderInterface
+    public function getAutosaveProvider(string $context): DraftProviderInterface
     {
         if ($this->fail) {
             throw new \RuntimeException('provider failure');
@@ -45,7 +45,7 @@ final class ResolverTestCapableComponent implements ComponentInterface, Autosave
         return $this->getRegisteredAutosaveProvider($context);
     }
 
-    public function forceProvider(string $context, AutosaveProviderInterface $provider): void
+    public function forceProvider(string $context, DraftProviderInterface $provider): void
     {
         $this->forcedProviders[$context] = $provider;
     }

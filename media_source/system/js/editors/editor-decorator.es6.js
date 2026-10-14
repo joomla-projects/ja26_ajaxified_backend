@@ -72,6 +72,16 @@ export default class JoomlaEditorDecorator {
   // id = '';
 
   /**
+   * The native textarea owned by this provider, or null when unsupported.
+   * Consumers must verify its form and projection, not merely its ID.
+   *
+   * @returns {HTMLTextAreaElement|null}
+   */
+  getElement() {
+    return null;
+  }
+
+  /**
    * Class constructor.
    *
    * @param {Object} instance The editor instance

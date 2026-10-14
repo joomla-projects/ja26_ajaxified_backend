@@ -10,7 +10,7 @@
 
 namespace Joomla\Plugin\Task\Autosave\Extension;
 
-use Joomla\CMS\Autosave\AutosaveStorageInterface;
+use Joomla\CMS\Autosave\DraftStore;
 use Joomla\CMS\Date\Date;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Plugin\CMSPlugin;
@@ -31,6 +31,10 @@ use Joomla\Event\SubscriberInterface;
 final class Autosave extends CMSPlugin implements SubscriberInterface
 {
     use TaskPluginTrait;
+
+    private const MAX_PURGE_ROWS = 1000;
+
+    private const MAX_PURGE_SECONDS = 5;
 
     /**
      * Supported task routines.
@@ -58,8 +62,10 @@ final class Autosave extends CMSPlugin implements SubscriberInterface
      *
      * @since  __DEPLOY_VERSION__
      */
-    public function __construct(array $config, private readonly AutosaveStorageInterface $storage)
-    {
+    public function __construct(
+        array $config,
+        private readonly DraftStore $drafts
+    ) {
         parent::__construct($config);
     }
 
@@ -75,32 +81,32 @@ final class Autosave extends CMSPlugin implements SubscriberInterface
     }
 
     /**
-     * Remove one bounded batch of retained Autosave data.
+     * Purge the new store within a run budget, using native Scheduler continuation.
      *
      * @since  __DEPLOY_VERSION__
      */
     private function cleanup(ExecuteTaskEvent $event): int
     {
+        $now     = new Date('now', 'UTC');
+        $started = microtime(true);
+        $deleted = 0;
+
         try {
-            $result = $this->storage->purgeRetainedData(
-                new Date('now', 'UTC'),
-                AutosaveStorageInterface::DEFAULT_PURGE_LIMIT
-            );
+            do {
+                $count = $this->drafts->purge($now, min(DraftStore::PURGE_BATCH_SIZE, self::MAX_PURGE_ROWS - $deleted));
+                $deleted += $count;
+            } while ($count > 0 && $deleted < self::MAX_PURGE_ROWS && microtime(true) - $started < self::MAX_PURGE_SECONDS);
+
+            $remaining = $this->drafts->hasExpired($now);
+            $this->logTask(Text::sprintf('PLG_TASK_AUTOSAVE_DRAFT_CLEANUP_RESULT', $deleted));
+
+            if ($remaining) {
+                $this->logTask(Text::_('PLG_TASK_AUTOSAVE_DRAFT_CLEANUP_REMAINING'));
+            }
         } catch (\Throwable) {
             return Status::KNOCKOUT;
         }
 
-        $this->logTask(
-            Text::sprintf(
-                'PLG_TASK_AUTOSAVE_CLEANUP_RESULT',
-                $result['generations_expired'],
-                $result['closed_generations_released'],
-                $result['canonical_actions_deleted'],
-                $result['generations_deleted'],
-                $result['continuations_deleted']
-            )
-        );
-
-        return Status::OK;
+        return $remaining ? Status::WILL_RESUME : Status::OK;
     }
 }

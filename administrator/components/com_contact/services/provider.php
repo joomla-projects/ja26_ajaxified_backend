@@ -24,7 +24,6 @@ use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\Component\Contact\Administrator\Autosave\ContactAutosaveProvider;
 use Joomla\Component\Contact\Administrator\Extension\ContactComponent;
 use Joomla\Component\Contact\Administrator\Helper\AssociationsHelper;
-use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
 
@@ -62,7 +61,7 @@ return new class () implements ServiceProviderInterface {
                 $component->setCategoryFactory($container->get(CategoryFactoryInterface::class));
                 $component->setAssociationExtension($container->get(AssociationExtensionInterface::class));
                 $component->setRouterFactory($container->get(RouterFactoryInterface::class));
-                $autosaveProvider = new ContactAutosaveProvider($container->get(DatabaseInterface::class));
+                $autosaveProvider = new ContactAutosaveProvider($container->get(MVCFactoryInterface::class));
                 $component->setAutosaveProvider($autosaveProvider->getContext(), $autosaveProvider);
 
                 return $component;

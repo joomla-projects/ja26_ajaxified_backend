@@ -10,9 +10,7 @@
 
 namespace Joomla\Component\Languages\Administrator\View\Language;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -33,6 +31,8 @@ use Joomla\Component\Languages\Administrator\Model\LanguageModel;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'language-autosave-status';
     /**
      * The active item
      *
@@ -92,38 +92,17 @@ class HtmlView extends BaseHtmlView
 
     private function prepareAutosave(): void
     {
-        $app          = Factory::getApplication();
-        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
-        $configurator->disable('com_languages.autosave.language');
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-        try {
-            $provider = $app->bootComponent('com_languages')->getAutosaveProvider('com_languages.language');
-            $itemId   = (int) $this->item->lang_id;
-            $target   = null;
-            if ($itemId > 0) {
-                $target = $provider->canonicalizeTargetId((string) $itemId);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } else {
-                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-            if ($target !== null && !$provider->targetExists($target)) {
-                return;
-            }
-        } catch (\Throwable) {
-            return;
+        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
+            'context'    => 'com_languages.language', 'formId' => 'language-form', 'statusId' => $this->autosaveStatusId,
+            'optionsKey' => 'com_languages.autosave.language', 'script' => 'com_languages.language-autosave',
+            'saveTasks'  => ['language.apply', 'language.save', 'language.save2new', 'language.save2copy'],
+        ]);
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
-        $ids = [];
-        foreach (['title', 'title_native', 'description', 'metadesc', 'sitename'] as $name) {
-            $field = $this->form->getField($name);
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            } $ids[$name] = $field->id;
-        }
-        $configurator->configure($provider, $target, 'com_languages.autosave.language', 'language-form', $ids, 'com_languages.language-autosave');
-        $this->autosaveEnabled = true;
     }
     /**
      * Add the page title and toolbar.

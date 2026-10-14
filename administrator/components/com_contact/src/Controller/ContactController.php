@@ -10,7 +10,7 @@
 
 namespace Joomla\Component\Contact\Administrator\Controller;
 
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Router\Route;
@@ -28,17 +28,7 @@ use Joomla\Utilities\ArrayHelper;
  */
 class ContactController extends FormController
 {
-    use AutosaveFormControllerTrait;
     use VersionableControllerTrait;
-
-    private const AUTOSAVE_CONTEXT      = 'com_contact.contact';
-    private const AUTOSAVE_TASK_INTENTS = [
-        'apply'     => 'apply',
-        'save'      => 'save-exit',
-        'save2new'  => 'save-new',
-        'save2copy' => 'save-copy',
-        'save2menu' => 'save-exit',
-    ];
 
     /**
      * Method override to check if you can add a new record.
@@ -165,8 +155,7 @@ class ContactController extends FormController
 
             $this->setRedirect(Route::_($return, false));
         }
-
-        $this->captureAutosaveCanonicalResult($model, 'contact.id');
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_contact.contact', $this->getTask(), 'id', []);
     }
 
     /**

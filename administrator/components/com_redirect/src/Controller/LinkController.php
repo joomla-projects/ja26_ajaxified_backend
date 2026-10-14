@@ -10,7 +10,7 @@
 
 namespace Joomla\Component\Redirect\Administrator\Controller;
 
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
@@ -25,28 +25,12 @@ use Joomla\CMS\MVC\Model\BaseDatabaseModel;
  */
 class LinkController extends FormController
 {
-    use AutosaveFormControllerTrait;
-
-    private const AUTOSAVE_CONTEXT      = 'com_redirect.link';
-    private const AUTOSAVE_TASK_INTENTS = [
-        'apply'    => 'apply',
-        'save'     => 'save-exit',
-        'save2new' => 'save-new',
-    ];
-
-    /**
-     * Capture the identity from the exact model Joomla saved.
-     *
-     * @param   BaseDatabaseModel  $model      The saved model.
-     * @param   array              $validData  The validated data.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
+    // Parent class access checks are sufficient for this controller.
+    /** Optional draft retirement after the authoritative native success hook. */
     protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
     {
         parent::postSaveHook($model, $validData);
-        $this->captureAutosaveCanonicalResult($model, 'link.id');
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_redirect.link', $this->getTask(), 'id', []);
     }
 }

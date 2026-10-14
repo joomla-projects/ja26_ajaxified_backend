@@ -10,9 +10,7 @@
 
 namespace Joomla\Component\Users\Administrator\View\Group;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -34,6 +32,8 @@ use Joomla\Component\Users\Administrator\Model\GroupModel;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'group-autosave-status';
     /**
      * The Form object
      *
@@ -98,39 +98,19 @@ class HtmlView extends BaseHtmlView
 
     private function prepareAutosave(): void
     {
-        $app          = Factory::getApplication();
-        $key          = 'com_users.autosave.group';
-        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
-        $configurator->disable($key);
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-        try {
-            $provider = $app->bootComponent('com_users')->getAutosaveProvider('com_users.group');
-            $itemId   = (int) $this->item->id;
-            $target   = null;
-            if ($itemId > 0) {
-                $target = $provider->canonicalizeTargetId((string) $itemId);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } else {
-                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-            if ($target !== null && !$provider->targetExists($target)) {
-                return;
-            }
-        } catch (\Throwable) {
-            return;
+        $item                  = clone $this->item;
+
+        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+            'context'    => 'com_users.group', 'formId' => 'group-form', 'statusId' => $this->autosaveStatusId,
+            'optionsKey' => 'com_users.autosave.group', 'script' => 'com_users.group-autosave',
+            'saveTasks'  => ['group.apply', 'group.save', 'group.save2new', 'group.save2copy'],
+        ]);
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
-        $ids = [];
-        foreach (['title'] as $fieldName) {
-            $field = $this->form->getField($fieldName);
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            } $ids[$fieldName] = $field->id;
-        }
-        $configurator->configure($provider, $target, $key, 'group-form', $ids, 'com_users.group-autosave');
-        $this->autosaveEnabled = true;
     }
     /**
      * Add the page title and toolbar.

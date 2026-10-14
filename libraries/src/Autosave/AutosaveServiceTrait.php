@@ -26,7 +26,7 @@ trait AutosaveServiceTrait
     /**
      * Providers keyed by exact qualified context.
      *
-     * @var    array<string, AutosaveProviderInterface>
+     * @var    array<string, DraftProviderInterface>
      * @since  __DEPLOY_VERSION__
      */
     private array $autosaveProviders = [];
@@ -35,13 +35,13 @@ trait AutosaveServiceTrait
      * Register a component-owned provider for one exact context.
      *
      * @param   string                     $context   The exact qualified context.
-     * @param   AutosaveProviderInterface  $provider  The provider.
+     * @param   DraftProviderInterface  $provider  The provider.
      *
      * @return  void
      *
      * @since   __DEPLOY_VERSION__
      */
-    public function setAutosaveProvider(string $context, AutosaveProviderInterface $provider): void
+    public function setAutosaveProvider(string $context, DraftProviderInterface $provider): void
     {
         if (AutosaveContext::getComponentName($context) === null) {
             throw new \InvalidArgumentException('The Autosave provider context is malformed.');
@@ -63,11 +63,11 @@ trait AutosaveServiceTrait
      *
      * @param   string  $context  The exact qualified context.
      *
-     * @return  AutosaveProviderInterface
+     * @return  DraftProviderInterface
      *
      * @since   __DEPLOY_VERSION__
      */
-    public function getAutosaveProvider(string $context): AutosaveProviderInterface
+    public function getAutosaveProvider(string $context): DraftProviderInterface
     {
         if (!isset($this->autosaveProviders[$context])) {
             throw new \OutOfBoundsException('No Autosave provider is registered for this context.');

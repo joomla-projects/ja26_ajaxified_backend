@@ -10,9 +10,9 @@
       "type": "script",
       "uri": "com_categories/category-autosave.min.js",
       "dependencies": [
-        "com_autosave.integration-controller",
-        "com_autosave.create-binding",
-        "editor-api"
+        "core",
+        "editors",
+        "com_autosave.drafts"
       ],
       "attributes": {
         "type": "module"

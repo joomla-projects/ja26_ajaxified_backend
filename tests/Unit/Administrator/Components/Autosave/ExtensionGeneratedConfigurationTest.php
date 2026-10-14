@@ -2,218 +2,42 @@
 
 namespace Joomla\Tests\Unit\Administrator\Components\Autosave;
 
-use Joomla\CMS\Autosave\AutosaveDynamicSchema;
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
 use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\DraftProjection;
 use Joomla\CMS\Dispatcher\ComponentDispatcherFactoryInterface;
 use Joomla\CMS\Extension\ComponentInterface;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\CMS\User\User;
 use Joomla\Component\Modules\Administrator\Autosave\ModuleAutosaveProvider;
-use Joomla\Component\Modules\Administrator\Autosave\ModuleAutosaveSchemaFactory;
-use Joomla\Component\Modules\Administrator\Controller\ModuleController;
 use Joomla\Component\Templates\Administrator\Autosave\StyleAutosaveProvider;
-use Joomla\Component\Templates\Administrator\Autosave\StyleAutosaveSchemaFactory;
-use Joomla\Component\Templates\Administrator\Controller\StyleController;
 use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
 use Joomla\Tests\Unit\UnitTestCase;
 
 class ExtensionGeneratedConfigurationTest extends UnitTestCase
 {
-    /**
-     * @dataProvider invalidTargetCases
-     */
-    public function testProvidersRejectNoncanonicalExistingRecordTargets(string $target): void
-    {
-        $schema = new AutosaveDynamicSchema([]);
-        $db     = $this->databaseReturning((object) ['id' => 1, 'checked_out' => 0]);
-
-        $providers = [
-            new ModuleAutosaveProvider($db, static fn () => $schema),
-            new StyleAutosaveProvider($db, static fn () => $schema),
-        ];
-
-        foreach ($providers as $provider) {
-            try {
-                $provider->canonicalizeTargetId($target);
-                $this->fail('A noncanonical target was accepted.');
-            } catch (\Joomla\CMS\Autosave\AutosaveException $exception) {
-                $this->assertSame('invalid_target', $exception->getErrorCode());
-            }
-        }
-    }
-
-    public static function invalidTargetCases(): array
-    {
-        return [
-            'new record'   => ['0'],
-            'negative'     => ['-1'],
-            'leading zero' => ['01'],
-            'whitespace'   => [' 1'],
-            'decimal'      => ['1.0'],
-            'overflow'     => ['2147483648'],
-        ];
-    }
-
-    public function testFactoriesAreBoundedAndExcludeSensitiveExtensionFields(): void
+    public function testPreparedParametersProtectOnlyDeclaredSupportedControls(): void
     {
         $form = new Form('extension', ['control' => 'jform']);
-        $form->load('<form><fields name="params"><fieldset name="basic"><field name="colour" type="text" maxlength="20"/><field name="mode" type="list"><option value="a">A</option><option value="b">B</option></field><field name="api_token" type="text"/><field name="upload" type="file"/><field name="nested" type="subform"/></fieldset></fields></form>');
-        $module = (new ModuleAutosaveSchemaFactory())->fromForm($form);
-        $style  = (new StyleAutosaveSchemaFactory())->fromForm($form);
-        $this->assertSame(['colour', 'mode'], array_column(array_column($module->fields(), 'path'), 1));
-        $this->assertSame($module->fields(), $style->fields());
-        $this->assertSame($module->fingerprint(), $style->fingerprint());
-    }
-
-    /**
-     * @dataProvider schemaFactoryCases
-     */
-    public function testFactoriesOmitInvalidExtensionFieldsAndRetainSafeSiblings(string $factoryClass): void
-    {
-        $tooManyOptions = '';
-
-        for ($i = 0; $i <= AutosaveDynamicSchema::MAXIMUM_ENUM_VALUES; $i++) {
-            $tooManyOptions .= '<option value="value' . $i . '">Value</option>';
-        }
-
-        $form = new Form('extension', ['control' => 'jform']);
-        $form->load(
-            '<form><fields name="params"><fieldset name="basic">'
-            . '<field name="safe_text" type="text" maxlength="20"/>'
-            . '<field name="safe_boolean" type="checkbox"/>'
-            . '<field name="safe_collection" type="list" multiple="true"><option value="a">A</option><option value="b">B</option></field>'
-            . '<field name="vendor_widget" type="VendorCustom"/>'
-            . '<field name="private_key" type="text"/>'
-            . '<field name="upload_reference" type="text"/>'
-            . '<field name="too_many" type="list">' . $tooManyOptions . '</field>'
-            . '<field name="too_long" type="list"><option value="' . str_repeat('x', 129) . '">Long</option></field>'
-            . '<field name="safe_enum" type="list"><option value="one">One</option><option value="two">Two</option></field>'
-            . '</fieldset></fields></form>'
-        );
-
-        $schema = (new $factoryClass())->fromForm($form);
-
+        $form->setCurrentUser(new User());
+        $form->load('<form><fields name="params"><fieldset>'
+            . '<field name="safe_text" type="text" autosave="true"/>'
+            . '<field name="safe_boolean" type="checkbox" autosave="true"/>'
+            . '<field name="safe_collection" type="list" multiple="true" autosave="true"><option value="a">A</option></field>'
+            . '<field name="secret" type="text" sensitive="true" autosave="true"/>'
+            . '<field name="undeclared" type="text"/>'
+            . '<field name="upload" type="file" autosave="true"/>'
+            . '<field name="nested" type="subform" autosave="true"/>'
+            . '</fieldset></fields></form>');
+        $fields = DraftProjection::describe($form, DraftProjection::groupKeys($form, 'params'));
+        $this->assertSame(['params.safe_text', 'params.safe_boolean', 'params.safe_collection'], array_keys($fields));
+        $this->assertSame(['text', 'checkbox', 'multiple'], array_column($fields, 'control'));
         $this->assertSame(
-            ['safe_boolean', 'safe_collection', 'safe_enum', 'safe_text'],
-            array_column(array_column($schema->fields(), 'path'), 1)
+            ['params.safe_text' => '', 'params.safe_boolean' => '1', 'params.safe_collection' => ['a']],
+            DraftProjection::normalize(['params.safe_text' => '', 'params.safe_boolean' => true, 'params.safe_collection' => ['a']], $fields)
         );
-        $this->assertSame(['boolean', 'strings', 'enum', 'string'], array_column($schema->fields(), 'kind'));
-    }
-
-    /**
-     * @dataProvider schemaFactoryCases
-     */
-    public function testFactoriesDoNotSelectAnOrderDependentSubsetWhenFieldLimitIsExceeded(string $factoryClass): void
-    {
-        $fields = '';
-
-        for ($i = 0; $i <= AutosaveDynamicSchema::MAXIMUM_FIELDS; $i++) {
-            $fields .= '<field name="safe' . $i . '" type="text"/>';
-        }
-
-        $form = new Form('extension', ['control' => 'jform']);
-        $form->load('<form><fields name="params"><fieldset name="basic">' . $fields . '</fieldset></fields></form>');
-
-        $this->assertSame([], (new $factoryClass())->fromForm($form)->fields());
-    }
-
-    public static function schemaFactoryCases(): array
-    {
-        return [
-            'Module'         => [ModuleAutosaveSchemaFactory::class],
-            'Template Style' => [StyleAutosaveSchemaFactory::class],
-        ];
-    }
-
-    public function testProvidersResolveSchemasFromAuthoritativeStoredExtensionIdentity(): void
-    {
-        $schema       = new AutosaveDynamicSchema([]);
-        $moduleRecord = (object) ['id' => 7, 'module' => 'mod_vendor', 'checked_out' => 0];
-        $styleRecord  = (object) ['id' => 9, 'template' => 'vendor_template', 'client_id' => 1];
-        $moduleSeen   = null;
-        $styleSeen    = null;
-
-        $module = new ModuleAutosaveProvider(
-            $this->databaseReturning($moduleRecord),
-            static function (object $record) use (&$moduleSeen, $schema): AutosaveDynamicSchema {
-                $moduleSeen = $record;
-
-                return $schema;
-            }
-        );
-        $style = new StyleAutosaveProvider(
-            $this->databaseReturning($styleRecord),
-            static function (object $record) use (&$styleSeen, $schema): AutosaveDynamicSchema {
-                $styleSeen = $record;
-
-                return $schema;
-            }
-        );
-
-        $module->getDynamicSchema('7');
-        $style->getDynamicSchema('9');
-
-        $this->assertSame($moduleRecord, $moduleSeen);
-        $this->assertSame($styleRecord, $styleSeen);
-    }
-
-    public function testProvidersRejectCrossExtensionFingerprintsAndUnknownParams(): void
-    {
-        $schemaA = new AutosaveDynamicSchema([['path' => ['params', 'colour'], 'id' => 'jform_params_colour', 'kind' => 'string', 'maxLength' => 20]]);
-        $schemaB = new AutosaveDynamicSchema([['path' => ['params', 'layout'], 'id' => 'jform_params_layout', 'kind' => 'string', 'maxLength' => 20]]);
-        $module  = new ModuleAutosaveProvider(
-            $this->databaseReturning((object) ['id' => 7, 'checked_out' => 0]),
-            static fn () => $schemaA
-        );
-        $payload = [
-            'title'             => 'Title',
-            'note'              => '',
-            'version_note'      => '',
-            'showtitle'         => '1',
-            'position'          => 'sidebar',
-            'content'           => '',
-            'schemaFingerprint' => $schemaA->fingerprint(),
-            'params'            => ['colour' => 'blue'],
-        ];
-        $this->assertSame($payload, $module->normalizePayloadForTarget('7', $payload, 1));
-        $this->expectException(\Joomla\CMS\Autosave\AutosaveException::class);
-        $module->normalizePayloadForTarget(
-            '7',
-            array_replace(
-                $payload,
-                ['schemaFingerprint' => $schemaB->fingerprint(), 'params' => ['layout' => 'x']]
-            ),
-            1
-        );
-    }
-
-    public function testTemplateStyleProviderAcceptsOnlyItsExactCurrentSchema(): void
-    {
-        $schema = new AutosaveDynamicSchema([
-            [
-                'path'      => ['params', 'colour'],
-                'id'        => 'jform_params_colour',
-                'kind'      => 'string',
-                'maxLength' => 20,
-            ],
-        ]);
-        $provider = new StyleAutosaveProvider(
-            $this->databaseReturning((object) ['id' => 11]),
-            static fn () => $schema
-        );
-        $payload = [
-            'title'             => 'Cassiopeia',
-            'schemaFingerprint' => $schema->fingerprint(),
-            'params'            => ['colour' => 'blue'],
-        ];
-
-        $this->assertSame($payload, $provider->normalizePayloadForTarget('11', $payload, 1));
-
-        $this->expectException(\Joomla\CMS\Autosave\AutosaveException::class);
-        $provider->normalizePayloadForTarget('11', $payload + ['template' => 'other'], 1);
     }
 
     /**
@@ -249,65 +73,16 @@ class ExtensionGeneratedConfigurationTest extends UnitTestCase
         ];
     }
 
-    public function testControllersUseCanonicalTraitAndProductionWiringIsLiteral(): void
-    {
-        $moduleController = new \ReflectionClass(ModuleController::class);
-        $styleController  = new \ReflectionClass(StyleController::class);
-        $this->assertContains(AutosaveFormControllerTrait::class, $moduleController->getTraitNames());
-        $this->assertContains(AutosaveFormControllerTrait::class, $styleController->getTraitNames());
-        $this->assertSame('com_modules.module', $moduleController->getConstant('AUTOSAVE_CONTEXT'));
-        $this->assertSame(
-            ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'],
-            $moduleController->getConstant('AUTOSAVE_TASK_INTENTS')
-        );
-        $this->assertSame('com_templates.style', $styleController->getConstant('AUTOSAVE_CONTEXT'));
-        $this->assertSame(
-            ['apply' => 'apply', 'save' => 'save-exit', 'save2copy' => 'save-copy'],
-            $styleController->getConstant('AUTOSAVE_TASK_INTENTS')
-        );
-        $moduleView = file_get_contents(JPATH_ADMINISTRATOR . '/components/com_modules/src/View/Module/HtmlView.php');
-        $styleView  = file_get_contents(JPATH_ADMINISTRATOR . '/components/com_templates/src/View/Style/HtmlView.php');
-        $this->assertStringContainsString("'com_modules.module-autosave'", $moduleView);
-        $this->assertStringContainsString("'com_templates.style-autosave'", $styleView);
-    }
 
-    public function testModulePreserveResolverUsesTheAuthoritativeNativeFormDirectory(): void
-    {
-        $service = file_get_contents(JPATH_ADMINISTRATOR . '/components/com_modules/services/provider.php');
 
-        $this->assertStringContainsString(
-            "JPATH_ADMINISTRATOR . '/components/com_modules/forms'",
-            $service
-        );
-        $this->assertStringNotContainsString('/components/com_modules/models/forms', $service);
-        $this->assertFileExists(JPATH_ADMINISTRATOR . '/components/com_modules/forms/module.xml');
-        $this->assertFileExists(JPATH_ADMINISTRATOR . '/components/com_modules/forms/moduleadmin.xml');
-    }
-
-    public function testTemplateStyleProviderUsesOnlyColumnsInTheAuthoritativeTable(): void
-    {
-        $provider = file_get_contents(
-            JPATH_ADMINISTRATOR . '/components/com_templates/src/Autosave/StyleAutosaveProvider.php'
-        );
-        $mysql = file_get_contents(JPATH_INSTALLATION . '/sql/mysql/base.sql');
-        $table = substr(
-            $mysql,
-            strpos($mysql, 'CREATE TABLE IF NOT EXISTS `#__template_styles`'),
-            strpos($mysql, ') ENGINE=', strpos($mysql, 'CREATE TABLE IF NOT EXISTS `#__template_styles`'))
-                - strpos($mysql, 'CREATE TABLE IF NOT EXISTS `#__template_styles`')
-        );
-
-        $this->assertStringNotContainsString("'checked_out'", $provider);
-        $this->assertStringNotContainsString('`checked_out`', $table);
-        $this->assertStringContainsString("'params'", $provider);
-    }
 
     /**
      * @dataProvider siteTemplateStyleForms
      */
-    public function testSiteTemplateStyleFormsProduceAnAutosaveSchema(string $template): void
+    public function testSiteTemplateStyleFormsRespectExplicitParameterCoverage(string $template, bool $brandProtected): void
     {
         $form = new Form('style', ['control' => 'jform']);
+        $form->setCurrentUser(new User());
         $this->assertTrue(
             $form->loadFile(JPATH_ADMINISTRATOR . '/components/com_templates/forms/style.xml')
         );
@@ -315,31 +90,17 @@ class ExtensionGeneratedConfigurationTest extends UnitTestCase
             $form->loadFile(JPATH_SITE . '/templates/' . $template . '/templateDetails.xml', false, '//config')
         );
 
-        $schema = (new StyleAutosaveSchemaFactory())->fromForm($form);
+        $fields = DraftProjection::describe($form, DraftProjection::groupKeys($form, 'params'));
 
-        $names = array_column(array_column($schema->fields(), 'path'), 1);
-
-        $this->assertNotSame('', $schema->fingerprint());
-        $this->assertContains('brand', $names);
-        $this->assertNotContains('systemFontBody', $names);
+        $this->assertSame($brandProtected, \array_key_exists('params.brand', $fields));
+        $this->assertSame($brandProtected, \array_key_exists('params.systemFontBody', $fields));
     }
 
     public static function siteTemplateStyleForms(): array
     {
         return [
-            'Cassiopeia'          => ['cassiopeia'],
-            'Cassiopeia Extended' => ['cassiopeia_extended'],
+            'Cassiopeia'          => ['cassiopeia', true],
+            'Cassiopeia Extended' => ['cassiopeia_extended', false],
         ];
-    }
-
-    private function databaseReturning(object $record): DatabaseInterface
-    {
-        $db = $this->createMock(DatabaseInterface::class);
-        $db->method('createQuery')->willReturnCallback(fn () => $this->getQueryStub($db));
-        $db->method('quoteName')->willReturnArgument(0);
-        $db->method('setQuery')->willReturnSelf();
-        $db->method('loadObject')->willReturn($record);
-
-        return $db;
     }
 }

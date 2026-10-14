@@ -9,11 +9,13 @@
       "name": "com_menus.item-autosave",
       "type": "script",
       "uri": "com_menus/item-autosave.min.js",
-      "attributes": { "type": "module" },
+      "attributes": {
+        "type": "module"
+      },
       "dependencies": [
-        "com_autosave.runtime",
-        "com_autosave.integration-controller",
-        "com_autosave.create-binding"
+        "core",
+        "editors",
+        "com_autosave.drafts"
       ]
     },
     {
@@ -21,8 +23,9 @@
       "type": "script",
       "uri": "com_menus/menu-autosave.min.js",
       "dependencies": [
-        "com_autosave.integration-controller",
-        "com_autosave.create-binding"
+        "core",
+        "editors",
+        "com_autosave.drafts"
       ],
       "attributes": {
         "type": "module"

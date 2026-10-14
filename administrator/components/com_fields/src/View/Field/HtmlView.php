@@ -10,17 +10,13 @@
 
 namespace Joomla\Component\Fields\Administrator\View\Field;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveDynamicCreateDescriptorProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\CMS\Toolbar\ToolbarHelper;
-use Joomla\Component\Fields\Administrator\Autosave\FieldAutosaveProvider;
 use Joomla\Component\Fields\Administrator\Model\FieldModel;
 use Joomla\Filesystem\Path;
 
@@ -36,6 +32,8 @@ use Joomla\Filesystem\Path;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'field-autosave-status';
 
     /**
      * @var     \Joomla\CMS\Form\Form
@@ -96,79 +94,24 @@ class HtmlView extends BaseHtmlView
 
     private function prepareAutosave(): void
     {
-        $app          = Factory::getApplication();
-        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
-        $configurator->disable('com_fields.autosave.field');
-
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-
-        $target       = null;
-        $createScope  = null;
-        $schema       = null;
-        $itemId       = (int) $this->item->id;
-
-        try {
-            $provider = $app->bootComponent('com_fields')->getAutosaveProvider('com_fields.field');
-            if (!$provider instanceof FieldAutosaveProvider) {
-                return;
-            }
-
-            if ($itemId > 0) {
-                $target = $provider->canonicalizeTargetId((string) $itemId);
-                if (!$provider->targetExists($target)) {
-                    return;
-                }
-
-                $schema = $provider->getDynamicSchemaForForm($target, $this->form);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } elseif ($provider instanceof AutosaveDynamicCreateDescriptorProviderInterface) {
-                // The candidate context and field type are server-owned form values.
-                // They are canonicalized and authorized once at initialization; the
-                // browser never resubmits authoritative creation state afterwards.
-                $type    = (string) $this->form->getValue('type');
-                $context = (string) $this->state->get('field.context', '') ?: (string) $this->form->getValue('context');
-
-                if ($type === '' || $context === '') {
-                    return;
-                }
-
-                $createScope = $provider->canonicalizeStaticCreateScope($context . '|' . $type);
-                $provider->authorizeStaticCreateScope($app->getIdentity(), $createScope, AutosaveOperation::InitializeCreate, null);
-                $schema = $provider->getDynamicSchemaForType($type);
-            } else {
-                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-        } catch (\Throwable) {
-            return;
+        $item                  = clone $this->item;
+        $item->draftContext    = (string) $this->state->get('field.context');
+        if (empty($item->id)) {
+            $item->context = $item->draftContext;
+            $item->type    = (string) $this->form->getValue('type', null, '');
         }
-
-        if ($schema === null) {
-            return;
+        $this->form->addControlField('context', $item->context);
+        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+            'context'    => 'com_fields.field', 'formId' => 'item-form', 'statusId' => $this->autosaveStatusId,
+            'optionsKey' => 'com_fields.autosave.field', 'script' => 'com_fields.field-autosave',
+            'saveTasks'  => ['field.apply', 'field.save', 'field.save2new', 'field.save2copy'],
+        ]);
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
-
-        $ids = [];
-        foreach (['title', 'name', 'label', 'description', 'required', 'only_use_in_subform', 'default_value', 'note'] as $name) {
-            $field = $this->form->getField($name);
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            }
-            $ids[$name] = $field->id;
-        }
-
-        $configurator->configure(
-            $provider,
-            $target,
-            'com_fields.autosave.field',
-            'item-form',
-            $ids,
-            'com_fields.field-autosave',
-            ['fields' => $schema->fields(), 'fingerprint' => $schema->fingerprint(), 'support' => $schema->support()],
-            $createScope
-        );
-        $this->autosaveEnabled = true;
     }
 
     /**

@@ -299,3 +299,13 @@ test('stale core provider decorators cannot unregister newer replacements', asyn
     });
   });
 });
+
+test('native providers expose the exact textarea they own', () => {
+  const none = createNoneProvider();
+  assert.equal(new EditorNoneDecorator(none, 'none', 'none').getElement(), none.editor);
+  const element = new FakeTextarea();
+  const tiny = new TinyMCEDecorator({ getElement: () => element }, 'tinymce', 'tiny');
+  assert.equal(tiny.getElement(), element);
+  const code = new CodemirrorDecorator({}, 'codemirror', 'code', () => () => {}, element);
+  assert.equal(code.getElement(), element);
+});

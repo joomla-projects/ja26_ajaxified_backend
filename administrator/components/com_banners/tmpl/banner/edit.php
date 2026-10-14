@@ -8,7 +8,7 @@
  * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
-\defined('_JEXEC') or die;
+defined('_JEXEC') or die;
 
 use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
@@ -26,10 +26,9 @@ $wa->useScript('keepalive')
 ?>
 
 <form action="<?php echo Route::_('index.php?option=com_banners&layout=edit&id=' . (int) $this->item->id); ?>" method="post" name="adminForm" id="banner-form" aria-label="<?php echo Text::_('COM_BANNERS_BANNER_' . ((int) $this->item->id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="form-validate">
-
     <?php if ($this->autosaveEnabled) : ?>
-        <?php echo LayoutHelper::render('joomla.autosave.status'); ?>
-        <?php echo LayoutHelper::render('joomla.autosave.recovery'); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'feedback', 'id' => $this->autosaveStatusId]); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'recovery', 'id' => $this->autosaveStatusId]); ?>
     <?php endif; ?>
 
     <?php echo LayoutHelper::render('joomla.edit.title_alias', $this); ?>
@@ -47,8 +46,10 @@ $wa->useScript('keepalive')
                 <div id="custom">
                     <?php echo $this->form->renderField('custombannercode'); ?>
                 </div>
-                <?php echo $this->form->renderField('clickurl'); ?>
-                <?php echo $this->form->renderField('description'); ?>
+                <?php
+                echo $this->form->renderField('clickurl');
+                echo $this->form->renderField('description');
+                ?>
             </div>
             <div class="col-lg-3">
                 <?php echo LayoutHelper::render('joomla.edit.global', $this); ?>

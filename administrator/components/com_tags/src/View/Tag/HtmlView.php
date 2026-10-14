@@ -10,9 +10,7 @@
 
 namespace Joomla\Component\Tags\Administrator\View\Tag;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -34,6 +32,8 @@ use Joomla\Component\Tags\Administrator\Model\TagModel;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'tag-autosave-status';
     /**
      * The Form object
      *
@@ -100,51 +100,25 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form
             ->addControlField('task');
-        $this->prepareAutosave();
         $this->addToolbar();
+        $this->prepareAutosave();
 
         parent::display($tpl);
     }
 
     private function prepareAutosave(): void
     {
-        $app          = Factory::getApplication();
-        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
-        $configurator->disable('com_tags.autosave.tag');
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-
-        try {
-            $provider = $app->bootComponent('com_tags')->getAutosaveProvider('com_tags.tag');
-            $itemId   = (int) $this->item->id;
-            $target   = null;
-            if ($itemId > 0) {
-                $target = $provider->canonicalizeTargetId((string) $itemId);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } else {
-                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-            if ($target !== null && !$provider->targetExists($target)) {
-                return;
-            }
-        } catch (\Throwable) {
-            return;
+        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
+            'context'    => 'com_tags.tag', 'formId' => 'item-form', 'statusId' => $this->autosaveStatusId,
+            'optionsKey' => 'com_tags.autosave.tag', 'script' => 'com_tags.tag-autosave',
+            'saveTasks'  => ['tag.apply', 'tag.save', 'tag.save2new', 'tag.save2copy'],
+        ]);
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
-
-        $ids = [];
-        foreach (['title', 'note', 'description', 'version_note', 'metadesc', 'metakey', 'parent_id'] as $name) {
-            $field = $this->form->getField($name);
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            }
-
-            $ids[$name] = $field->id;
-        }
-
-        $configurator->configure($provider, $target, 'com_tags.autosave.tag', 'item-form', $ids, 'com_tags.tag-autosave');
-        $this->autosaveEnabled = true;
     }
 
     /**

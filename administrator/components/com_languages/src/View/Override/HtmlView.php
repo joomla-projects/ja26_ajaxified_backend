@@ -10,17 +10,13 @@
 
 namespace Joomla\Component\Languages\Administrator\View\Override;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveStaticScopeProviderInterface;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\CMS\Toolbar\ToolbarHelper;
-use Joomla\Component\Languages\Administrator\Autosave\OverrideAutosaveProvider;
 use Joomla\Component\Languages\Administrator\Model\OverrideModel;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -35,6 +31,9 @@ use Joomla\Component\Languages\Administrator\Model\OverrideModel;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'override-autosave-status';
+
     /**
      * The form to use for the view.
      *
@@ -105,61 +104,52 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form
             ->addControlField('task')
-            ->addControlField('id', $this->item->key);
+            ->addControlField('id', $this->item->key)
+            ->addControlField('filter_client', $this->state->get('filter.client') === 'administrator' ? 1 : 0)
+            ->addControlField('filter_language', $this->state->get('filter.language'));
+
+        $this->prepareAutosave();
 
         $this->addToolbar();
-        $this->prepareAutosave();
+        if ($this->autosaveEnabled) {
+            if ($this->autosaveEnabled) {
+                DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+            }
+        }
         parent::display($tpl);
     }
 
+    /**
+     * Bind the prepared native form to the shared private-draft runtime.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     private function prepareAutosave(): void
     {
-        $app          = Factory::getApplication();
-        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
-        $configurator->disable('com_languages.autosave.override');
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-
-        $client   = (string) $this->state->get('filter.client', 'site');
-        $language = (string) $this->state->get('filter.language', 'en-GB');
-        $target   = null;
-        $scope    = null;
-
-        try {
-            $provider = $app->bootComponent('com_languages')->getAutosaveProvider('com_languages.override');
-
-            if (empty($this->item->key)) {
-                // Genuine new record: the immutable client/language scope is
-                // anchored before the first draft. The browser only transports
-                // the canonical scope candidate; the provider re-canonicalizes
-                // and re-authorizes it on every provisional operation.
-                if (!$provider instanceof AutosaveCreateProviderInterface || !$provider instanceof AutosaveStaticScopeProviderInterface) {
-                    return;
-                }
-
-                $scope = $provider->canonicalizeStaticCreateScope($client . '|' . $language);
-                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
-                $provider->authorizeStaticCreateScope($app->getIdentity(), $scope, AutosaveOperation::InitializeCreate, null);
-            } else {
-                $target = $provider->canonicalizeTargetId(OverrideAutosaveProvider::target($client, $language, (string) $this->item->key));
-
-                if (!$provider->targetExists($target)) {
-                    return;
-                }
-            }
-        } catch (\Throwable) {
-            return;
-        }
-
-        $fields = ['key' => $this->form->getField('key'), 'override' => $this->form->getField('override'), 'both' => $this->form->getField('both')];
-        if (array_filter($fields, static fn ($field) => !$field || !\is_string($field->id) || $field->id === '')) {
-            return;
-        }
-
-        $configurator->configure($provider, $target, 'com_languages.autosave.override', 'override-form', array_map(static fn ($field) => $field->id, $fields), 'com_languages.override-autosave', null, $scope);
-        $this->autosaveEnabled = true;
+        $item                  = clone $this->item;
+        $item->client          = (string) $this->state->get('filter.client');
+        $item->language        = (string) $this->state->get('filter.language');
+        $this->autosaveEnabled = DraftView::configure(
+            Factory::getApplication(),
+            $this->getDocument(),
+            $this->getCurrentUser(),
+            $this->form,
+            $item,
+            [
+                'context'    => 'com_languages.override',
+                'formId'     => 'override-form',
+                'statusId'   => $this->autosaveStatusId,
+                'optionsKey' => 'com_languages.autosave.override',
+                'script'     => 'com_languages.override-autosave',
+                'saveTasks'  => ['override.apply', 'override.save', 'override.save2new'],
+            ]
+        );
     }
+
+
     /**
      * Adds the page title and toolbar.
      *

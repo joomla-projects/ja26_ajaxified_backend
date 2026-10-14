@@ -26,13 +26,10 @@ $wa->useScript('core')
 Text::script('ERROR');
 ?>
 <form action="<?php echo Route::_('index.php?option=com_menus&layout=edit&id=' . (int) $this->item->id); ?>" method="post" name="adminForm" id="item-form" aria-label="<?php echo Text::_('COM_MENUS_MENU_FORM_' . ((int) $this->item->id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="form-validate">
-
-    <?php if ($this->autosaveEnabled) :
-        ?>
-        <?php echo LayoutHelper::render('joomla.autosave.status'); ?>
-        <?php echo LayoutHelper::render('joomla.autosave.recovery'); ?>
-        <?php
-    endif; ?>
+    <?php if ($this->autosaveEnabled) : ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'feedback', 'id' => $this->autosaveStatusId]); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'recovery', 'id' => $this->autosaveStatusId]); ?>
+    <?php endif; ?>
 
     <?php echo LayoutHelper::render('joomla.edit.title_alias', $this); ?>
 

@@ -4,216 +4,157 @@
  * @package     Joomla.Administrator
  * @subpackage  com_languages
  *
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Languages\Administrator\Autosave;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
-use Joomla\CMS\Autosave\AutosaveStaticScopeProviderInterface;
-use Joomla\CMS\Autosave\AutosaveTargetIdentity;
+use Joomla\CMS\Autosave\DraftProjection;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Filter\InputFilter;
+use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\LanguageHelper;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
 use Joomla\Component\Languages\Administrator\Helper\LanguagesHelper;
-use Joomla\String\StringHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class OverrideAutosaveProvider implements
-    AutosaveProviderInterface,
-    AutosaveCreateProviderInterface,
-    AutosaveStaticScopeProviderInterface
+/**
+ * Private override drafts keep native string identity and file persistence separate.
+ *
+ * @since  __DEPLOY_VERSION__
+ */
+final class OverrideAutosaveProvider implements DraftProviderInterface
 {
-    private const TYPE        = 'languages.override';
-    private const KEY_LIMIT   = 110;
-    private const VALUE_LIMIT = 65535;
+    private const KEYS = ['key', 'override', 'both'];
 
-    /** @var callable(string, string): array<string, string> */
-    private $reader;
-
-    public function __construct(?callable $reader = null)
+    /**
+     * Constructor.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly MVCFactoryInterface $factory)
     {
-        $this->reader = $reader ?? static function (string $client, string $language): array {
-            $root = $client === 'administrator' ? JPATH_ADMINISTRATOR : JPATH_SITE;
-
-            return LanguageHelper::parseIniFile($root . '/language/overrides/' . $language . '.override.ini');
-        };
     }
 
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_languages.override';
     }
-    public function getPayloadSchemaVersion(): int
+
+    /**
+     * Validate the native client/language pair before it is used in a file path.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public static function scope(string $client, string $language): array
     {
-        return 1;
-    }
-    public function getCreateContractVersion(): string
-    {
-        return 'override-create-v1';
-    }
-
-    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
-    {
-        // Mirrors the native create gate for Language Overrides: a component-wide
-        // core.create on com_languages. The target client/language live in the
-        // anchored immutable scope, never in the draft payload, so no per-relation
-        // payload authorization is possible or needed here.
-        if (!$user->authorise('core.create', 'com_languages')) {
-            throw new AutosaveException('forbidden', 'A Language Override cannot be created by this user.');
-        }
-    }
-
-    public function getStaticScopeContractVersion(): string
-    {
-        return 'override-scope-v1';
-    }
-
-    public function canonicalizeStaticCreateScope(mixed $candidateScope): string
-    {
-        if (!\is_string($candidateScope)) {
-            throw $this->invalidScope();
-        }
-
-        $parts = explode('|', $candidateScope, 2);
-
-        if (\count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
-            throw $this->invalidScope();
-        }
-
-        [$client, $language] = $parts;
-
         if (
             !\in_array($client, ['site', 'administrator'], true)
-            || \strlen($language) > 32
-            || preg_match('/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/D', $language) !== 1
+            || InputFilter::getInstance()->clean($language, 'cmd') !== $language
+            || !LanguageHelper::exists($language, \constant('JPATH_' . strtoupper($client)))
         ) {
-            throw $this->invalidScope();
+            throw new AutosaveException('scope_conflict', 'The native override scope is unavailable.');
         }
 
-        return $client . '|' . $language;
+        return ['client' => $client, 'language' => $language];
     }
 
-    public function authorizeStaticCreateScope(User $user, string $canonicalScope, AutosaveOperation $operation, ?array $normalizedPayload): void
+    /** @inheritDoc */
+    public function describe(Form $form, object $item, User $user): array
     {
-        // The anchored scope is re-authorized for every provisional operation so a
-        // permission revocation after P1 fails closed. Canonicalizing also rejects
-        // a malformed stored scope before any authorization is granted.
-        $this->canonicalizeStaticCreateScope($canonicalScope);
-
-        if (!$user->authorise('core.create', 'com_languages')) {
-            throw new AutosaveException('forbidden', 'A Language Override cannot be created by this user.');
-        }
-    }
-
-    public function verifyFinalTargetStaticScope(string $finalTargetId, string $canonicalScope): void
-    {
-        // A malformed or foreign composite target fails through canonicalizeTargetId.
-        [$client, $language] = $this->parts($this->canonicalizeTargetId($finalTargetId));
-
-        if ($client . '|' . $language !== $this->canonicalizeStaticCreateScope($canonicalScope)) {
-            throw new AutosaveException('scope_mismatch', 'The saved Language Override does not belong to the anchored client and language.');
-        }
-    }
-
-    public static function target(string $client, string $language, string $key): string
-    {
-        return AutosaveTargetIdentity::composite(self::TYPE, [$client, $language, $key]);
-    }
-
-    public function canonicalizeTargetId(string $targetId): string
-    {
-        try {
-            $identity = AutosaveTargetIdentity::parseComposite($targetId);
-        } catch (\InvalidArgumentException) {
-            throw $this->invalidTarget();
-        }
-        if ($identity['type'] !== self::TYPE || \count($identity['members']) !== 3) {
-            throw $this->invalidTarget();
-        }
-        [$client, $language, $key] = $identity['members'];
+        $scope  = self::scope((string) ($item->client ?? ''), (string) ($item->language ?? ''));
+        $target = (string) ($item->key ?? '');
+        $target = $target === '' ? null : $this->key($target);
+        $this->authorize($user, $target);
+        $fields = DraftProjection::describe($form, self::KEYS);
+        // This key-level snapshot was captured by the same native read as the rendered values.
+        $canonical = $item->draftRevision ?? null;
         if (
-            !\in_array($client, ['site', 'administrator'], true) || $language === '' || StringHelper::strlen($language) > 32
-            || preg_match('/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/D', $language) !== 1 || $key === ''
-            || StringHelper::strlen($key) > self::KEY_LIMIT || LanguagesHelper::filterKey($key) !== $key
+            $target !== null && (!\is_array($canonical) || !\array_key_exists('site', $canonical)
+            || !\array_key_exists('administrator', $canonical))
         ) {
-            throw $this->invalidTarget();
+            throw new AutosaveException('target_not_found', 'The native override revision is unavailable.');
         }
-        return self::target($client, $language, $key);
+
+        return [
+            'context'  => $this->getContext(),
+            'target'   => $target,
+            'scope'    => $scope,
+            'version'  => 1,
+            'fields'   => $fields,
+            'revision' => $target === null ? null : hash('sha256', json_encode(
+                [$target, $scope, $canonical],
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            )),
+            'values' => [
+                'key'      => (string) ($item->key ?? ''),
+                'override' => (string) ($item->override ?? ''),
+                'both'     => !empty($item->both) ? '1' : '0',
+            ],
+            'excluded' => array_values(array_diff(self::KEYS, array_keys($fields))),
+        ];
     }
 
-    public function targetExists(string $targetId): bool
+    /** @inheritDoc */
+    public function read(array $binding, User $user, ?array $payload = null): array
     {
-        [$client, $language, $key] = $this->parts($this->canonicalizeTargetId($targetId));
-        return \array_key_exists($key, $this->read($client, $language));
+        if ($binding['context'] !== $this->getContext() || array_keys($binding['scope']) !== ['client', 'language']) {
+            throw new AutosaveException('scope_conflict', 'The override binding is incompatible.');
+        }
+        $scope  = self::scope($binding['scope']['client'], $binding['scope']['language']);
+        $target = $binding['target_id'] === null ? null : $this->key($binding['target_id']);
+        $this->authorize($user, $target);
+        $model = $this->factory->createModel('Override', 'Administrator', ['ignore_request' => true]);
+        $model->setState('filter.client', $scope['client']);
+        $model->setState('filter.language', $scope['language']);
+        // An explicit empty key is a creation, never the request's unrelated id.
+        $item = $model->getItem($target ?? '');
+        if (!$item || ($target !== null && (string) ($item->key ?? '') !== $target)) {
+            throw new AutosaveException('target_not_found', 'The native override was not found.');
+        }
+        $item->client   = $scope['client'];
+        $item->language = $scope['language'];
+        Form::addFormPath(JPATH_ADMINISTRATOR . '/components/com_languages/forms');
+        $data = (array) $item;
+        $form = $model->getForm($data, false);
+        if (!$form) {
+            throw new AutosaveException('unsupported_context', 'The native override form is unavailable.');
+        }
+        $form->bind(array_intersect_key($data, array_flip(self::KEYS)));
+
+        return $this->describe($form, $item, $user);
     }
 
-    public function authorize(User $user, string $targetId, AutosaveOperation $operation): void
+    private function key(string $key): string
     {
-        if (!$this->targetExists($targetId)) {
-            throw new AutosaveException('target_not_found', 'The Language Override was not found.');
+        if ($key === '' || LanguagesHelper::filterKey($key) !== $key) {
+            throw new AutosaveException('invalid_target', 'The native override identity is invalid.');
         }
-        if (!$user->authorise('core.edit', 'com_languages')) {
-            throw new AutosaveException('forbidden', 'The Language Override cannot be edited by this user.');
-        }
+
+        return $key;
     }
 
-    public function getBaseRevision(string $targetId): string
+    private function authorize(User $user, ?string $target): void
     {
-        [$client, $language, $key] = $this->parts($this->canonicalizeTargetId($targetId));
-        $strings                   = $this->read($client, $language);
-        if (!\array_key_exists($key, $strings)) {
-            throw new AutosaveException('target_not_found', 'The Language Override was not found.');
+        if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', 'com_languages')) {
+            throw new AutosaveException('forbidden', 'Override draft access is denied.');
         }
-        $opposite = $this->read($client === 'site' ? 'administrator' : 'site', $language);
-        $domain   = 'autosave:com_languages.override:entry-revision:v1';
-        $state    = static function (array $entries, string $entryKey): string {
-            if (!\array_key_exists($entryKey, $entries)) {
-                return 'missing';
+        if ($target === null) {
+            if (
+                !$user->authorise('core.create', 'com_languages')
+                && \count($user->getAuthorisedCategories('com_languages', 'core.create')) === 0
+            ) {
+                throw new AutosaveException('forbidden', 'An override cannot be created by this user.');
             }
-
-            $value = (string) $entries[$entryKey];
-
-            return 'present:' . \strlen($value) . ':' . $value;
-        };
-
-        return $domain . ':' . hash('sha256', $domain . "\0primary\0" . $state($strings, $key) . "\0opposite\0" . $state($opposite, $key));
-    }
-
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
-    {
-        $keys = ['key' => true, 'override' => true, 'both' => true];
-        if (
-            $schemaVersion !== 1 || !\is_array($payload) || array_is_list($payload) || array_diff_key($payload, $keys)
-            || array_diff_key($keys, $payload) || !\is_string($payload['key']) || !\is_string($payload['override'])
-            || !\is_bool($payload['both']) || preg_match('//u', $payload['key']) !== 1 || preg_match('//u', $payload['override']) !== 1
-            || StringHelper::strlen($payload['key']) > self::KEY_LIMIT || StringHelper::strlen($payload['override']) > self::VALUE_LIMIT
-        ) {
-            throw new AutosaveException('invalid_payload', 'The Language Override draft payload is invalid.');
+        } elseif (!$user->authorise('core.edit', 'com_languages')) {
+            throw new AutosaveException('forbidden', 'The override cannot be edited by this user.');
         }
-        return ['key' => $payload['key'], 'override' => $payload['override'], 'both' => $payload['both']];
-    }
-
-    private function parts(string $targetId): array
-    {
-        return AutosaveTargetIdentity::parseComposite($targetId)['members'];
-    }
-    private function read(string $client, string $language): array
-    {
-        return ($this->reader)($client, $language);
-    }
-    private function invalidTarget(): AutosaveException
-    {
-        return new AutosaveException('invalid_target', 'The Language Override target is invalid.');
-    }
-    private function invalidScope(): AutosaveException
-    {
-        return new AutosaveException('invalid_scope', 'The Language Override creation scope is invalid.');
     }
 }

@@ -10,7 +10,7 @@
 
 namespace Joomla\Component\Tags\Administrator\Controller;
 
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Versioning\VersionableControllerTrait;
@@ -26,26 +26,7 @@ use Joomla\CMS\Versioning\VersionableControllerTrait;
  */
 class TagController extends FormController
 {
-    use AutosaveFormControllerTrait;
     use VersionableControllerTrait;
-
-    private const AUTOSAVE_CONTEXT      = 'com_tags.tag';
-    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'];
-
-    /**
-     * Capture the authoritative Tag identity after Joomla saves it.
-     *
-     * @param   BaseDatabaseModel  $model      The saved model.
-     * @param   array              $validData  The validated form data.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
-    {
-        $this->captureAutosaveCanonicalResult($model, 'tag.id');
-    }
 
     /**
      * Method to check if you can add a new record.
@@ -81,5 +62,12 @@ class TagController extends FormController
         $this->setRedirect('index.php?option=com_tags&view=tags');
 
         return parent::batch($model);
+    }
+    /** Optional draft retirement after the authoritative native success hook. */
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_tags.tag', $this->getTask(), 'id', []);
     }
 }

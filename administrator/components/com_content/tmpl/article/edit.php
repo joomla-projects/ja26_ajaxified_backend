@@ -59,13 +59,17 @@ $tmpl    = $input->get('tmpl');
 $tmpl    = $tmpl ? '&tmpl=' . $tmpl : '';
 ?>
 <form action="<?php echo Route::_('index.php?option=com_content&layout=' . $layout . $tmpl . '&id=' . (int) $this->item->id); ?>" method="post" name="adminForm" id="item-form" aria-label="<?php echo Text::_('COM_CONTENT_FORM_TITLE_' . ((int) $this->item->id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="form-validate">
-    <?php echo LayoutHelper::render('joomla.edit.title_alias', $this); ?>
-
     <?php
     if ($this->autosaveEnabled) {
-        echo LayoutHelper::render('joomla.autosave.recovery', ['id' => 'item-form-autosave-recovery']);
+        if ($input->getCmd('tmpl') === 'component' && !$isModal) {
+            echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'status', 'id' => $this->autosaveStatusId]);
+        }
+        echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'feedback']);
+        echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'recovery']);
     }
     ?>
+
+    <?php echo LayoutHelper::render('joomla.edit.title_alias', $this); ?>
 
     <div class="main-card">
         <?php echo HTMLHelper::_('uitab.startTabSet', 'myTab', ['active' => 'general', 'recall' => true, 'breakpoint' => 768]); ?>
@@ -75,12 +79,7 @@ $tmpl    = $tmpl ? '&tmpl=' . $tmpl : '';
             <div class="col-lg-9">
                 <div>
                     <fieldset class="adminform">
-                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                            <?php echo $this->form->getLabel('articletext'); ?>
-                            <?php if ($this->autosaveEnabled) : ?>
-                                <?php echo LayoutHelper::render('joomla.autosave.status', ['id' => 'item-form-autosave-status']); ?>
-                            <?php endif; ?>
-                        </div>
+                        <?php echo $this->form->getLabel('articletext'); ?>
                         <?php echo $this->form->getInput('articletext'); ?>
                     </fieldset>
                 </div>

@@ -1,146 +1,123 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_workflow
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @package Joomla.Administrator
+ * @subpackage com_workflow
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Workflow\Administrator\Autosave;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
-use Joomla\CMS\Factory;
+use Joomla\CMS\Autosave\DraftModel;
+use Joomla\CMS\Autosave\DraftProjection;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Form\Form;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
-use Joomla\Database\DatabaseInterface;
-use Joomla\Database\ParameterType;
-use Joomla\String\StringHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class StageAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
+/**
+ * Native Stage scope, authority and selected values; no canonical persistence.
+ *
+ * @since  __DEPLOY_VERSION__
+ */
+final class StageAutosaveProvider implements DraftProviderInterface
 {
-    private const MAXIMUM_ID = '2147483647';
+    private const KEYS = ['title', 'description'];
 
-    /** @var callable(): int */
-    private $workflowIdResolver;
-
-    public function __construct(private readonly DatabaseInterface $db, ?callable $workflowIdResolver = null)
+    /**
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly MVCFactoryInterface $factory)
     {
-        // The owning Workflow is immutable creation scope. It is never read from the
-        // Autosave request: StageModel::getForm() puts it into server-side user state
-        // when the native new-Stage form is built, and only that state is consulted here.
-        $this->workflowIdResolver = $workflowIdResolver
-            ?? static fn (): int => (int) Factory::getApplication()
-                ->getUserState('com_workflow.stage.filter.workflow_id');
     }
 
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_workflow.stage';
     }
 
-    public function getCreateContractVersion(): string
+    /** @inheritDoc */
+    public function describe(Form $form, object $item, User $user): array
     {
-        return 'workflow-stage-create-v1';
+        $scope = $this->scope($form, $item);
+        $this->authorize($user, $item, $scope);
+        $keys = self::KEYS;
+
+        $descriptor = DraftProjection::descriptor(
+            $form,
+            $item,
+            $this->getContext(),
+            empty($item->id) ? null : (string) $item->id,
+            $scope,
+            $keys,
+            []
+        );
+
+
+        return $descriptor;
     }
 
-    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    /** @inheritDoc */
+    public function read(array $binding, User $user, ?array $payload = null): array
     {
-        $workflowId = ($this->workflowIdResolver)();
-        $workflow   = $workflowId > 0 && $workflowId <= 2147483647 ? $this->loadWorkflow($workflowId) : null;
-
-        if ($workflow === null) {
-            throw new AutosaveException('forbidden', 'A Workflow Stage has no resolvable owning Workflow.');
+        $target = DraftModel::target($binding, $this->getContext());
+        if (array_keys($binding['scope']) !== ['extension', 'workflow_id']) {
+            throw new AutosaveException('scope_conflict', 'The native scope shape changed.');
         }
-
-        // StageController::allowAdd() scopes creation to the owning Workflow asset. The
-        // component part is taken from the stored Workflow row rather than the request,
-        // so a forged extension cannot move the permission check to another component.
-        $component = explode('.', (string) $workflow->extension, 2)[0];
-
-        if ($component === '' || !$user->authorise('core.create', $component . '.workflow.' . $workflowId)) {
-            throw new AutosaveException('forbidden', 'A Workflow Stage cannot be created in this Workflow.');
+        $model = $this->factory->createModel('Stage', 'Administrator', ['ignore_request' => true]);
+        $model->setState('stage.id', $target === null ? 0 : (int) $target);
+        $model->setState('filter.extension', $binding['scope']['extension']);
+        $model->setState('filter.workflow_id', (int) $binding['scope']['workflow_id']);
+        $item = $model->getItem($target === null ? 0 : (int) $target);
+        if (!$item || ($target !== null && (string) $item->id !== $target)) {
+            throw new AutosaveException('target_not_found', 'The native record was not found.');
         }
+        if ($target === null) {
+            $item->workflow_id = (int) $binding['scope']['workflow_id'];
+        }
+        $this->authorize($user, $item, $binding['scope']);
+        $form       = DraftModel::form($model, 'com_workflow', $item);
+        $descriptor = $this->describe($form, $item, $user);
+        if ($descriptor['scope'] !== $binding['scope']) {
+            throw new AutosaveException('scope_conflict', 'The native identity or owning relation changed.');
+        }
+        return $descriptor;
     }
 
-    public function getPayloadSchemaVersion(): int
+    private function scope(Form $form, object $item): array
     {
-        return 1;
-    }
-    public function canonicalizeTargetId(string $id): string
-    {
-        if (preg_match('/^[1-9][0-9]{0,9}$/D', $id) !== 1 || (\strlen($id) === 10 && strcmp($id, self::MAXIMUM_ID) > 0)) {
-            throw new AutosaveException('invalid_target', 'The Stage target is invalid.');
+        $workflowId = (int) ($item->workflow_id ?? 0);
+        $workflow   = $this->factory->createModel('Workflow', 'Administrator', ['ignore_request' => true])->getItem($workflowId);
+        if ($workflowId <= 0 || !$workflow || (int) $workflow->id !== $workflowId) {
+            throw new AutosaveException('target_not_found', 'The owning workflow was not found.');
         }
-        return $id;
+        $extension = (string) $workflow->extension;
+        DraftModel::extension($extension, $item->draftExtension ?? null);
+        return ['extension' => $extension, 'workflow_id' => (string) $workflowId];
     }
-    public function targetExists(string $id): bool
-    {
-        return $this->load($this->canonicalizeTargetId($id)) !== null;
-    }
-    public function authorize(User $user, string $id, AutosaveOperation $operation): void
-    {
-        $record = $this->load($this->canonicalizeTargetId($id));
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Stage was not found.');
-        }
-        if (!$user->authorise('core.edit', $record->extension . '.stage.' . (int) $record->id)) {
-            throw new AutosaveException('forbidden', 'The Stage cannot be edited by this user.');
-        }
-        if ((int) ($record->checked_out ?? 0) !== 0 && (int) $record->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checked_out', 'The Stage is checked out by another user.');
-        }
-    }
-    public function getBaseRevision(string $id): string
-    {
-        $record = $this->load($this->canonicalizeTargetId($id));
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Stage was not found.');
-        }
-        $domain = 'autosave:com_workflow.stage:base-revision:v1';
-        $json   = json_encode($record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        return $domain . ':' . hash('sha256', $domain . "\0" . $json);
-    }
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
-    {
-        $required = ['title' => true, 'description' => true];
 
-        if ($schemaVersion !== 1 || !\is_array($payload) || array_is_list($payload) || array_diff_key($payload, $required) || array_diff_key($required, $payload)) {
-            throw $this->invalid();
+    private function authorize(User $user, object $item, array $scope): void
+    {
+        $component = explode('.', $scope['extension'])[0];
+        if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage.workflow', $component)) {
+            throw new AutosaveException('forbidden', 'The native component access is denied.');
         }
-        foreach (['title' => 255, 'description' => 65535] as $key => $limit) {
-            if (!\is_string($payload[$key]) || preg_match('//u', $payload[$key]) !== 1 || StringHelper::strlen($payload[$key]) > $limit) {
-                throw $this->invalid();
-            }
+
+        if (
+            !(empty($item->id) ? $user->authorise('core.create', $component . '.workflow.' . $scope['workflow_id']) : ($user->authorise('core.edit', $component . '.stage.' . (int) $item->id)
+            || (isset($item->created_by) && $user->authorise('core.edit.own', $component . '.stage.' . (int) $item->id) && (int) $item->created_by === (int) $user->id)))
+        ) {
+            throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
         }
-        return ['title' => $payload['title'], 'description' => $payload['description']];
-    }
-    private function loadWorkflow(int $workflowId): ?object
-    {
-        $query = $this->db->createQuery()
-            ->select($this->db->quoteName(['id', 'extension']))
-            ->from($this->db->quoteName('#__workflows'))
-            ->where($this->db->quoteName('id') . ' = :id')
-            ->bind(':id', $workflowId, ParameterType::INTEGER);
-
-        $record = $this->db->setQuery($query)->loadObject() ?: null;
-
-        return $record !== null && \is_string($record->extension) && $record->extension !== '' ? $record : null;
-    }
-    private function load(string $id): ?object
-    {
-        $fields = ['s.id', 's.asset_id', 's.ordering', 's.workflow_id', 's.published', 's.title', 's.description', 's.default', 's.position', 's.checked_out', 's.checked_out_time', 'w.extension'];
-        $query  = $this->db->createQuery()->select(array_map(fn ($f) => $this->db->quoteName($f), $fields))->from($this->db->quoteName('#__workflow_stages', 's'))->join('INNER', $this->db->quoteName('#__workflows', 'w') . ' ON ' . $this->db->quoteName('w.id') . ' = ' . $this->db->quoteName('s.workflow_id'))->where($this->db->quoteName('s.id') . ' = :id')->bind(':id', $id, ParameterType::INTEGER);
-        return $this->db->setQuery($query)->loadObject() ?: null;
-    }
-    private function invalid(): AutosaveException
-    {
-        return new AutosaveException('invalid_payload', 'The Stage draft payload is invalid.');
+        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
+            throw new AutosaveException('checkout_conflict', 'The record is checked out by another user.');
+        }
     }
 }

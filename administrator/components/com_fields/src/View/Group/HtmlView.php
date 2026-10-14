@@ -10,9 +10,7 @@
 
 namespace Joomla\Component\Fields\Administrator\View\Group;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -36,6 +34,8 @@ use Joomla\Filesystem\Path;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'group-autosave-status';
     /**
      * @var    \Joomla\CMS\Form\Form
      *
@@ -109,43 +109,23 @@ class HtmlView extends BaseHtmlView
 
     private function prepareAutosave(): void
     {
-        $app          = Factory::getApplication();
-        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
-        $configurator->disable('com_fields.autosave.group');
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-
-        try {
-            $provider = $app->bootComponent('com_fields')->getAutosaveProvider('com_fields.group');
-            $itemId   = (int) $this->item->id;
-            $target   = null;
-            if ($itemId > 0) {
-                $target = $provider->canonicalizeTargetId((string) $itemId);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } else {
-                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-            if ($target !== null && !$provider->targetExists($target)) {
-                return;
-            }
-        } catch (\Throwable) {
-            return;
+        $item                  = clone $this->item;
+        $item->draftContext    = (string) $this->state->get('filter.context');
+        if (empty($item->id)) {
+            $item->context = $item->draftContext;
         }
-
-        $ids = [];
-        foreach (['title', 'note', 'description'] as $name) {
-            $field = $this->form->getField($name);
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            }
-
-            $ids[$name] = $field->id;
+        $this->form->addControlField('context', $item->context);
+        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+            'context'    => 'com_fields.group', 'formId' => 'item-form', 'statusId' => $this->autosaveStatusId,
+            'optionsKey' => 'com_fields.autosave.group', 'script' => 'com_fields.group-autosave',
+            'saveTasks'  => ['group.apply', 'group.save', 'group.save2new', 'group.save2copy'],
+        ]);
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
-
-        $configurator->configure($provider, $target, 'com_fields.autosave.group', 'item-form', $ids, 'com_fields.group-autosave');
-        $this->autosaveEnabled = true;
     }
 
     /**

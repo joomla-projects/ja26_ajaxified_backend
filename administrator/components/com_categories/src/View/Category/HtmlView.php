@@ -10,10 +10,7 @@
 
 namespace Joomla\Component\Categories\Administrator\View\Category;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveStaticScopeProviderInterface;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -39,6 +36,9 @@ use Joomla\Component\Categories\Administrator\Model\CategoryModel;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'category-autosave-status';
+
     /**
      * The Form object
      *
@@ -149,6 +149,7 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task')
             ->addControlField('return', $input->getBase64('return', ''))
             ->addControlField('forcedLanguage', $forcedLanguage);
+
         $this->prepareAutosave();
         if ($this->getLayout() !== 'modal') {
             $this->addToolbar();
@@ -156,65 +157,41 @@ class HtmlView extends BaseHtmlView
             $this->addModalToolbar();
         }
 
+        if ($this->autosaveEnabled) {
+            if ($this->autosaveEnabled) {
+                DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+            }
+        }
         parent::display($tpl);
     }
 
+    /**
+     * Bind the prepared native form to the shared private-draft runtime.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
     private function prepareAutosave(): void
     {
-        $app             = Factory::getApplication();
-        $configurator    = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
-        $candidateScope  = null;
-        $configurator->disable('com_categories.autosave.category');
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-
-        try {
-            $provider = $app->bootComponent('com_categories')->getAutosaveProvider('com_categories.category');
-            $itemId   = (int) $this->item->id;
-            $target   = null;
-
-            if ($itemId > 0) {
-                $target = $provider->canonicalizeTargetId((string) $itemId);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } elseif ($provider instanceof AutosaveStaticScopeProviderInterface) {
-                // The candidate owning extension is transported once at initialization and
-                // canonicalized/authorized server-side before it is anchored to the lineage.
-                $candidateScope = $provider->canonicalizeStaticCreateScope((string) $this->state->get('category.extension', ''));
-                $provider->authorizeStaticCreateScope($app->getIdentity(), $candidateScope, AutosaveOperation::InitializeCreate, null);
-            } else {
-                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-
-            if ($target !== null && !$provider->targetExists($target)) {
-                return;
-            }
-        } catch (\Throwable) {
-            return;
-        }
-
-        $ids = [];
-        foreach (['title', 'note', 'description', 'version_note', 'metadesc', 'metakey', 'parent_id'] as $name) {
-            $field = $this->form->getField($name);
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            }
-
-            $ids[$name] = $field->id;
-        }
-
-        $configurator->configure(
-            $provider,
-            $target,
-            'com_categories.autosave.category',
-            'item-form',
-            $ids,
-            'com_categories.category-autosave',
-            null,
-            $candidateScope
+        $item                  = clone $this->item;
+        $item->draftExtension  = (string) $this->state->get('category.extension');
+        $this->autosaveEnabled = DraftView::configure(
+            Factory::getApplication(),
+            $this->getDocument(),
+            $this->getCurrentUser(),
+            $this->form,
+            $item,
+            [
+                'context'    => 'com_categories.category',
+                'formId'     => 'item-form',
+                'statusId'   => $this->autosaveStatusId,
+                'optionsKey' => 'com_categories.autosave.category',
+                'script'     => 'com_categories.category-autosave',
+                'saveTasks'  => ['category.apply', 'category.save', 'category.save2new', 'category.save2copy', 'category.save2menulist', 'category.save2menublog'],
+            ]
         );
-        $this->autosaveEnabled = true;
     }
 
     /**

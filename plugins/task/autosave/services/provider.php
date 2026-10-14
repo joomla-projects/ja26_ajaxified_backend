@@ -10,11 +10,10 @@
 
 \defined('_JEXEC') or die;
 
-use Joomla\CMS\Autosave\AutosaveStorage;
+use Joomla\CMS\Autosave\DraftStore;
 use Joomla\CMS\Extension\PluginInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Plugin\PluginHelper;
-use Joomla\Component\Autosave\Administrator\Extension\AutosaveComponent;
 use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
@@ -31,12 +30,11 @@ return new class () implements ServiceProviderInterface {
         $container->set(
             PluginInterface::class,
             $container->lazy(Autosave::class, function (Container $container) {
+                $db = $container->get(DatabaseInterface::class);
+
                 $plugin = new Autosave(
                     (array) PluginHelper::getPlugin('task', 'autosave'),
-                    new AutosaveStorage(
-                        $container->get(DatabaseInterface::class),
-                        AutosaveComponent::STORAGE_POLICY
-                    )
+                    new DraftStore($db)
                 );
                 $plugin->setApplication(Factory::getApplication());
 

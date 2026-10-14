@@ -1,224 +1,117 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_finder
- *
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @package Joomla.Administrator
+ * @subpackage com_finder
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Finder\Administrator\Autosave;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
+use Joomla\CMS\Autosave\DraftModel;
+use Joomla\CMS\Autosave\DraftProjection;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Form\Form;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
-use Joomla\Database\DatabaseInterface;
-use Joomla\Database\ParameterType;
-use Joomla\String\StringHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Bounded Autosave contract for existing Finder Filter records.
+ * Native Filter identity, prepared form and selected private values.
  *
  * @since  __DEPLOY_VERSION__
  */
-final class FilterAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
+final class FilterAutosaveProvider implements DraftProviderInterface
 {
-    private const STRING_LIMITS = [
-        'title'            => 255,
-        'alias'            => 255,
-        'created'          => 255,
-        'created_alt'      => 255,
-        'created_by'       => 10,
-        'created_by_alias' => 255,
-    ];
+    private const KEYS = ['title', 'alias', 'created', 'created_by', 'created_by_alias', 'state', 'params.w1', 'params.d1', 'params.w2', 'params.d2', 't[]'];
 
-    private const DATE_STRING_LIMIT = 255;
-    private const MAXIMUM_ID        = '2147483647';
-    private const MAXIMUM_MAPS      = 1000;
-
-    public function __construct(private readonly DatabaseInterface $db)
+    /**
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_finder.filter';
     }
 
-    public function getCreateContractVersion(): string
+    /** @inheritDoc */
+    public function describe(Form $form, object $item, User $user): array
     {
-        return 'finder-filter-create-v1';
-    }
+        $scope = $this->scope($item);
+        $this->authorize($user, $item, $scope);
+        $item          = clone $item;
+        $item->{'t[]'} = array_values(array_unique(array_map('strval', \is_array($item->data ?? null) ? $item->data : array_filter(explode(',', (string) ($item->data ?? ''))))));
+        sort($item->{'t[]'}, SORT_NUMERIC);
+        $keys = self::KEYS;
 
-    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
-    {
-        if (!$user->authorise('core.create', 'com_finder')) {
-            throw new AutosaveException('forbidden', 'A Finder Filter cannot be created by this user.');
-        }
-    }
-
-    public function getPayloadSchemaVersion(): int
-    {
-        return 1;
-    }
-
-    public function canonicalizeTargetId(string $targetId): string
-    {
-        if (!$this->isCanonicalPositiveId($targetId)) {
-            throw new AutosaveException('invalid_target', 'The Finder Filter target is invalid.');
-        }
-
-        return $targetId;
-    }
-
-    public function targetExists(string $targetId): bool
-    {
-        return $this->load($this->canonicalizeTargetId($targetId)) !== null;
-    }
-
-    public function authorize(User $user, string $targetId, AutosaveOperation $operation): void
-    {
-        $record = $this->load($this->canonicalizeTargetId($targetId));
-
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Finder Filter was not found.');
-        }
-
-        if (!$user->authorise('core.edit', 'com_finder')) {
-            throw new AutosaveException('forbidden', 'The Finder Filter cannot be edited by this user.');
-        }
-
-        if ((int) $record->checked_out !== 0 && (int) $record->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checked_out', 'The Finder Filter is checked out by another user.');
-        }
-    }
-
-    public function getBaseRevision(string $targetId): string
-    {
-        $record = $this->load($this->canonicalizeTargetId($targetId));
-
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Finder Filter was not found.');
-        }
-
-        unset($record->checked_out);
-        $domain = 'autosave:com_finder.filter:base-revision:v1';
-
-        return $domain . ':' . hash(
-            'sha256',
-            $domain . "\0" . json_encode($record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+        $descriptor = DraftProjection::descriptor(
+            $form,
+            $item,
+            $this->getContext(),
+            empty($item->filter_id) ? null : (string) $item->filter_id,
+            $scope,
+            $keys,
+            [$item->modified ?? null, $item->modified_by ?? null]
         );
+        $descriptor['fields']['t[]'] = ['id' => 'finder-taxonomy', 'name' => 't[]', 'control' => 'checkboxes', 'label' => 'COM_FINDER_EDIT_FILTER'];
+        $descriptor['excluded']      = array_values(array_diff($descriptor['excluded'], ['t[]']));
+        $descriptor['values']['t[]'] = $item->{'t[]'};
+        if ($descriptor['target'] !== null) {
+            $descriptor['revision'] = hash('sha256', json_encode([$descriptor['revision'], $item->{'t[]'}], JSON_THROW_ON_ERROR));
+        }
+
+        return $descriptor;
     }
 
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
+    /** @inheritDoc */
+    public function read(array $binding, User $user, ?array $payload = null): array
     {
-        $keys = [...array_keys(self::STRING_LIMITS), 'state', 'params', 'taxonomy_ids'];
-
-        if (
-            $schemaVersion !== 1 || !\is_array($payload) || array_is_list($payload)
-            || array_diff_key($payload, array_fill_keys($keys, true)) !== []
-            || array_diff_key(array_fill_keys($keys, true), $payload) !== []
-        ) {
-            throw $this->invalidPayload();
+        $target = DraftModel::target($binding, $this->getContext());
+        if (array_keys($binding['scope']) !== []) {
+            throw new AutosaveException('scope_conflict', 'The native scope shape changed.');
         }
 
-        foreach (self::STRING_LIMITS as $key => $limit) {
-            if (!$this->isBoundedString($payload[$key], $limit)) {
-                throw $this->invalidPayload();
-            }
+        $model = $this->factory->createModel('Filter', 'Administrator', ['ignore_request' => true]);
+        $model->setState('filter.id', $target === null ? 0 : (int) $target);
+
+        $item = $model->getItem($target === null ? 0 : (int) $target);
+        if (!$item || ($target !== null && (string) $item->filter_id !== $target)) {
+            throw new AutosaveException('target_not_found', 'The native record was not found.');
         }
 
-        if ($payload['created_by'] !== '' && !$this->isCanonicalNonNegativeId($payload['created_by'])) {
-            throw $this->invalidPayload();
+        $this->authorize($user, $item, $binding['scope']);
+        $form       = DraftModel::form($model, 'com_finder', $item);
+        $descriptor = $this->describe($form, $item, $user);
+        if ($descriptor['scope'] !== $binding['scope']) {
+            throw new AutosaveException('scope_conflict', 'The native extension, route or client changed.');
         }
-
-        if (!\is_int($payload['state']) || !\in_array($payload['state'], [0, 1], true)) {
-            throw $this->invalidPayload();
-        }
-
-        $params    = $payload['params'];
-        $paramKeys = ['w1', 'd1', 'd1_alt', 'w2', 'd2', 'd2_alt'];
-
-        if (
-            !\is_array($params) || array_is_list($params)
-            || array_diff_key($params, array_fill_keys($paramKeys, true)) !== []
-            || array_diff_key(array_fill_keys($paramKeys, true), $params) !== []
-        ) {
-            throw $this->invalidPayload();
-        }
-
-        foreach (['w1', 'w2'] as $key) {
-            if (!\is_string($params[$key]) || !\in_array($params[$key], ['', '-1', '0', '1'], true)) {
-                throw $this->invalidPayload();
-            }
-        }
-
-        foreach (['d1', 'd1_alt', 'd2', 'd2_alt'] as $key) {
-            if (!$this->isBoundedString($params[$key], self::DATE_STRING_LIMIT)) {
-                throw $this->invalidPayload();
-            }
-        }
-
-        if (
-            !\is_array($payload['taxonomy_ids']) || !array_is_list($payload['taxonomy_ids'])
-            || \count($payload['taxonomy_ids']) > self::MAXIMUM_MAPS
-        ) {
-            throw $this->invalidPayload();
-        }
-
-        $seen = [];
-
-        foreach ($payload['taxonomy_ids'] as $id) {
-            if (!\is_string($id) || !$this->isCanonicalPositiveId($id) || isset($seen[$id])) {
-                throw $this->invalidPayload();
-            }
-
-            $seen[$id] = true;
-        }
-
-        return array_replace(array_fill_keys($keys, null), $payload);
+        return $descriptor;
     }
 
-    private function load(string $targetId): ?object
+    private function scope(object $item): array
     {
-        $fields = [
-            'filter_id', 'title', 'alias', 'state', 'created', 'created_by', 'created_by_alias',
-            'modified', 'modified_by', 'checked_out', 'map_count', 'data', 'params',
-        ];
-        $query = $this->db->createQuery()
-            ->select(array_map(fn ($field) => $this->db->quoteName($field), $fields))
-            ->from($this->db->quoteName('#__finder_filters'))
-            ->where($this->db->quoteName('filter_id') . ' = :id')
-            ->bind(':id', $targetId, ParameterType::INTEGER);
-
-        return $this->db->setQuery($query)->loadObject() ?: null;
+        return [];
     }
 
-    private function isCanonicalPositiveId(string $value): bool
+    private function authorize(User $user, object $item, array $scope): void
     {
-        return preg_match('/^[1-9][0-9]{0,9}$/D', $value) === 1
-            && (\strlen($value) < 10 || strcmp($value, self::MAXIMUM_ID) <= 0);
-    }
-
-    private function isCanonicalNonNegativeId(string $value): bool
-    {
-        return $value === '0' || $this->isCanonicalPositiveId($value);
-    }
-
-    private function isBoundedString(mixed $value, int $limit): bool
-    {
-        return \is_string($value) && preg_match('//u', $value) === 1 && StringHelper::strlen($value) <= $limit;
-    }
-
-    private function invalidPayload(): AutosaveException
-    {
-        return new AutosaveException('invalid_payload', 'The Finder Filter draft payload is invalid.');
+        if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', 'com_finder')) {
+            throw new AutosaveException('forbidden', 'Native component access is denied.');
+        }
+        if (!(empty($item->filter_id) ? ($user->authorise('core.create', 'com_finder') || \count($user->getAuthorisedCategories('com_finder', 'core.create')) > 0) : $user->authorise('core.edit', 'com_finder'))) {
+            throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
+        }
+        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
+            throw new AutosaveException('checkout_conflict', 'The native record is checked out by another user.');
+        }
     }
 }

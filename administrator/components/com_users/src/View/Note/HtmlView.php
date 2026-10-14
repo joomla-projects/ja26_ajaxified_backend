@@ -10,9 +10,7 @@
 
 namespace Joomla\Component\Users\Administrator\View\Note;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -35,6 +33,8 @@ use Joomla\Component\Users\Administrator\Model\NoteModel;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'note-autosave-status';
     /**
      * The edit form.
      *
@@ -91,42 +91,28 @@ class HtmlView extends BaseHtmlView
         $this->prepareAutosave();
         parent::display($tpl);
         $this->addToolbar();
+        if ($this->autosaveEnabled) {
+            if ($this->autosaveEnabled) {
+                DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+            }
+        }
     }
 
     private function prepareAutosave(): void
     {
-        $app          = Factory::getApplication();
-        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
-        $configurator->disable('com_users.autosave.note');
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-        try {
-            $provider = $app->bootComponent('com_users')->getAutosaveProvider('com_users.note');
-            $itemId   = (int) $this->item->id;
-            $target   = null;
-            if ($itemId > 0) {
-                $target = $provider->canonicalizeTargetId((string) $itemId);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } else {
-                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-            if ($target !== null && !$provider->targetExists($target)) {
-                return;
-            }
-        } catch (\Throwable) {
-            return;
+        $item                  = clone $this->item;
+        if (empty($item->id)) {
+            $item->user_id = (int) $this->form->getValue('user_id', null, 0);
+            $item->catid   = (int) $this->form->getValue('catid', null, 0);
         }
-        $ids = [];
-        foreach (['subject', 'body'] as $name) {
-            $field = $this->form->getField($name);
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            } $ids[$name] = $field->id;
-        }
-        $configurator->configure($provider, $target, 'com_users.autosave.note', 'note-form', $ids, 'com_users.note-autosave');
-        $this->autosaveEnabled = true;
+        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+            'context'    => 'com_users.note', 'formId' => 'note-form', 'statusId' => $this->autosaveStatusId,
+            'optionsKey' => 'com_users.autosave.note', 'script' => 'com_users.note-autosave',
+            'saveTasks'  => ['note.apply', 'note.save', 'note.save2new', 'note.save2copy'],
+        ]);
     }
     /**
      * Display the toolbar.

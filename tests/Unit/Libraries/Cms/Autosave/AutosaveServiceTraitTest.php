@@ -11,7 +11,7 @@
 namespace Joomla\Tests\Unit\Libraries\Cms\Autosave;
 
 use Joomla\CMS\Autosave\AutosaveServiceTrait;
-use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\ServiceTraitTestProvider;
+use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\ResolverTestProvider;
 use Joomla\Tests\Unit\UnitTestCase;
 
 /**
@@ -33,7 +33,7 @@ class AutosaveServiceTraitTest extends UnitTestCase
         $service  = new class () {
             use AutosaveServiceTrait;
         };
-        $provider = new ServiceTraitTestProvider('com_example.record');
+        $provider = new ResolverTestProvider('com_example.record');
 
         $service->setAutosaveProvider('com_example.record', $provider);
 
@@ -52,7 +52,7 @@ class AutosaveServiceTraitTest extends UnitTestCase
         $service = new class () {
             use AutosaveServiceTrait;
         };
-        $provider = new ServiceTraitTestProvider('com_example-addon.record');
+        $provider = new ResolverTestProvider('com_example-addon.record');
 
         $service->setAutosaveProvider('com_example-addon.record', $provider);
 
@@ -71,7 +71,7 @@ class AutosaveServiceTraitTest extends UnitTestCase
         $service = new class () {
             use AutosaveServiceTrait;
         };
-        $provider = new ServiceTraitTestProvider('com_example.record');
+        $provider = new ResolverTestProvider('com_example.record');
         $service->setAutosaveProvider('com_example.record', $provider);
 
         $this->expectException(\LogicException::class);
@@ -96,7 +96,7 @@ class AutosaveServiceTraitTest extends UnitTestCase
         };
 
         $this->expectException(\InvalidArgumentException::class);
-        $service->setAutosaveProvider($context, new ServiceTraitTestProvider($context));
+        $service->setAutosaveProvider($context, new ResolverTestProvider($context));
     }
 
     /**
@@ -146,7 +146,7 @@ class AutosaveServiceTraitTest extends UnitTestCase
         $this->expectException(\InvalidArgumentException::class);
         $service->setAutosaveProvider(
             'com_example.record',
-            new ServiceTraitTestProvider('com_example.other')
+            new ResolverTestProvider('com_example.other')
         );
     }
 

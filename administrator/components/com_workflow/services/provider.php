@@ -19,7 +19,6 @@ use Joomla\Component\Workflow\Administrator\Autosave\StageAutosaveProvider;
 use Joomla\Component\Workflow\Administrator\Autosave\TransitionAutosaveProvider;
 use Joomla\Component\Workflow\Administrator\Autosave\WorkflowAutosaveProvider;
 use Joomla\Component\Workflow\Administrator\Extension\WorkflowComponent;
-use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
 
@@ -47,9 +46,9 @@ return new class () implements ServiceProviderInterface {
             function (Container $container) {
                 $component = new WorkflowComponent($container->get(ComponentDispatcherFactoryInterface::class));
                 $component->setMVCFactory($container->get(MVCFactoryInterface::class));
-                $workflow   = new WorkflowAutosaveProvider($container->get(DatabaseInterface::class));
-                $stage      = new StageAutosaveProvider($container->get(DatabaseInterface::class));
-                $transition = new TransitionAutosaveProvider($container->get(DatabaseInterface::class));
+                $workflow   = new WorkflowAutosaveProvider($container->get(MVCFactoryInterface::class));
+                $stage      = new StageAutosaveProvider($container->get(MVCFactoryInterface::class));
+                $transition = new TransitionAutosaveProvider($container->get(MVCFactoryInterface::class));
                 $component->setAutosaveProvider($workflow->getContext(), $workflow);
                 $component->setAutosaveProvider($stage->getContext(), $stage);
                 $component->setAutosaveProvider($transition->getContext(), $transition);

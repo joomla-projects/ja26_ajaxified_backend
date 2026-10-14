@@ -2,11 +2,11 @@
 
 namespace Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub;
 
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Form\Form;
 use Joomla\CMS\User\User;
 
-final class ResolverTestProvider implements AutosaveProviderInterface
+final class ResolverTestProvider implements DraftProviderInterface
 {
     public function __construct(private readonly string $context)
     {
@@ -17,32 +17,13 @@ final class ResolverTestProvider implements AutosaveProviderInterface
         return $this->context;
     }
 
-    public function canonicalizeTargetId(string $targetId): string
+    public function describe(Form $form, object $item, User $user): array
     {
-        return $targetId;
+        throw new \LogicException('Provider registration does not prepare a form.');
     }
 
-    public function targetExists(string $targetId): bool
+    public function read(array $binding, User $user, ?array $payload = null): array
     {
-        return true;
-    }
-
-    public function authorize(User $user, string $targetId, AutosaveOperation $operation): void
-    {
-    }
-
-    public function getBaseRevision(string $targetId): string
-    {
-        return 'revision';
-    }
-
-    public function getPayloadSchemaVersion(): int
-    {
-        return 1;
-    }
-
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
-    {
-        return (array) $payload;
+        throw new \LogicException('Provider registration does not read content.');
     }
 }

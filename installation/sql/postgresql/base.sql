@@ -127,90 +127,6 @@ INSERT INTO "#__assets" ("id", "parent_id", "lft", "rgt", "level", "name", "titl
 SELECT setval('#__assets_id_seq', 100, false);
 
 --
--- Table structure for table `#__autosave_continuations`
---
-
-CREATE TABLE IF NOT EXISTS "#__autosave_continuations" (
-  "id" bigserial NOT NULL,
-  "public_id" varchar(64) NOT NULL,
-  "user_id" bigint NOT NULL,
-  "context" varchar(255) NOT NULL,
-  "target_id" varchar(191) NOT NULL,
-  "initialization_key" varchar(191) NOT NULL,
-  "create_scope" varchar(255),
-  "created_at" timestamp without time zone NOT NULL,
-  "last_activity_at" timestamp without time zone NOT NULL,
-  PRIMARY KEY ("id"),
-  CONSTRAINT "#__autosave_continuation_public_id" UNIQUE ("public_id"),
-  CONSTRAINT "#__autosave_continuation_initialization" UNIQUE ("user_id", "initialization_key")
-);
-CREATE INDEX "#__autosave_continuation_recovery" ON "#__autosave_continuations" ("user_id", "context", "target_id");
-CREATE INDEX "#__autosave_continuation_activity" ON "#__autosave_continuations" ("last_activity_at");
-
---
--- Table structure for table `#__autosave_generations`
---
-
-CREATE TABLE IF NOT EXISTS "#__autosave_generations" (
-  "id" bigserial NOT NULL,
-  "public_id" varchar(64) NOT NULL,
-  "continuation_id" bigint NOT NULL,
-  "user_id" bigint NOT NULL,
-  "base_revision" varchar(255) NOT NULL,
-  "state" varchar(16) NOT NULL,
-  "client_revision" bigint DEFAULT 0 NOT NULL,
-  "payload" text,
-  "payload_digest" varchar(64),
-  "payload_schema_version" integer,
-  "active_marker" smallint,
-  "quota_slot" integer,
-  "created_at" timestamp without time zone NOT NULL,
-  "updated_at" timestamp without time zone NOT NULL,
-  "expires_at" timestamp without time zone NOT NULL,
-  "closed_at" timestamp without time zone,
-  "terminal_at" timestamp without time zone,
-  "retain_until" timestamp without time zone,
-  PRIMARY KEY ("id"),
-  CONSTRAINT "#__autosave_generation_public_id" UNIQUE ("public_id"),
-  CONSTRAINT "#__autosave_generation_active" UNIQUE ("continuation_id", "active_marker"),
-  CONSTRAINT "#__autosave_generation_quota" UNIQUE ("user_id", "quota_slot")
-);
-CREATE INDEX "#__autosave_generation_continuation" ON "#__autosave_generations" ("continuation_id");
-CREATE INDEX "#__autosave_generation_expiry" ON "#__autosave_generations" ("user_id", "state", "expires_at");
-CREATE INDEX "#__autosave_generation_global_expiry" ON "#__autosave_generations" ("state", "expires_at");
-CREATE INDEX "#__autosave_generation_retention" ON "#__autosave_generations" ("retain_until");
-
---
--- Table structure for table `#__autosave_canonical_actions`
---
-
-CREATE TABLE IF NOT EXISTS "#__autosave_canonical_actions" (
-  "id" bigserial NOT NULL,
-  "public_id" varchar(64) NOT NULL,
-  "user_id" bigint NOT NULL,
-  "continuation_id" bigint NOT NULL,
-  "generation_id" bigint NOT NULL,
-  "context" varchar(255) NOT NULL,
-  "target_id" varchar(191) NOT NULL,
-  "intent" varchar(32) NOT NULL,
-  "expected_base_revision" varchar(255) NOT NULL,
-  "outcome" varchar(16) NOT NULL,
-  "final_target_id" varchar(191),
-  "final_base_revision" varchar(255),
-  "failure_code" varchar(64),
-  "created_at" timestamp without time zone NOT NULL,
-  "updated_at" timestamp without time zone NOT NULL,
-  "expires_at" timestamp without time zone NOT NULL,
-  "completed_at" timestamp without time zone,
-  PRIMARY KEY ("id"),
-  CONSTRAINT "#__autosave_canonical_public_id" UNIQUE ("public_id"),
-  CONSTRAINT "#__autosave_canonical_generation" UNIQUE ("generation_id")
-);
-CREATE INDEX "#__autosave_canonical_continuation" ON "#__autosave_canonical_actions" ("continuation_id");
-CREATE INDEX "#__autosave_canonical_owner" ON "#__autosave_canonical_actions" ("user_id", "context", "target_id");
-CREATE INDEX "#__autosave_canonical_expiry" ON "#__autosave_canonical_actions" ("outcome", "expires_at");
-
---
 -- Table structure for table `#__extensions`
 --
 
@@ -253,7 +169,7 @@ INSERT INTO "#__extensions" ("package_id", "name", "type", "element", "folder", 
 (0, 'com_cache', 'component', 'com_cache', '', 1, 1, 1, 1, 1, '', '', '', 0, 0),
 (0, 'com_categories', 'component', 'com_categories', '', 1, 1, 1, 1, 1, '', '', '', 0, 0),
 (0, 'com_checkin', 'component', 'com_checkin', '', 1, 1, 1, 1, 1, '', '', '', 0, 0),
-(0, 'com_contact', 'component', 'com_contact', '', 1, 1, 1, 0, 1, '', '{"contact_layout":"_:default","show_contact_category":"hide","save_history":"1","history_limit":10,"show_contact_list":"0","presentation_style":"sliders","show_tags":"1","show_info":"1","show_name":"1","show_position":"1","show_email":"0","show_street_address":"1","show_suburb":"1","show_state":"1","show_postcode":"1","show_country":"1","show_telephone":"1","show_mobile":"1","show_fax":"1","show_webpage":"1","show_image":"1","show_misc":"1","image":"","allow_vcard":"0","show_articles":"0","articles_display_num":"10","show_profile":"0","show_user_custom_fields":["-1"],"show_links":"0","linka_name":"","linkb_name":"","linkc_name":"","linkd_name":"","linke_name":"","contact_icons":"0","icon_address":"","icon_email":"","icon_telephone":"","icon_mobile":"","icon_fax":"","icon_misc":"","category_layout":"_:default","show_category_title":"1","show_description":"1","show_description_image":"0","maxLevel":"-1","show_subcat_desc":"1","show_empty_categories":"0","show_cat_items":"1","show_cat_tags":"1","show_base_description":"1","maxLevelcat":"-1","show_subcat_desc_cat":"1","show_empty_categories_cat":"0","show_cat_items_cat":"1","filter_field":"0","show_pagination_limit":"0","show_headings":"1","show_image_heading":"0","show_position_headings":"1","show_email_headings":"0","show_telephone_headings":"1","show_mobile_headings":"0","show_fax_headings":"0","show_suburb_headings":"1","show_state_headings":"1","show_country_headings":"1","show_pagination":"2","show_pagination_results":"1","initial_sort":"ordering","captcha":"","show_email_form":"1","show_email_copy":"0","banned_email":"","banned_subject":"","banned_text":"","validate_session":"1","custom_reply":"0","redirect":"","show_feed_link":"1","sef_ids":1,"custom_fields_enable":"1"}', '', 0, 0),
+(0, 'com_contact', 'component', 'com_contact', '', 1, 1, 1, 0, 1, '', '{"contact_layout":"_:default","show_contact_category":"hide","save_history":"1","history_limit":10,"show_contact_list":"0","presentation_style":"sliders","show_tags":"1","show_info":"1","show_name":"1","show_position":"1","show_email":"0","show_street_address":"1","show_suburb":"1","show_state":"1","show_postcode":"1","show_country":"1","show_telephone":"1","show_mobile":"1","show_fax":"1","show_webpage":"1","show_image":"1","show_misc":"1","image":"","allow_vcard":"0","show_articles":"0","articles_display_num":"10","show_profile":"0","show_user_custom_fields":["-1"],"show_links":"0","linka_name":"","linkb_name":"","linkc_name":"","linkd_name":"","linke_name":"","contact_icons":"0","icon_address":"","icon_email":"","icon_telephone":"","icon_mobile":"","icon_fax":"","icon_misc":"","category_layout":"_:default","show_category_title":"1","show_description":"1","show_description_image":"0","maxLevel":"-1","show_subcat_desc":"1","show_subcat_image":"0","show_empty_categories":"0","show_cat_items":"1","show_cat_tags":"1","show_base_description":"1","maxLevelcat":"-1","show_subcat_desc_cat":"1","show_empty_categories_cat":"0","show_cat_items_cat":"1","filter_field":"0","show_pagination_limit":"0","show_headings":"1","show_image_heading":"0","show_position_headings":"1","show_email_headings":"0","show_telephone_headings":"1","show_mobile_headings":"0","show_fax_headings":"0","show_suburb_headings":"1","show_state_headings":"1","show_country_headings":"1","show_pagination":"2","show_pagination_results":"1","initial_sort":"ordering","captcha":"","show_email_form":"1","show_email_copy":"0","banned_email":"","banned_subject":"","banned_text":"","validate_session":"1","custom_reply":"0","redirect":"","show_feed_link":"1","sef_ids":1,"custom_fields_enable":"1"}', '', 0, 0),
 (0, 'com_cpanel', 'component', 'com_cpanel', '', 1, 1, 1, 1, 1, '', '', '', 0, 0),
 (0, 'com_installer', 'component', 'com_installer', '', 1, 1, 1, 1, 1, '', '{"cachetimeout":"6","minimum_stability":"4"}', '', 0, 0),
 (0, 'com_languages', 'component', 'com_languages', '', 1, 1, 1, 1, 1, '', '{"administrator":"en-GB","site":"en-GB"}', '', 0, 0),
@@ -262,10 +178,10 @@ INSERT INTO "#__extensions" ("package_id", "name", "type", "element", "folder", 
 (0, 'com_menus', 'component', 'com_menus', '', 1, 1, 1, 1, 1, '', '{"page_title":"","show_page_heading":0,"page_heading":"","pageclass_sfx":""}', '', 0, 0),
 (0, 'com_messages', 'component', 'com_messages', '', 1, 1, 1, 1, 1, '', '', '', 0, 0),
 (0, 'com_modules', 'component', 'com_modules', '', 1, 1, 1, 1, 1, '', '', '', 0, 0),
-(0, 'com_newsfeeds', 'component', 'com_newsfeeds', '', 1, 1, 1, 0, 1, '', '{"newsfeed_layout":"_:default","save_history":"1","history_limit":5,"show_feed_image":"1","show_feed_description":"1","show_item_description":"1","feed_character_count":"0","feed_display_order":"des","float_first":"right","float_second":"right","show_tags":"1","category_layout":"_:default","show_category_title":"1","show_description":"1","show_description_image":"1","maxLevel":"-1","show_empty_categories":"0","show_subcat_desc":"1","show_cat_items":"1","show_cat_tags":"1","show_base_description":"1","maxLevelcat":"-1","show_empty_categories_cat":"0","show_subcat_desc_cat":"1","show_cat_items_cat":"1","filter_field":"1","show_pagination_limit":"1","show_headings":"1","show_articles":"0","show_link":"1","show_pagination":"1","show_pagination_results":"1","sef_ids":1}', '', 0, 0),
+(0, 'com_newsfeeds', 'component', 'com_newsfeeds', '', 1, 1, 1, 0, 1, '', '{"newsfeed_layout":"_:default","save_history":"1","history_limit":5,"show_feed_image":"1","show_feed_description":"1","show_item_description":"1","feed_character_count":"0","feed_display_order":"des","float_first":"right","float_second":"right","show_tags":"1","category_layout":"_:default","show_category_title":"1","show_description":"1","show_description_image":"1","maxLevel":"-1","show_empty_categories":"0","show_subcat_desc":"1","show_subcat_image":"0","show_cat_items":"1","show_cat_tags":"1","show_base_description":"1","maxLevelcat":"-1","show_empty_categories_cat":"0","show_subcat_desc_cat":"1","show_cat_items_cat":"1","filter_field":"1","show_pagination_limit":"1","show_headings":"1","show_articles":"0","show_link":"1","show_pagination":"1","show_pagination_results":"1","sef_ids":1}', '', 0, 0),
 (0, 'com_plugins', 'component', 'com_plugins', '', 1, 1, 1, 1, 1, '', '', '', 0, 0),
 (0, 'com_templates', 'component', 'com_templates', '', 1, 1, 1, 1, 1, '', '{"template_positions_display":"0","upload_limit":"10","image_formats":"gif,bmp,jpg,jpeg,png,webp","source_formats":"txt,less,ini,xml,js,php,css,scss,sass,json","font_formats":"woff,woff2,ttf,otf","compressed_formats":"zip","difference":"SideBySide"}', '', 0, 0),
-(0, 'com_content', 'component', 'com_content', '', 1, 1, 0, 1, 1, '', '{"article_layout":"_:default","show_title":"1","link_titles":"1","show_intro":"1","info_block_position":"0","info_block_show_title":"1","show_category":"1","link_category":"1","show_parent_category":"0","link_parent_category":"0","show_associations":"0","flags":"1","show_author":"1","link_author":"0","show_create_date":"0","show_modify_date":"0","show_publish_date":"1","show_item_navigation":"1","show_readmore":"1","show_readmore_title":"1","readmore_limit":100,"show_tags":"1","record_hits":"1","show_hits":"1","show_noauth":"0","urls_position":0,"captcha":"","show_publishing_options":"1","show_article_options":"1","show_configure_edit_options":"1","show_permissions":"1","show_associations_edit":"1","save_history":"1","history_limit":10,"show_urls_images_frontend":"0","show_urls_images_backend":"1","targeta":0,"targetb":0,"targetc":0,"float_intro":"left","float_fulltext":"left","category_layout":"_:blog","show_category_title":"0","show_description":"0","show_description_image":"0","maxLevel":"1","show_empty_categories":"0","show_no_articles":"1","show_category_heading_title_text":"1","show_subcat_desc":"1","show_cat_num_articles":"0","show_cat_tags":"1","show_base_description":"1","maxLevelcat":"-1","show_empty_categories_cat":"0","show_subcat_desc_cat":"1","show_cat_num_articles_cat":"1","num_leading_articles":1,"blog_class_leading":"","num_intro_articles":4,"blog_class":"","num_columns":1,"multi_column_order":"0","num_links":4,"show_subcategory_content":"0","link_intro_image":"0","show_pagination_limit":"1","filter_field":"hide","show_headings":"1","list_show_date":"0","date_format":"","list_show_hits":"1","list_show_author":"1","display_num":"10","orderby_pri":"order","orderby_sec":"rdate","order_date":"published","show_pagination":"2","show_pagination_results":"1","show_featured":"show","show_feed_link":"1","feed_summary":"0","feed_show_readmore":"0","sef_ids":1,"custom_fields_enable":"1","workflow_enabled":"0"}', '', 0, 0),
+(0, 'com_content', 'component', 'com_content', '', 1, 1, 0, 1, 1, '', '{"article_layout":"_:default","show_title":"1","link_titles":"1","show_intro":"1","info_block_position":"0","info_block_show_title":"1","show_category":"1","link_category":"1","show_parent_category":"0","link_parent_category":"0","show_associations":"0","flags":"1","show_author":"1","link_author":"0","show_create_date":"0","show_modify_date":"0","show_publish_date":"1","show_item_navigation":"1","show_readmore":"1","show_readmore_title":"1","readmore_limit":100,"show_tags":"1","record_hits":"1","show_hits":"1","show_noauth":"0","urls_position":0,"captcha":"","show_publishing_options":"1","show_article_options":"1","show_configure_edit_options":"1","show_permissions":"1","show_associations_edit":"1","save_history":"1","history_limit":10,"show_urls_images_frontend":"0","show_urls_images_backend":"1","targeta":0,"targetb":0,"targetc":0,"float_intro":"left","float_fulltext":"left","category_layout":"_:blog","show_category_title":"0","show_description":"0","show_description_image":"0","maxLevel":"1","show_empty_categories":"0","show_no_articles":"1","show_category_heading_title_text":"1","show_subcat_desc":"1","show_subcat_image":"0","show_cat_num_articles":"0","show_cat_tags":"1","show_base_description":"1","maxLevelcat":"-1","show_empty_categories_cat":"0","show_subcat_desc_cat":"1","show_cat_num_articles_cat":"1","num_leading_articles":1,"blog_class_leading":"","num_intro_articles":4,"blog_class":"","num_columns":1,"multi_column_order":"0","num_links":4,"show_subcategory_content":"0","link_intro_image":"0","show_pagination_limit":"1","filter_field":"hide","show_headings":"1","list_show_date":"0","date_format":"","list_show_hits":"1","list_show_author":"1","display_num":"10","orderby_pri":"order","orderby_sec":"rdate","order_date":"published","show_pagination":"2","show_pagination_results":"1","show_featured":"show","show_feed_link":"1","feed_summary":"0","feed_show_readmore":"0","sef_ids":1,"custom_fields_enable":"1","workflow_enabled":"0"}', '', 0, 0),
 (0, 'com_config', 'component', 'com_config', '', 1, 1, 0, 1, 1, '', '{"filters":{"1":{"filter_type":"NH","filter_tags":"","filter_attributes":""},"9":{"filter_type":"NH","filter_tags":"","filter_attributes":""},"6":{"filter_type":"BL","filter_tags":"","filter_attributes":""},"7":{"filter_type":"BL","filter_tags":"","filter_attributes":""},"2":{"filter_type":"NH","filter_tags":"","filter_attributes":""},"3":{"filter_type":"BL","filter_tags":"","filter_attributes":""},"4":{"filter_type":"BL","filter_tags":"","filter_attributes":""},"5":{"filter_type":"BL","filter_tags":"","filter_attributes":""},"8":{"filter_type":"NONE","filter_tags":"","filter_attributes":""}}}', '', 0, 0),
 (0, 'com_redirect', 'component', 'com_redirect', '', 1, 1, 0, 0, 1, '', '', '', 0, 0),
 (0, 'com_users', 'component', 'com_users', '', 1, 1, 0, 1, 1, '', '{"allowUserRegistration":"0","new_usertype":"2","guest_usergroup":"9","sendpassword":"0","useractivation":"2","mail_to_admin":"1","captcha":"","frontend_userparams":"1","site_language":"0","change_login_name":"0","reset_count":"10","reset_time":"1","minimum_length":"12","minimum_integers":"0","minimum_symbols":"0","minimum_uppercase":"0","save_history":"1","history_limit":5,"mailSubjectPrefix":"","mailBodySuffix":""}', '', 0, 0),
@@ -377,7 +293,7 @@ INSERT INTO "#__extensions" ("package_id", "name", "type", "element", "folder", 
 (0, 'plg_editors-xtd_readmore', 'plugin', 'readmore', 'editors-xtd', 0, 1, 1, 0, 1, '', '', '', 8, 0),
 (0, 'plg_editors_codemirror', 'plugin', 'codemirror', 'editors', 0, 1, 1, 0, 1, '', '{"lineNumbers":"1","lineWrapping":"1","matchTags":"1","matchBrackets":"1","marker-gutter":"1","autoCloseTags":"1","autoCloseBrackets":"1","autoFocus":"1","theme":"default","tabmode":"indent"}', '', 1, 0),
 (0, 'plg_editors_none', 'plugin', 'none', 'editors', 0, 1, 1, 1, 1, '', '', '', 2, 0),
-(0, 'plg_editors_tinymce', 'plugin', 'tinymce', 'editors', 0, 1, 1, 0, 1, '', '{"configuration":{"toolbars":{"2":{"toolbar1":["bold","underline","strikethrough","|","undo","redo","|","bullist","numlist","|","pastetext"]},"1":{"menu":["edit","insert","view","format","table","tools"],"toolbar1":["bold","italic","underline","strikethrough","|","alignleft","aligncenter","alignright","alignjustify","|","blocks","|","bullist","numlist","|","outdent","indent","|","undo","redo","|","link","unlink","anchor","code","|","hr","table","|","subscript","superscript","|","charmap","pastetext","preview"]},"0":{"menu":["edit","insert","view","format","table","tools"],"toolbar1":["bold","italic","underline","strikethrough","|","alignleft","aligncenter","alignright","alignjustify","|","styles","|","blocks","fontfamily","fontsize","|","searchreplace","|","bullist","numlist","|","outdent","indent","|","undo","redo","|","link","unlink","anchor","image","|","code","|","forecolor","backcolor","|","fullscreen","|","table","|","subscript","superscript","|","charmap","emoticons","media","hr","ltr","rtl","|","cut","copy","paste","pastetext","|","visualchars","visualblocks","nonbreaking","blockquote","jtemplate","|","print","preview","codesample","insertdatetime","removeformat","language","abbr","abbr_remove"]}},"setoptions":{"2":{"access":["1"],"skin":"0","skin_admin":"0","mobile":"0","drag_drop":"1","path":"","entity_encoding":"raw","lang_mode":"1","text_direction":"ltr","content_css":"1","content_css_custom":"","relative_urls":"1","newlines":"0","use_config_textfilters":"0","invalid_elements":"script,applet,iframe","valid_elements":"","extended_elements":"","resizing":"1","resize_horizontal":"1","element_path":"1","wordcount":"1","image_advtab":"0","advlist":"1","autosave":"1","contextmenu":"1","custom_plugin":"","custom_button":""},"1":{"access":["6","2"],"skin":"0","skin_admin":"0","mobile":"0","drag_drop":"1","path":"","entity_encoding":"raw","lang_mode":"1","text_direction":"ltr","content_css":"1","content_css_custom":"","relative_urls":"1","newlines":"0","use_config_textfilters":"0","invalid_elements":"script,applet,iframe","valid_elements":"","extended_elements":"","resizing":"1","resize_horizontal":"1","element_path":"1","wordcount":"1","image_advtab":"0","advlist":"1","autosave":"1","contextmenu":"1","custom_plugin":"","custom_button":""},"0":{"access":["7","4","8"],"skin":"0","skin_admin":"0","mobile":"0","drag_drop":"1","path":"","entity_encoding":"raw","lang_mode":"1","text_direction":"ltr","content_css":"1","content_css_custom":"","relative_urls":"1","newlines":"0","use_config_textfilters":"0","invalid_elements":"script,applet,iframe","valid_elements":"","extended_elements":"","resizing":"1","resize_horizontal":"1","element_path":"1","wordcount":"1","image_advtab":"1","advlist":"1","autosave":"1","contextmenu":"1","custom_plugin":"","custom_button":""}}},"sets_amount":3,"html_height":"550px","html_width":"100%"}', '', 3, 0),
+(0, 'plg_editors_tinymce', 'plugin', 'tinymce', 'editors', 0, 1, 1, 0, 1, '', '{"configuration":{"toolbars":{"2":{"toolbar1":["bold","underline","strikethrough","|","readmore","|","undo","redo","|","bullist","numlist","|","pastetext"]},"1":{"menu":["edit","insert","view","format","table","tools"],"toolbar1":["bold","italic","underline","strikethrough","|","alignleft","aligncenter","alignright","alignjustify","|","readmore","|","blocks","|","bullist","numlist","|","outdent","indent","|","undo","redo","|","link","unlink","anchor","code","|","hr","table","|","subscript","superscript","|","charmap","pastetext","preview"]},"0":{"menu":["edit","insert","view","format","table","tools"],"toolbar1":["bold","italic","underline","strikethrough","|","alignleft","aligncenter","alignright","alignjustify","|","readmore","|","lineheight","|","styles","|","blocks","fontfamily","fontsize","|","searchreplace","|","bullist","numlist","|","outdent","indent","|","undo","redo","|","link","unlink","anchor","image","|","code","|","forecolor","backcolor","|","fullscreen","|","table","|","subscript","superscript","|","charmap","emoticons","media","hr","ltr","rtl","|","cut","copy","paste","pastetext","|","visualchars","visualblocks","nonbreaking","blockquote","jtemplate","|","print","preview","codesample","insertdatetime","removeformat","language","abbr","abbr_remove"]}},"setoptions":{"2":{"access":["1"],"skin":"0","skin_admin":"0","mobile":"0","drag_drop":"1","path":"","entity_encoding":"raw","lang_mode":"1","text_direction":"ltr","content_css":"1","content_css_custom":"","relative_urls":"1","newlines":"0","use_config_textfilters":"1","invalid_elements":"script,applet,iframe","valid_elements":"","extended_elements":"","resizing":"1","resize_horizontal":"1","element_path":"1","wordcount":"1","image_advtab":"0","advlist":"1","autosave":"1","contextmenu":"1","custom_plugin":"","custom_button":""},"1":{"access":["6","2"],"skin":"0","skin_admin":"0","mobile":"0","drag_drop":"1","path":"","entity_encoding":"raw","lang_mode":"1","text_direction":"ltr","content_css":"1","content_css_custom":"","relative_urls":"1","newlines":"0","use_config_textfilters":"1","invalid_elements":"script,applet,iframe","valid_elements":"","extended_elements":"","resizing":"1","resize_horizontal":"1","element_path":"1","wordcount":"1","image_advtab":"0","advlist":"1","autosave":"1","contextmenu":"1","custom_plugin":"","custom_button":""},"0":{"access":["7","4","8"],"skin":"0","skin_admin":"0","mobile":"0","drag_drop":"1","path":"","entity_encoding":"raw","lang_mode":"1","text_direction":"ltr","content_css":"1","content_css_custom":"","relative_urls":"1","newlines":"0","use_config_textfilters":"1","invalid_elements":"script,applet,iframe","valid_elements":"","extended_elements":"","resizing":"1","resize_horizontal":"1","element_path":"1","wordcount":"1","image_advtab":"1","advlist":"1","autosave":"1","contextmenu":"1","custom_plugin":"","custom_button":""}}},"sets_amount":3,"html_height":"550px","html_width":"100%"}', '', 3, 0),
 (0, 'plg_extension_finder', 'plugin', 'finder', 'extension', 0, 1, 1, 0, 1, '', '', '', 1, 0),
 (0, 'plg_extension_joomla', 'plugin', 'joomla', 'extension', 0, 1, 1, 0, 1, '', '', '', 2, 0),
 (0, 'plg_extension_joomlaupdate', 'plugin', 'joomlaupdate', 'extension', 0, 1, 1, 0, 1, '', '', '', 3, 0),
@@ -976,6 +892,7 @@ CREATE TABLE IF NOT EXISTS "#__updates" (
   "infourl" text NOT NULL,
   "changelogurl" text,
   "extra_query" varchar(1000) DEFAULT '',
+  "security" smallint DEFAULT NULL,
   PRIMARY KEY ("update_id")
 );
 
@@ -1374,3 +1291,28 @@ INSERT INTO "#__workflow_transitions" ("id", "asset_id", "published", "ordering"
 (7, 64, 1, 7, 1, 'PUBLISH_AND_FEATURE', '', -1, 1, '{"publishing":"1","featuring":"1"}');
 
 SELECT setval('#__workflow_transitions_id_seq', 8, false);
+
+-- Private recoverable draft instances. Canonical records remain native Joomla records.
+CREATE TABLE IF NOT EXISTS "#__autosave_drafts" (
+  "id" bigserial NOT NULL,
+  "draft_id" char(32) NOT NULL,
+  "owner_id" integer NOT NULL,
+  "context" varchar(255) NOT NULL,
+  "target_id" varchar(255) DEFAULT NULL,
+  "scope" text NOT NULL,
+  "schema_version" integer NOT NULL,
+  "fields" text NOT NULL,
+  "baseline_revision" varchar(64) DEFAULT NULL,
+  "client_revision" bigint NOT NULL DEFAULT 0,
+  "retired_revision" bigint NOT NULL DEFAULT 0,
+  "payload" text DEFAULT NULL,
+  "payload_digest" char(64) DEFAULT NULL,
+  "result_id" varchar(255) DEFAULT NULL,
+  "created_at" timestamp without time zone NOT NULL,
+  "updated_at" timestamp without time zone NOT NULL,
+  "expires_at" timestamp without time zone NOT NULL,
+  PRIMARY KEY ("id"),
+  CONSTRAINT "#__autosave_draft_public" UNIQUE ("draft_id")
+);
+CREATE INDEX "#__autosave_draft_owner" ON "#__autosave_drafts" ("owner_id","context","target_id");
+CREATE INDEX "#__autosave_draft_expiry" ON "#__autosave_drafts" ("expires_at");

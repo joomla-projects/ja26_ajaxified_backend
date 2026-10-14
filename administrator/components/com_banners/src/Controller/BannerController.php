@@ -10,7 +10,7 @@
 
 namespace Joomla\Component\Banners\Administrator\Controller;
 
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Router\Route;
@@ -28,16 +28,7 @@ use Joomla\Utilities\ArrayHelper;
  */
 class BannerController extends FormController
 {
-    use AutosaveFormControllerTrait;
     use VersionableControllerTrait;
-
-    private const AUTOSAVE_CONTEXT      = 'com_banners.banner';
-    private const AUTOSAVE_TASK_INTENTS = [
-        'apply'     => 'apply',
-        'save'      => 'save-exit',
-        'save2new'  => 'save-new',
-        'save2copy' => 'save-copy',
-    ];
 
     /**
      * The prefix to use with controller messages.
@@ -119,19 +110,11 @@ class BannerController extends FormController
 
         return parent::batch($model);
     }
-
-    /**
-     * Capture the authoritative Banner identity after Joomla saves it.
-     *
-     * @param   BaseDatabaseModel  $model      The saved model.
-     * @param   array              $validData  The validated data.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
+    /** Optional draft retirement after the authoritative native success hook. */
     protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
     {
-        $this->captureAutosaveCanonicalResult($model, 'banner.id');
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_banners.banner', $this->getTask(), 'id', []);
     }
 }

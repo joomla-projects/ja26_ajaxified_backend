@@ -4,255 +4,159 @@
  * @package     Joomla.Administrator
  * @subpackage  com_categories
  *
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Categories\Administrator\Autosave;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
-use Joomla\CMS\Autosave\AutosaveStaticScopeProviderInterface;
+use Joomla\CMS\Autosave\DraftProjection;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Filter\InputFilter;
+use Joomla\CMS\Form\Form;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
-use Joomla\Database\DatabaseInterface;
-use Joomla\Database\ParameterType;
-use Joomla\String\StringHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class CategoryAutosaveProvider implements
-    AutosaveProviderInterface,
-    AutosaveCreateProviderInterface,
-    AutosaveStaticScopeProviderInterface
+/**
+ * Category drafts reuse native forms and permission rules, without nested-set writes.
+ *
+ * @since  __DEPLOY_VERSION__
+ */
+final class CategoryAutosaveProvider implements DraftProviderInterface
 {
-    private const LIMITS = [
-        'title'        => 255,
-        'note'         => 255,
-        'description'  => 65535,
-        'version_note' => 255,
-        'metadesc'     => 300,
-        'metakey'      => 1024,
-    ];
-    private const MAXIMUM_ID = '2147483647';
-    private const ROOT_ID    = 1;
+    private const KEYS = ['title', 'note', 'description', 'version_note', 'metadesc', 'metakey', 'parent_id'];
 
-    public function __construct(private readonly DatabaseInterface $db)
+    /**
+     * Constructor.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_categories.category';
     }
 
-    public function getCreateContractVersion(): string
+    /** @inheritDoc */
+    public function describe(Form $form, object $item, User $user): array
     {
-        return 'category-create-v1';
+        $extension = $this->extension((string) ($item->extension ?? ''));
+        if (isset($item->draftExtension) && $item->draftExtension !== $extension) {
+            throw new AutosaveException('scope_conflict', 'The native Category form has a different owning extension.');
+        }
+        $target    = empty($item->id) ? null : (string) $item->id;
+        $this->authorize($user, $item, $extension);
+        $fields = DraftProjection::describe($form, self::KEYS);
+        $scope  = ['extension' => $extension];
+
+        return [
+            'context'  => $this->getContext(),
+            'target'   => $target,
+            'scope'    => $scope,
+            'version'  => 1,
+            'fields'   => $fields,
+            'revision' => $target === null ? null : hash('sha256', json_encode(
+                [$target, $scope, $this->values($item), $item->modified_time ?? null, $item->modified_user_id ?? null],
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            )),
+            'values'   => $this->values($item),
+            'excluded' => array_values(array_diff(self::KEYS, array_keys($fields))),
+        ];
     }
 
-    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    /** @inheritDoc */
+    public function read(array $binding, User $user, ?array $payload = null): array
     {
-        // A Category can only be authorized against its anchored owning extension. The
-        // lifecycle routes every provisional operation of this provider through
-        // authorizeStaticCreateScope(); reaching this method means no anchored scope is
-        // available, so it fails closed instead of guessing an extension.
-        throw new AutosaveException('scope_required', 'A Category requires an anchored owning extension.');
-    }
-
-    public function getStaticScopeContractVersion(): string
-    {
-        return 'category-scope-v1';
-    }
-
-    public function canonicalizeStaticCreateScope(mixed $candidateScope): string
-    {
-        if (!\is_string($candidateScope)) {
-            throw $this->invalidScope();
+        if ($binding['context'] !== $this->getContext() || array_keys($binding['scope']) !== ['extension']) {
+            throw new AutosaveException('scope_conflict', 'The Category binding is incompatible.');
+        }
+        $extension = $this->extension($binding['scope']['extension']);
+        $target    = $binding['target_id'];
+        if ($target !== null && (preg_match('/^[1-9][0-9]*$/D', $target) !== 1 || (int) $target > 4294967295)) {
+            throw new AutosaveException('invalid_target', 'The Category identity is invalid.');
         }
 
-        // The owning extension is a plain component name. The bare com_categories default
-        // is the "nonsense situation" the native views refuse to render.
-        if (preg_match('/^com_[a-z][a-z0-9_]{0,48}$/D', $candidateScope) !== 1 || $candidateScope === 'com_categories') {
-            throw $this->invalidScope();
-        }
-
-        return $candidateScope;
-    }
-
-    public function authorizeStaticCreateScope(User $user, string $canonicalScope, AutosaveOperation $operation, ?array $normalizedPayload): void
-    {
-        // Mirrors CategoryController::allowAdd(): creation is allowed on the extension
-        // root asset or when the user may create in any category of that extension. The
-        // extension is the anchored scope, never the browser request. Every provisional
-        // operation re-runs this check so a revoked permission fails closed.
-        if (
-            !$user->authorise('core.create', $canonicalScope)
-            && \count($user->getAuthorisedCategories($canonicalScope, 'core.create')) === 0
-        ) {
-            throw new AutosaveException('forbidden', 'A Category cannot be created in this extension.');
-        }
-
-        // Authored parent relations must stay inside the anchored tree: the global ROOT
-        // row is a legal parent for every extension, any other parent must be an existing
-        // Category of the anchored extension. This runs after normalization and before any
-        // storage mutation on every generation, so a parent moved to another extension or
-        // deleted mid-lineage fails closed.
-        if ($normalizedPayload === null) {
-            return;
-        }
-
-        if (!\is_array($normalizedPayload) || !\array_key_exists('parent_id', $normalizedPayload)) {
-            throw $this->invalidPayload();
-        }
-
-        $parentId = (int) $normalizedPayload['parent_id'];
-
-        if ($parentId === self::ROOT_ID) {
-            return;
-        }
-
-        $parent = $this->load((string) $parentId);
-
-        if ($parent === null || $parent->extension !== $canonicalScope) {
-            throw $this->invalidPayload();
-        }
-    }
-
-    public function verifyFinalTargetStaticScope(string $finalTargetId, string $canonicalScope): void
-    {
-        $record = $this->load($this->canonicalizeTargetId($finalTargetId));
-
-        if ($record === null || $record->extension !== $canonicalScope) {
-            throw new AutosaveException('scope_mismatch', 'The saved Category does not belong to the anchored extension.');
-        }
-    }
-
-    public function getPayloadSchemaVersion(): int
-    {
-        return 2;
-    }
-
-    public function canonicalizeTargetId(string $targetId): string
-    {
-        if (
-            preg_match('/^[1-9][0-9]{0,9}$/D', $targetId) !== 1
-            || (\strlen($targetId) === 10 && strcmp($targetId, self::MAXIMUM_ID) > 0)
-        ) {
-            throw new AutosaveException('invalid_target', 'The Category target is invalid.');
-        }
-
-        return $targetId;
-    }
-
-    public function targetExists(string $targetId): bool
-    {
-        return $this->load($this->canonicalizeTargetId($targetId)) !== null;
-    }
-
-    public function authorize(User $user, string $targetId, AutosaveOperation $operation): void
-    {
-        $record = $this->load($this->canonicalizeTargetId($targetId));
-
-        if ($record === null) {
+        $model = $this->factory->createModel('Category', 'Administrator', ['ignore_request' => true]);
+        $parts = explode('.', $extension);
+        $model->setState('category.extension', $extension);
+        $model->setState('category.component', $parts[0]);
+        $model->setState('category.section', $parts[1] ?? null);
+        $model->setState('category.id', $target === null ? 0 : (int) $target);
+        $model->setState('category.parent_id', $target === null ? ($payload['parent_id'] ?? 0) : 0);
+        $item = $model->getItem($target === null ? 0 : (int) $target);
+        if (!$item || ($target !== null && (string) $item->id !== $target)) {
             throw new AutosaveException('target_not_found', 'The Category was not found.');
         }
+        if (($item->extension ?? '') !== $extension) {
+            throw new AutosaveException('scope_conflict', 'The Category owning extension changed.');
+        }
+        $this->authorize($user, $item, $extension);
+        Form::addFormPath(JPATH_ADMINISTRATOR . '/components/com_categories/forms');
+        $data = (array) $item;
+        $form = $model->getForm($data, false);
+        if (!$form) {
+            throw new AutosaveException('unsupported_context', 'The native Category form is unavailable.');
+        }
+        $form->bind($data);
 
-        $asset = $record->extension . '.category.' . (int) $record->id;
+        return $this->describe($form, $item, $user);
+    }
 
+    private function extension(string $extension): string
+    {
+        $component = explode('.', $extension)[0];
+        if (
+            !str_starts_with($component, 'com_') || $component === 'com_'
+            || InputFilter::getInstance()->clean($extension, 'cmd') !== $extension
+        ) {
+            throw new AutosaveException('scope_conflict', 'The owning extension is invalid.');
+        }
+
+        return $extension;
+    }
+
+    private function authorize(User $user, object $item, string $extension): void
+    {
+        $component = explode('.', $extension)[0];
+        if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', $component)) {
+            throw new AutosaveException('forbidden', 'Category draft access is denied.');
+        }
+        if (empty($item->id)) {
+            // CategoryController.allowAdd checks the owning extension, not a guessed parent asset.
+            if (!$user->authorise('core.create', $extension) && \count($user->getAuthorisedCategories($extension, 'core.create')) === 0) {
+                throw new AutosaveException('forbidden', 'A Category cannot be created by this user.');
+            }
+
+            return;
+        }
+        $asset = $extension . '.category.' . (int) $item->id;
         if (
             !$user->authorise('core.edit', $asset)
-            && !($user->authorise('core.edit.own', $asset) && (int) $record->created_user_id === (int) $user->id)
+            && !($user->authorise('core.edit.own', $asset) && (int) ($item->created_user_id ?? 0) === (int) $user->id)
         ) {
             throw new AutosaveException('forbidden', 'The Category cannot be edited by this user.');
         }
-
-        if ((int) ($record->checked_out ?? 0) !== 0 && (int) $record->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checked_out', 'The Category is checked out by another user.');
+        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
+            throw new AutosaveException('checkout_conflict', 'The Category is checked out by another user.');
         }
     }
 
-    public function getBaseRevision(string $targetId): string
+    private function values(object $item): array
     {
-        $record = $this->load($this->canonicalizeTargetId($targetId));
-
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Category was not found.');
+        $values = [];
+        foreach (self::KEYS as $key) {
+            $values[$key] = (string) ($item->$key ?? '');
         }
 
-        unset($record->checked_out);
-        $domain = 'autosave:com_categories.category:base-revision:v1';
-
-        return $domain . ':' . hash('sha256', $domain . "\0" . json_encode($record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
-    }
-
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
-    {
-        $required              = array_fill_keys(array_keys(self::LIMITS), true);
-        $required['parent_id'] = true;
-
-        if (
-            $schemaVersion !== 2 || !\is_array($payload) || array_is_list($payload)
-            || array_diff_key($payload, $required) || array_diff_key($required, $payload)
-        ) {
-            throw $this->invalidPayload();
-        }
-
-        foreach (self::LIMITS as $key => $limit) {
-            if (
-                !\is_string($payload[$key]) || preg_match('//u', $payload[$key]) !== 1
-                || StringHelper::strlen($payload[$key]) > $limit
-            ) {
-                throw $this->invalidPayload();
-            }
-        }
-
-        // parent_id is a bounded integer: the global ROOT row (1) or an existing Category.
-        if (
-            !\is_int($payload['parent_id'])
-            || $payload['parent_id'] < self::ROOT_ID
-            || $payload['parent_id'] > (int) self::MAXIMUM_ID
-        ) {
-            throw $this->invalidPayload();
-        }
-
-        $normalized = [];
-
-        foreach (array_keys(self::LIMITS) as $key) {
-            $normalized[$key] = $payload[$key];
-        }
-
-        $normalized['parent_id'] = $payload['parent_id'];
-
-        return $normalized;
-    }
-
-    private function load(string $targetId): ?object
-    {
-        $fields = [
-            'id', 'asset_id', 'parent_id', 'lft', 'rgt', 'level', 'path', 'extension', 'title', 'alias', 'note',
-            'description', 'published', 'access', 'params', 'metadesc', 'metakey', 'metadata', 'created_user_id',
-            'created_time', 'modified_user_id', 'modified_time', 'hits', 'language', 'version', 'checked_out',
-        ];
-        $query = $this->db->createQuery()
-            ->select(array_map(fn ($field) => $this->db->quoteName($field), $fields))
-            ->from($this->db->quoteName('#__categories'))
-            ->where($this->db->quoteName('id') . ' = :id')
-            ->bind(':id', $targetId, ParameterType::INTEGER);
-
-        return $this->db->setQuery($query)->loadObject() ?: null;
-    }
-
-    private function invalidPayload(): AutosaveException
-    {
-        return new AutosaveException('invalid_payload', 'The Category draft payload is invalid.');
-    }
-
-    private function invalidScope(): AutosaveException
-    {
-        return new AutosaveException('invalid_scope', 'The Category creation scope is invalid.');
+        return $values;
     }
 }

@@ -49,7 +49,7 @@
 	<config>
 		<fields name="params">
 			<fieldset name="colors" label="TPL_ATUM_COLORS_SETTINGS_LABEL">
-				<field
+				<field autosave="true"
 					name="hue"
 					type="color"
 					label="TPL_ATUM_COLORS_HUE"
@@ -59,49 +59,49 @@
 					saveFormat="hsl"
 					default="hsl(214,63%,20%)"
 				/>
-				<field
+				<field autosave="true"
 					name="bg-light"
 					type="color"
 					label="TPL_ATUM_COLORS_SETTINGS_BG_LIGHT_LABEL"
 					default="#f0f4fb"
 					filter="color"
 				/>
-				<field
+				<field autosave="true"
 					name="text-dark"
 					type="color"
 					label="TPL_ATUM_COLORS_SETTINGS_TEXT_DARK_LABEL"
 					default="#495057"
 					filter="color"
 				/>
-				<field
+				<field autosave="true"
 					name="text-light"
 					type="color"
 					label="TPL_ATUM_COLORS_SETTINGS_TEXT_LIGHT_LABEL"
 					default="#ffffff"
 					filter="color"
 				/>
-				<field
+				<field autosave="true"
 					name="link-color"
 					type="color"
 					label="TPL_ATUM_COLORS_SETTINGS_LINK_COLOR_LABEL"
 					default="#2a69b8"
 					filter="color"
 				/>
-				<field
+				<field autosave="true"
 					name="link-color-dark"
 					type="color"
 					label="TPL_ATUM_COLORS_SETTINGS_LINK_COLOR_DARK_LABEL"
 					default="#6fbfdb"
 					filter="color"
 				/>
-				<field
+				<field autosave="true"
 					name="special-color"
 					type="color"
 					label="TPL_ATUM_COLORS_SETTINGS_SPECIAL_COLOR_LABEL"
 					default="#001B4C"
 					filter="color"
 				/>
-				<field
+				<field autosave="true"
 					name="monochrome"
 					type="radio"
 					label="TPL_ATUM_COLORS_SETTINGS_MONOCHROME_LABEL"
@@ -111,7 +111,7 @@
 					<option value="0">JNO</option>
 					<option value="1">JYES</option>
 				</field>
-				<field
+				<field autosave="true"
 					name="colorScheme"
 					type="list"
 					label="TPL_ATUM_COLORSCHEME_LABEL"
@@ -130,7 +130,7 @@
 					name="loginLogo"
 					label="TPL_ATUM_LOGIN_LOGO_LABEL"
 					description="TPL_ATUM_LOGIN_LOGO_DESCRIPTION">
-					<field
+					<field autosave="true"
 						name="loginLogo"
 						type="media"
 						schemes="http,https,ftp,ftps,data,file"
@@ -138,12 +138,12 @@
 						relative="true"
 						label="TPL_ATUM_IMAGE_LABEL"
 					/>
-					<field
+					<field autosave="true"
 						name="loginLogoAlt"
 						type="text"
 						label="TPL_ATUM_LOGO_ALT_LABEL"
 					/>
-					<field
+					<field autosave="true"
 						name="emptyLoginLogoAlt"
 						type="checkbox"
 						label="TPL_ATUM_LOGO_ALT_EMPTY_LABEL"
@@ -154,7 +154,7 @@
 					name="logoBrandLarge"
 					label="TPL_ATUM_SITE_LOGO_LABEL"
 					description="TPL_ATUM_SITE_LOGO_DESCRIPTION">
-					<field
+					<field autosave="true"
 						name="logoBrandLarge"
 						type="media"
 						schemes="http,https,ftp,ftps,data,file"
@@ -162,12 +162,12 @@
 						relative="true"
 						label="TPL_ATUM_IMAGE_LABEL"
 					/>
-					<field
+					<field autosave="true"
 						name="logoBrandLargeAlt"
 						type="text"
 						label="TPL_ATUM_LOGO_ALT_LABEL"
 					/>
-					<field
+					<field autosave="true"
 						name="emptyLogoBrandLargeAlt"
 						type="checkbox"
 						label="TPL_ATUM_LOGO_ALT_EMPTY_LABEL"
@@ -178,7 +178,7 @@
 					name="logoBrandSmall"
 					label="TPL_ATUM_SITE_LOGO_SMALL_LABEL"
 					description="TPL_ATUM_SITE_LOGO_SMALL_DESCRIPTION">
-					<field
+					<field autosave="true"
 						name="logoBrandSmall"
 						type="media"
 						schemes="http,https,ftp,ftps,data,file"
@@ -186,12 +186,12 @@
 						relative="true"
 						label="TPL_ATUM_IMAGE_LABEL"
 					/>
-					<field
+					<field autosave="true"
 						name="logoBrandSmallAlt"
 						type="text"
 						label="TPL_ATUM_LOGO_ALT_LABEL"
 					/>
-					<field
+					<field autosave="true"
 						name="emptyLogoBrandSmallAlt"
 						type="checkbox"
 						label="TPL_ATUM_LOGO_ALT_EMPTY_LABEL"

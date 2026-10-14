@@ -1,116 +1,113 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_users
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @package Joomla.Administrator
+ * @subpackage com_users
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Users\Administrator\Autosave;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
+use Joomla\CMS\Autosave\DraftModel;
+use Joomla\CMS\Autosave\DraftProjection;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Form\Form;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
-use Joomla\Database\DatabaseInterface;
-use Joomla\Database\ParameterType;
-use Joomla\String\StringHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class NoteAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
+/**
+ * Native Note scope, authority and selected values; no canonical persistence.
+ *
+ * @since  __DEPLOY_VERSION__
+ */
+final class NoteAutosaveProvider implements DraftProviderInterface
 {
-    public function __construct(private readonly DatabaseInterface $db)
+    private const KEYS = ['subject', 'body'];
+
+    /**
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
+
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_users.note';
     }
-    public function getCreateContractVersion(): string
-    {
-        return 'user-note-create-v1';
-    }
-    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
-    {
-        // Mirrors the native create gate (NoteController uses the default
-        // FormController::allowAdd()): component-wide core.create on com_users or
-        // any com_users category the operator may create notes in. A Note draft
-        // carries only the authored subject/body - the required target user and
-        // category relations never enter a draft (their widgets are ACL-gated and
-        // the model re-primes them from the routed request state), so no
-        // per-relation payload authorization is possible or needed here.
-        if (
-            !$user->authorise('core.create', 'com_users')
-            && \count($user->getAuthorisedCategories('com_users', 'core.create')) === 0
-        ) {
-            throw new AutosaveException('forbidden', 'A User Note cannot be created by this user.');
-        }
-    }
-    public function getPayloadSchemaVersion(): int
-    {
-        return 1;
-    }
-    public function canonicalizeTargetId(string $id): string
-    {
-        if (preg_match('/^[1-9][0-9]{0,9}$/D', $id) !== 1 || (\strlen($id) === 10 && strcmp($id, '4294967295') > 0)) {
-            throw new AutosaveException('invalid_target', 'The User Note target is invalid.');
-        }
-        return $id;
-    }
-    public function targetExists(string $id): bool
-    {
-        return $this->load($this->canonicalizeTargetId($id)) !== null;
-    }
-    public function authorize(User $user, string $id, AutosaveOperation $operation): void
-    {
-        $record = $this->load($this->canonicalizeTargetId($id));
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The User Note was not found.');
-        }
-        $asset = 'com_users.category.' . (int) $record->catid;
-        if (!$user->authorise('core.edit', $asset) && !($user->authorise('core.edit.own', $asset) && (int) $record->created_user_id === (int) $user->id)) {
-            throw new AutosaveException('forbidden', 'The User Note cannot be edited by this user.');
-        }
-        if ((int) ($record->checked_out ?? 0) !== 0 && (int) $record->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checked_out', 'The User Note is checked out by another user.');
-        }
-    }
-    public function getBaseRevision(string $id): string
-    {
-        $record = $this->load($this->canonicalizeTargetId($id));
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The User Note was not found.');
-        }
-        $domain = 'autosave:com_users.note:base-revision:v1';
-        return $domain . ':' . hash('sha256', $domain . "\0" . json_encode($record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
-    }
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
-    {
-        $required = ['subject' => true, 'body' => true];
 
-        if ($schemaVersion !== 1 || !\is_array($payload) || array_is_list($payload) || array_diff_key($payload, $required) || array_diff_key($required, $payload)) {
-            throw $this->invalid();
-        }
-        foreach (['subject' => 100, 'body' => 65535] as $key => $limit) {
-            if (!\is_string($payload[$key]) || preg_match('//u', $payload[$key]) !== 1 || StringHelper::strlen($payload[$key]) > $limit) {
-                throw $this->invalid();
-            }
-        }
-        return ['subject' => $payload['subject'], 'body' => $payload['body']];
-    }
-    private function load(string $id): ?object
+    /** @inheritDoc */
+    public function describe(Form $form, object $item, User $user): array
     {
-        $fields = ['id', 'user_id', 'catid', 'subject', 'body', 'state', 'checked_out', 'checked_out_time', 'created_user_id', 'created_time', 'modified_user_id', 'modified_time', 'review_time', 'publish_up', 'publish_down'];
-        $query  = $this->db->createQuery()->select(array_map(fn ($f) => $this->db->quoteName($f), $fields))->from($this->db->quoteName('#__user_notes'))->where($this->db->quoteName('id') . ' = :id')->bind(':id', $id, ParameterType::INTEGER);
-        return $this->db->setQuery($query)->loadObject() ?: null;
+        $scope = $this->scope($form, $item);
+        $this->authorize($user, $item, $scope);
+        $keys = self::KEYS;
+
+        $descriptor = DraftProjection::descriptor(
+            $form,
+            $item,
+            $this->getContext(),
+            empty($item->id) ? null : (string) $item->id,
+            $scope,
+            $keys,
+            [$item->modified ?? null, $item->modified_time ?? null, $item->modified_user_id ?? null]
+        );
+
+
+        return $descriptor;
     }
-    private function invalid(): AutosaveException
+
+    /** @inheritDoc */
+    public function read(array $binding, User $user, ?array $payload = null): array
     {
-        return new AutosaveException('invalid_payload', 'The User Note draft payload is invalid.');
+        $target = DraftModel::target($binding, $this->getContext());
+        if (array_keys($binding['scope']) !== ['user_id', 'catid']) {
+            throw new AutosaveException('scope_conflict', 'The native scope shape changed.');
+        }
+        $model = $this->factory->createModel('Note', 'Administrator', ['ignore_request' => true]);
+        $model->setState('note.id', $target === null ? 0 : (int) $target);
+        $model->setState('note.user_id', (int) $binding['scope']['user_id']);
+        $item = $model->getItem($target === null ? 0 : (int) $target);
+        if (!$item || ($target !== null && (string) $item->id !== $target)) {
+            throw new AutosaveException('target_not_found', 'The native record was not found.');
+        }
+        if ($target === null) {
+            $item->user_id = (int) $binding['scope']['user_id'];
+            $item->catid   = (int) $binding['scope']['catid'];
+        }
+        $this->authorize($user, $item, $binding['scope']);
+        $form       = DraftModel::form($model, 'com_users', $item);
+        $descriptor = $this->describe($form, $item, $user);
+        if ($descriptor['scope'] !== $binding['scope']) {
+            throw new AutosaveException('scope_conflict', 'The native identity or owning relation changed.');
+        }
+        return $descriptor;
+    }
+
+    private function scope(Form $form, object $item): array
+    {
+        return ['user_id' => (string) ($item->user_id ?? 0), 'catid' => (string) ($item->catid ?? 0)];
+    }
+
+    private function authorize(User $user, object $item, array $scope): void
+    {
+        $component = 'com_users';
+        if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', $component)) {
+            throw new AutosaveException('forbidden', 'The native component access is denied.');
+        }
+
+        if (!(empty($item->id) ? ($user->authorise('core.create', $component) || \count($user->getAuthorisedCategories($component, 'core.create')) > 0) : $user->authorise('core.edit', $component))) {
+            throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
+        }
+        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
+            throw new AutosaveException('checkout_conflict', 'The record is checked out by another user.');
+        }
     }
 }

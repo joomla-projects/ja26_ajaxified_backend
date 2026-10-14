@@ -11,10 +11,8 @@
       "uri": "com_contact/contact-autosave.min.js",
       "dependencies": [
         "core",
-        "com_autosave.integration-controller",
-        "com_autosave.create-binding",
-        "editor-api",
-        "webcomponent.field-media"
+        "editors",
+        "com_autosave.drafts"
       ],
       "attributes": {
         "type": "module"

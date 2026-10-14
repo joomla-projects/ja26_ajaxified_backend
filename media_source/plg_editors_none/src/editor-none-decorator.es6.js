@@ -8,6 +8,11 @@ import JoomlaEditorDecorator from 'editor-decorator';
  * Plain textarea decorator for JoomlaEditor.
  */
 export default class EditorNoneDecorator extends JoomlaEditorDecorator {
+  /** @returns {HTMLTextAreaElement} */
+  getElement() {
+    return this.instance.editor;
+  }
+
   /**
    * @returns {string}
    */

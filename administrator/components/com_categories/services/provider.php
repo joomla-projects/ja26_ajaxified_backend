@@ -18,7 +18,6 @@ use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\Component\Categories\Administrator\Autosave\CategoryAutosaveProvider;
 use Joomla\Component\Categories\Administrator\Extension\CategoriesComponent;
-use Joomla\Database\DatabaseInterface;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
 
@@ -49,7 +48,7 @@ return new class () implements ServiceProviderInterface {
 
                 $component->setMVCFactory($container->get(MVCFactoryInterface::class));
                 $component->setRegistry($container->get(Registry::class));
-                $provider = new CategoryAutosaveProvider($container->get(DatabaseInterface::class));
+                $provider = new CategoryAutosaveProvider($container->get(MVCFactoryInterface::class));
                 $component->setAutosaveProvider($provider->getContext(), $provider);
 
                 return $component;

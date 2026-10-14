@@ -10,9 +10,7 @@
 
 namespace Joomla\Component\Finder\Administrator\View\Filter;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveViewConfigurator;
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -34,6 +32,8 @@ use Joomla\Component\Finder\Administrator\Model\FilterModel;
 class HtmlView extends BaseHtmlView
 {
     public bool $autosaveEnabled = false;
+
+    public string $autosaveStatusId = 'filter-autosave-status';
 
     /**
      * The filter object
@@ -129,67 +129,19 @@ class HtmlView extends BaseHtmlView
 
     private function prepareAutosave(): void
     {
-        $app          = Factory::getApplication();
-        $configurator = new AutosaveViewConfigurator($app, $this->getDocument(), $app->getIdentity());
-        $configurator->disable('com_finder.autosave.filter');
-
-        if ($this->getLayout() !== 'edit') {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
+        $item                  = clone $this->item;
 
-        try {
-            $provider = $app->bootComponent('com_finder')->getAutosaveProvider('com_finder.filter');
-            $itemId   = (int) $this->item->filter_id;
-            $target   = null;
-
-            if ($itemId > 0) {
-                $target = $provider->canonicalizeTargetId((string) $itemId);
-            } elseif ($itemId !== 0 || !$provider instanceof AutosaveCreateProviderInterface) {
-                return;
-            } else {
-                $provider->authorizeCreate($app->getIdentity(), AutosaveOperation::InitializeCreate, null);
-            }
-
-            if ($target !== null && !$provider->targetExists($target)) {
-                return;
-            }
-        } catch (\Throwable) {
-            return;
+        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+            'context'    => 'com_finder.filter', 'formId' => 'adminForm', 'statusId' => $this->autosaveStatusId,
+            'optionsKey' => 'com_finder.autosave.filter', 'script' => 'com_finder.filter-autosave',
+            'saveTasks'  => ['filter.apply', 'filter.save', 'filter.save2new', 'filter.save2copy'],
+        ]);
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
-
-        $fields = [
-            'title'            => $this->form->getField('title'),
-            'alias'            => $this->form->getField('alias'),
-            'created'          => $this->form->getField('created'),
-            'created_by'       => $this->form->getField('created_by'),
-            'created_by_alias' => $this->form->getField('created_by_alias'),
-            'state'            => $this->form->getField('state'),
-            'w1'               => $this->form->getField('w1', 'params'),
-            'd1'               => $this->form->getField('d1', 'params'),
-            'w2'               => $this->form->getField('w2', 'params'),
-            'd2'               => $this->form->getField('d2', 'params'),
-        ];
-        $ids = [];
-
-        foreach ($fields as $name => $field) {
-            if (!$field || !\is_string($field->id) || $field->id === '') {
-                return;
-            }
-
-            // The User field's submitted canonical ID is held by its hidden
-            // input; the base ID belongs to the visible read-only user name.
-            $ids[$name] = $name === 'created_by' ? $field->id . '_id' : $field->id;
-        }
-
-        $configurator->configure(
-            $provider,
-            $target,
-            'com_finder.autosave.filter',
-            'adminForm',
-            $ids,
-            'com_finder.filter-autosave'
-        );
-        $this->autosaveEnabled = true;
     }
 
     /**

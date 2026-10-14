@@ -1,109 +1,113 @@
 <?php
 
-/** @package Joomla.Administrator @subpackage com_users */
+/**
+ * @package Joomla.Administrator
+ * @subpackage com_users
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
+ */
 
 namespace Joomla\Component\Users\Administrator\Autosave;
 
 use Joomla\CMS\Access\Access;
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
+use Joomla\CMS\Autosave\DraftModel;
+use Joomla\CMS\Autosave\DraftProjection;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Form\Form;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
-use Joomla\Database\DatabaseInterface;
-use Joomla\Database\ParameterType;
-use Joomla\String\StringHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class GroupAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
+/**
+ * Native Group scope, authority and selected values; no canonical persistence.
+ *
+ * @since  __DEPLOY_VERSION__
+ */
+final class GroupAutosaveProvider implements DraftProviderInterface
 {
-    public function __construct(private readonly DatabaseInterface $db)
+    private const KEYS = ['title'];
+
+    /**
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
+
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_users.group';
     }
-    public function getCreateContractVersion(): string
-    {
-        return 'user-group-create-v1';
-    }
-    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
-    {
-        // Mirrors GroupController::allowSave() for a new record: the com_users core.admin
-        // gate plus FormController::allowAdd(). The draft payload carries only the title,
-        // so no hierarchy relation is authored through Autosave and the native parent_id
-        // safeguards in GroupModel::save() stay the sole authority over placement.
-        if (
-            !$user->authorise('core.admin', 'com_users')
-            || (!$user->authorise('core.create', 'com_users') && \count($user->getAuthorisedCategories('com_users', 'core.create')) === 0)
-        ) {
-            throw new AutosaveException('forbidden', 'A User Group cannot be created by this user.');
-        }
-    }
-    public function getPayloadSchemaVersion(): int
-    {
-        return 1;
-    }
-    public function canonicalizeTargetId(string $id): string
-    {
-        return $this->canonical($id);
-    }
-    public function targetExists(string $id): bool
-    {
-        return $this->load($this->canonical($id)) !== null;
-    }
-    public function authorize(User $user, string $id, AutosaveOperation $operation): void
-    {
-        $record = $this->load($this->canonical($id));
 
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The User Group was not found.');
+    /** @inheritDoc */
+    public function describe(Form $form, object $item, User $user): array
+    {
+        $scope = $this->scope($form, $item);
+        $this->authorize($user, $item, $scope);
+        $keys = self::KEYS;
+
+        $descriptor = DraftProjection::descriptor(
+            $form,
+            $item,
+            $this->getContext(),
+            empty($item->id) ? null : (string) $item->id,
+            $scope,
+            $keys,
+            [(int) ($item->parent_id ?? 0)]
+        );
+
+
+        return $descriptor;
+    }
+
+    /** @inheritDoc */
+    public function read(array $binding, User $user, ?array $payload = null): array
+    {
+        $target = DraftModel::target($binding, $this->getContext());
+        if (array_keys($binding['scope']) !== []) {
+            throw new AutosaveException('scope_conflict', 'The native scope shape changed.');
         }
-        if (
-            !$user->authorise('core.admin', 'com_users')
-            || !$user->authorise('core.edit', 'com_users')
-            || (Access::checkGroup((int) $record->id, 'core.admin') && !$user->authorise('core.admin'))
-        ) {
-            throw new AutosaveException('forbidden', 'The User Group cannot be edited by this user.');
+        $model = $this->factory->createModel('Group', 'Administrator', ['ignore_request' => true]);
+        $model->setState('group.id', $target === null ? 0 : (int) $target);
+
+        $item = $model->getItem($target === null ? 0 : (int) $target);
+        if (!$item || ($target !== null && (string) $item->id !== $target)) {
+            throw new AutosaveException('target_not_found', 'The native record was not found.');
         }
-    }
-    public function getBaseRevision(string $id): string
-    {
-        return $this->revision($this->required($id), 'group');
-    }
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
-    {
-        if ($schemaVersion !== 1 || !\is_array($payload) || array_keys($payload) !== ['title'] || !\is_string($payload['title']) || preg_match('//u', $payload['title']) !== 1 || StringHelper::strlen($payload['title']) > 100) {
-            throw new AutosaveException('invalid_payload', 'The User Group draft payload is invalid.');
+
+        $this->authorize($user, $item, $binding['scope']);
+        $form       = DraftModel::form($model, 'com_users', $item);
+        $descriptor = $this->describe($form, $item, $user);
+        if ($descriptor['scope'] !== $binding['scope']) {
+            throw new AutosaveException('scope_conflict', 'The native identity or owning relation changed.');
         }
-        return ['title' => $payload['title']];
+        return $descriptor;
     }
-    private function canonical(string $id): string
+
+    private function scope(Form $form, object $item): array
     {
-        if (preg_match('/^[1-9][0-9]{0,9}$/D', $id) !== 1 || (\strlen($id) === 10 && strcmp($id, '4294967295') > 0)) {
-            throw new AutosaveException('invalid_target', 'The User Group target is invalid.');
+        return [];
+    }
+
+    private function authorize(User $user, object $item, array $scope): void
+    {
+        $component = 'com_users';
+        if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', $component)) {
+            throw new AutosaveException('forbidden', 'The native component access is denied.');
         }
-        return $id;
-    }
-    private function load(string $id): ?object
-    {
-        $query = $this->db->createQuery()->select(['id', 'parent_id', 'lft', 'rgt', 'title'])->from($this->db->quoteName('#__usergroups'))->where($this->db->quoteName('id') . ' = :id')->bind(':id', $id, ParameterType::INTEGER);
-        return $this->db->setQuery($query)->loadObject() ?: null;
-    }
-    private function required(string $id): object
-    {
-        $record = $this->load($this->canonical($id));
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The User Group was not found.');
-        } return $record;
-    }
-    private function revision(object $record, string $name): string
-    {
-        $domain = 'autosave:com_users.' . $name . ':base-revision:v1';
-        return $domain . ':' . hash('sha256', $domain . "\0" . json_encode($record, JSON_THROW_ON_ERROR));
+        if (!$user->authorise('core.admin', 'com_users') || (!$user->authorise('core.admin') && !empty($item->id) && Access::checkGroup((int) $item->id, 'core.admin'))) {
+            throw new AutosaveException('forbidden', 'Native administrator group access is denied.');
+        }
+        if (!(empty($item->id) ? ($user->authorise('core.create', $component) || \count($user->getAuthorisedCategories($component, 'core.create')) > 0) : $user->authorise('core.edit', $component))) {
+            throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
+        }
+        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
+            throw new AutosaveException('checkout_conflict', 'The record is checked out by another user.');
+        }
     }
 }

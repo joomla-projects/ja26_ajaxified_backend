@@ -11,7 +11,7 @@
 namespace Joomla\Component\Workflow\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
@@ -30,11 +30,6 @@ use Joomla\Input\Input;
  */
 class WorkflowController extends FormController
 {
-    use AutosaveFormControllerTrait;
-
-
-    private const AUTOSAVE_CONTEXT      = 'com_workflow.workflow';
-    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new', 'save2copy' => 'save-copy'];
     /**
      * The extension for which the workflows apply.
      *
@@ -178,8 +173,8 @@ class WorkflowController extends FormController
      */
     public function postSaveHook(BaseDatabaseModel $model, $validData = [])
     {
-        $this->captureAutosaveCanonicalResult($model, 'workflow.id');
         $task = $this->getTask();
+
         // The save2copy task needs to be handled slightly differently.
         if ($task === 'save2copy') {
             $table = $model->getTable();
@@ -244,5 +239,6 @@ class WorkflowController extends FormController
                 $table->save($transition);
             }
         }
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_workflow.workflow', $this->getTask(), 'id', []);
     }
 }

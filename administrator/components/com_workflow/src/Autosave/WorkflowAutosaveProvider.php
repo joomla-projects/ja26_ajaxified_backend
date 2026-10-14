@@ -1,148 +1,121 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_workflow
- *
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @package Joomla.Administrator
+ * @subpackage com_workflow
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Workflow\Administrator\Autosave;
 
-use Joomla\CMS\Autosave\AutosaveCreateProviderInterface;
 use Joomla\CMS\Autosave\AutosaveException;
-use Joomla\CMS\Autosave\AutosaveOperation;
-use Joomla\CMS\Autosave\AutosaveProviderInterface;
-use Joomla\CMS\Factory;
+use Joomla\CMS\Autosave\DraftModel;
+use Joomla\CMS\Autosave\DraftProjection;
+use Joomla\CMS\Autosave\DraftProviderInterface;
+use Joomla\CMS\Filter\InputFilter;
+use Joomla\CMS\Form\Form;
+use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\User\User;
-use Joomla\Database\DatabaseInterface;
-use Joomla\Database\ParameterType;
-use Joomla\String\StringHelper;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-final class WorkflowAutosaveProvider implements AutosaveProviderInterface, AutosaveCreateProviderInterface
+/**
+ * Native Workflow scope, authority and selected values; no canonical persistence.
+ *
+ * @since  __DEPLOY_VERSION__
+ */
+final class WorkflowAutosaveProvider implements DraftProviderInterface
 {
-    private const CONTEXT       = 'com_workflow.workflow';
-    private const MAXIMUM_ID    = '2147483647';
-    private const STRING_LIMITS = ['title' => 255, 'description' => 65535];
+    private const KEYS = ['title', 'description'];
 
-    /** @var callable(): string */
-    private $extensionResolver;
-
-    public function __construct(private readonly DatabaseInterface $db, ?callable $extensionResolver = null)
+    /**
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly MVCFactoryInterface $factory)
     {
-        // The owning extension is immutable creation scope. It is never read from the
-        // Autosave request: WorkflowModel::populateState() stores it in server-side user
-        // state when the native form is built, and only that state is consulted here.
-        $this->extensionResolver = $extensionResolver
-            ?? static fn (): string => (string) Factory::getApplication()
-                ->getUserState('com_workflow.workflow.filter.extension');
     }
 
+    /** @inheritDoc */
     public function getContext(): string
     {
-        return self::CONTEXT;
+        return 'com_workflow.workflow';
     }
 
-    public function getCreateContractVersion(): string
+    /** @inheritDoc */
+    public function describe(Form $form, object $item, User $user): array
     {
-        return 'workflow-create-v1';
+        $scope = $this->scope($form, $item);
+        $this->authorize($user, $item, $scope);
+        $keys = self::KEYS;
+
+        $descriptor = DraftProjection::descriptor(
+            $form,
+            $item,
+            $this->getContext(),
+            empty($item->id) ? null : (string) $item->id,
+            $scope,
+            $keys,
+            [$item->modified ?? null, $item->modified_time ?? null, $item->modified_user_id ?? null]
+        );
+
+
+        return $descriptor;
     }
 
-    public function authorizeCreate(User $user, AutosaveOperation $operation, ?array $normalizedPayload): void
+    /** @inheritDoc */
+    public function read(array $binding, User $user, ?array $payload = null): array
     {
-        // WorkflowController::allowAdd() authorises core.create on the component part of
-        // the extension. The component is resolved from server-side state and validated
-        // against the component-name shape, so a forged "extension" request variable can
-        // neither reach this check nor move it to another component.
-        $component = explode('.', ($this->extensionResolver)(), 2)[0];
+        $target = DraftModel::target($binding, $this->getContext());
+        if (array_keys($binding['scope']) !== ['extension']) {
+            throw new AutosaveException('scope_conflict', 'The native scope shape changed.');
+        }
+        $model = $this->factory->createModel('Workflow', 'Administrator', ['ignore_request' => true]);
+        $model->setState('workflow.id', $target === null ? 0 : (int) $target);
+        $model->setState('filter.extension', $binding['scope']['extension']);
+        $item = $model->getItem($target === null ? 0 : (int) $target);
+        if (!$item || ($target !== null && (string) $item->id !== $target)) {
+            throw new AutosaveException('target_not_found', 'The native record was not found.');
+        }
+        if ($target === null) {
+            $item->extension = $binding['scope']['extension'];
+        }
+        $this->authorize($user, $item, $binding['scope']);
+        $form       = DraftModel::form($model, 'com_workflow', $item);
+        $descriptor = $this->describe($form, $item, $user);
+        if ($descriptor['scope'] !== $binding['scope']) {
+            throw new AutosaveException('scope_conflict', 'The native identity or owning relation changed.');
+        }
+        return $descriptor;
+    }
 
-        if (preg_match('/^com_[a-z][a-z0-9_]{0,48}$/D', $component) !== 1) {
-            throw new AutosaveException('forbidden', 'A Workflow has no resolvable owning extension.');
+    private function scope(Form $form, object $item): array
+    {
+        $extension = (string) ($item->extension ?: ($item->draftExtension ?? ''));
+        if (!str_starts_with($extension, 'com_') || InputFilter::getInstance()->clean($extension, 'cmd') !== $extension) {
+            throw new AutosaveException('scope_conflict', 'The workflow extension is invalid.');
+        }
+        DraftModel::extension($extension, $item->draftExtension ?? null);
+        return ['extension' => $extension];
+    }
+
+    private function authorize(User $user, object $item, array $scope): void
+    {
+        $component = explode('.', $scope['extension'])[0];
+        if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage.workflow', $component)) {
+            throw new AutosaveException('forbidden', 'The native component access is denied.');
         }
 
-        if (!$user->authorise('core.create', $component)) {
-            throw new AutosaveException('forbidden', 'A Workflow cannot be created in this extension.');
+        if (
+            !(empty($item->id) ? $user->authorise('core.create', $component) : ($user->authorise('core.edit', $component . '.workflow.' . (int) $item->id)
+            || (isset($item->created_by) && $user->authorise('core.edit.own', $component . '.workflow.' . (int) $item->id) && (int) $item->created_by === (int) $user->id)))
+        ) {
+            throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
         }
-    }
-
-    public function getPayloadSchemaVersion(): int
-    {
-        return 1;
-    }
-
-    public function canonicalizeTargetId(string $targetId): string
-    {
-        if (preg_match('/^[1-9][0-9]{0,9}$/D', $targetId) !== 1 || (\strlen($targetId) === 10 && strcmp($targetId, self::MAXIMUM_ID) > 0)) {
-            throw new AutosaveException('invalid_target', 'The Workflow target is invalid.');
+        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
+            throw new AutosaveException('checkout_conflict', 'The record is checked out by another user.');
         }
-        return $targetId;
-    }
-
-    public function targetExists(string $targetId): bool
-    {
-        return $this->load($this->canonicalizeTargetId($targetId)) !== null;
-    }
-
-    public function authorize(User $user, string $targetId, AutosaveOperation $operation): void
-    {
-        $record = $this->load($this->canonicalizeTargetId($targetId));
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Workflow was not found.');
-        }
-        $asset = $record->extension . '.workflow.' . (int) $record->id;
-        if (!$user->authorise('core.edit', $asset) && !($user->authorise('core.edit.own', $asset) && (int) $record->created_by === (int) $user->id)) {
-            throw new AutosaveException('forbidden', 'The Workflow cannot be edited by this user.');
-        }
-        if ((int) ($record->checked_out ?? 0) !== 0 && (int) $record->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checked_out', 'The Workflow is checked out by another user.');
-        }
-    }
-
-    public function getBaseRevision(string $targetId): string
-    {
-        $record = $this->load($this->canonicalizeTargetId($targetId));
-        if ($record === null) {
-            throw new AutosaveException('target_not_found', 'The Workflow was not found.');
-        }
-        return $this->revision($record);
-    }
-
-    public function normalizePayload(mixed $payload, int $schemaVersion): array
-    {
-        $required = ['title' => true, 'description' => true];
-
-        if ($schemaVersion !== 1 || !\is_array($payload) || array_is_list($payload) || array_diff_key($payload, $required) || array_diff_key($required, $payload)) {
-            throw $this->invalidPayload();
-        }
-        foreach (self::STRING_LIMITS as $key => $limit) {
-            if (!\is_string($payload[$key]) || preg_match('//u', $payload[$key]) !== 1 || StringHelper::strlen($payload[$key]) > $limit) {
-                throw $this->invalidPayload();
-            }
-        }
-        return ['title' => $payload['title'], 'description' => $payload['description']];
-    }
-
-    private function load(string $targetId): ?object
-    {
-        $fields = ['id', 'asset_id', 'published', 'title', 'description', 'extension', 'default', 'ordering', 'created', 'created_by', 'modified', 'modified_by', 'checked_out', 'checked_out_time'];
-        $query  = $this->db->createQuery()->select(array_map(fn ($f) => $this->db->quoteName($f), $fields))->from($this->db->quoteName('#__workflows'))->where($this->db->quoteName('id') . ' = :id')->bind(':id', $targetId, ParameterType::INTEGER);
-        return $this->db->setQuery($query)->loadObject() ?: null;
-    }
-
-    private function revision(object $record): string
-    {
-        $domain = 'autosave:com_workflow.workflow:base-revision:v1';
-        $json   = json_encode($record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        return $domain . ':' . hash('sha256', $domain . "\0" . $json);
-    }
-
-    private function invalidPayload(): AutosaveException
-    {
-        return new AutosaveException('invalid_payload', 'The Workflow draft payload is invalid.');
     }
 }

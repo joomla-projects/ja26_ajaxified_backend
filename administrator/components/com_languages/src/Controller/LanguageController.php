@@ -10,7 +10,7 @@
 
 namespace Joomla\Component\Languages\Administrator\Controller;
 
-use Joomla\CMS\Autosave\AutosaveFormControllerTrait;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
@@ -25,24 +25,6 @@ use Joomla\CMS\MVC\Model\BaseDatabaseModel;
  */
 class LanguageController extends FormController
 {
-    use AutosaveFormControllerTrait;
-
-
-    private const AUTOSAVE_CONTEXT      = 'com_languages.language';
-    private const AUTOSAVE_TASK_INTENTS = ['apply' => 'apply', 'save' => 'save-exit', 'save2new' => 'save-new'];
-
-    public function save($key = null, $urlVar = null)
-    {
-        return $this->executeAutosaveCanonicalSave(
-            fn () => parent::save($key, $urlVar),
-            $urlVar ?: 'lang_id'
-        );
-    }
-
-    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
-    {
-        $this->captureAutosaveCanonicalResult($model, 'language.id');
-    }
     /**
      * Gets the URL arguments to append to an item redirect.
      *
@@ -56,5 +38,12 @@ class LanguageController extends FormController
     protected function getRedirectToItemAppend($recordId = null, $key = 'lang_id')
     {
         return parent::getRedirectToItemAppend($recordId, $key);
+    }
+    /** Optional draft retirement after the authoritative native success hook. */
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_languages.language', $this->getTask(), 'lang_id', ['lang_code'], ['lang_code']);
     }
 }

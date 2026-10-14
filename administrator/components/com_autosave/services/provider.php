@@ -12,9 +12,8 @@
 
 use Joomla\CMS\Application\AdministratorApplication;
 use Joomla\CMS\Autosave\AutosaveContextResolver;
-use Joomla\CMS\Autosave\AutosaveLifecycle;
-use Joomla\CMS\Autosave\AutosaveStorage;
-use Joomla\CMS\Autosave\AutosaveStorageInterface;
+use Joomla\CMS\Autosave\DraftService;
+use Joomla\CMS\Autosave\DraftStore;
 use Joomla\CMS\Extension\ComponentInterface;
 use Joomla\Component\Autosave\Administrator\Extension\AutosaveComponent;
 use Joomla\Database\DatabaseInterface;
@@ -39,24 +38,16 @@ return new class () implements ServiceProviderInterface {
     public function register(Container $container)
     {
         $container->share(
-            AutosaveStorageInterface::class,
-            static fn (Container $container): AutosaveStorageInterface => new AutosaveStorage(
-                $container->get(DatabaseInterface::class),
-                AutosaveComponent::STORAGE_POLICY
-            )
-        );
-        $container->share(
-            AutosaveLifecycle::class,
-            static fn (Container $container): AutosaveLifecycle => new AutosaveLifecycle(
+            DraftService::class,
+            static fn (Container $container): DraftService => new DraftService(
                 new AutosaveContextResolver($container->get(AdministratorApplication::class)),
-                $container->get(AutosaveStorageInterface::class),
-                (string) $container->get(AdministratorApplication::class)->get('secret')
+                new DraftStore($container->get(DatabaseInterface::class))
             )
         );
         $container->share(
             ComponentInterface::class,
             static fn (Container $container): ComponentInterface => new AutosaveComponent(
-                $container->get(AutosaveLifecycle::class)
+                $container->get(DraftService::class)
             )
         );
     }
