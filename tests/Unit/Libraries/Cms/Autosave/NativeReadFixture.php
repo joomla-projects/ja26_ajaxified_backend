@@ -24,7 +24,7 @@ trait NativeReadFixture
     private function installNativeReadFixture(): void
     {
         $this->previousNativeDatabase = Factory::$database;
-        $database = $this->createMock(\Joomla\Database\DatabaseDriver::class);
+        $database                     = $this->createMock(\Joomla\Database\DatabaseDriver::class);
         $database->method('createQuery')->willReturnCallback(fn () => new MysqliQuery($database));
         $database->method('quoteName')->willReturnCallback(static fn ($name, $alias = null) => $name);
         $database->method('quote')->willReturnCallback(static fn ($value) => "'" . $value . "'");
@@ -45,7 +45,7 @@ trait NativeReadFixture
             }
             if (str_contains($query, '#__usergroups')) {
                 return [1 => (object) ['id' => 1, 'parent_id' => 0, 'title' => 'Public', 'lft' => 1, 'rgt' => 4],
-                    42 => (object) ['id' => 42, 'parent_id' => 1, 'title' => 'Protected group', 'lft' => 2, 'rgt' => 3]];
+                    42    => (object) ['id' => 42, 'parent_id' => 1, 'title' => 'Protected group', 'lft' => 2, 'rgt' => 3]];
             }
 
             throw new \LogicException('Unexpected native read in the unit fixture: ' . $query);

@@ -52,19 +52,19 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
             getenv('JTEST_DB_ENGINE') ?: JTEST_DB_ENGINE,
             [
                 'database' => getenv('JTEST_DB_NAME') ?: JTEST_DB_NAME,
-                'host' => getenv('JTEST_DB_HOST') ?: JTEST_DB_HOST,
-                'user' => getenv('JTEST_DB_USER') ?: JTEST_DB_USER,
+                'host'     => getenv('JTEST_DB_HOST') ?: JTEST_DB_HOST,
+                'user'     => getenv('JTEST_DB_USER') ?: JTEST_DB_USER,
                 'password' => getenv('JTEST_DB_PASSWORD') ?: JTEST_DB_PASSWORD,
-                'prefix' => $this->db->getPrefix(),
+                'prefix'   => $this->db->getPrefix(),
             ]
         );
         $peer->setQuery($peer->getServerType() === 'mysql' ? 'SET SESSION innodb_lock_wait_timeout = 1' : "SET lock_timeout = '1000ms'")->execute();
-        $competing = new \Joomla\CMS\Autosave\DraftStore($peer);
+        $competing  = new \Joomla\CMS\Autosave\DraftStore($peer);
         $descriptor = $this->descriptor();
-        $draft = $this->store->open(7, $descriptor, $this->now);
-        $admission = ['draft_id' => $draft['draft_id'], 'owner_id' => 7, 'descriptor' => $descriptor, 'rendered_at' => $draft['created_at']];
-        $later = new \Joomla\CMS\Date\Date('2026-10-11 01:01:00', 'UTC');
-        $act = static function () use ($competing, $draft, $descriptor, $later, $admission, $operation): void {
+        $draft      = $this->store->open(7, $descriptor, $this->now);
+        $admission  = ['draft_id' => $draft['draft_id'], 'owner_id' => 7, 'descriptor' => $descriptor, 'rendered_at' => $draft['created_at']];
+        $later      = new \Joomla\CMS\Date\Date('2026-10-11 01:01:00', 'UTC');
+        $act        = static function () use ($competing, $draft, $descriptor, $later, $admission, $operation): void {
             switch ($operation) {
                 case 'preserve':
                     $competing->preserve(7, $draft['draft_id'], 1, ['title' => 'older'], $later, static fn ($row, $payload) => $payload);

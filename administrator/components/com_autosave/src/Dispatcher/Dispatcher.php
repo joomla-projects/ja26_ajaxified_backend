@@ -55,8 +55,8 @@ final class Dispatcher extends BaseDispatcher
         'payload_too_large'          => 413,
         'draft_retired'              => 409,
         'service_unavailable'        => 503,
-        'render_admission_missing'    => 410,
-        'render_admission_expired'    => 410,
+        'render_admission_missing'   => 410,
+        'render_admission_expired'   => 410,
     ];
 
     public function __construct(
@@ -163,7 +163,7 @@ final class Dispatcher extends BaseDispatcher
             }
 
             $admissions = $this->app->getSession()->get(DraftService::RENDER_ADMISSIONS, []);
-            $admission = \is_string($request['draft_id'] ?? null) ? ($admissions[$request['draft_id']] ?? null) : null;
+            $admission  = \is_string($request['draft_id'] ?? null) ? ($admissions[$request['draft_id']] ?? null) : null;
             $this->app->getSession()->close();
             $result = $this->drafts->execute(self::TASKS[$task], $request, $user, new Date('now', 'UTC'), $admission);
             $this->success($this->formatResult($result));

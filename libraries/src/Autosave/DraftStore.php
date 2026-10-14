@@ -94,7 +94,7 @@ final class DraftStore
                     throw $exception;
                 }
                 $newRow = $this->newRow($owner, $admission['descriptor'], $rendered, $now, $id);
-                $row = $this->decode((array) $newRow);
+                $row    = $this->decode((array) $newRow);
                 $validate($row);
                 $this->db->insertObject('#__autosave_drafts', $newRow);
 
@@ -116,7 +116,7 @@ final class DraftStore
             }
             $validate($row);
             if ($row['expires_at'] <= $now->toSql()) {
-                $old = $row;
+                $old               = $row;
                 $row['expires_at'] = min($this->deadline($now, $this->policy['empty_ttl']), $this->deadline($rendered, $this->policy['absolute_ttl']));
                 $this->update($row, $old, $now, null, true);
             }
@@ -614,7 +614,7 @@ final class DraftStore
             }
         }
         $rendered = $this->validateAdmission($owner, $id, $admission, $now);
-        $row = $this->newRow($owner, $admission['descriptor'], $rendered, $now, $id);
+        $row      = $this->newRow($owner, $admission['descriptor'], $rendered, $now, $id);
         $this->db->insertObject('#__autosave_drafts', $row);
 
         return $this->decode((array) $row);

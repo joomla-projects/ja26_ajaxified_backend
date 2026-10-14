@@ -65,7 +65,7 @@ class DraftServiceTest extends UnitTestCase
         $app = $this->createMock(CMSApplicationInterface::class);
         $app->method('bootComponent')->willReturn($component);
         $this->resolver = new AutosaveContextResolver($app, static fn (): bool => true);
-        $this->service = new DraftService($this->resolver, $this->store);
+        $this->service  = new DraftService($this->resolver, $this->store);
     }
 
     private function form(): Form
@@ -411,7 +411,7 @@ class DraftServiceTest extends UnitTestCase
     /** Server-owned render metadata, never a browser-supplied descriptor. */
     private function rendered(): array
     {
-        $values = [];
+        $values  = [];
         $session = $this->createMock(\Joomla\Session\SessionInterface::class);
         $session->method('get')->willReturnCallback(static function ($name, $default = null) use (&$values) {
             return $values[$name] ?? $default;
@@ -433,7 +433,7 @@ class DraftServiceTest extends UnitTestCase
     public function testAuthorizedFirstEditResumesLogicalExpiryAndPhysicalPurge(bool $purged): void
     {
         [$draft, $admission] = $this->rendered();
-        $now = new \Joomla\CMS\Date\Date('2026-10-11 01:01:00', 'UTC');
+        $now                 = new \Joomla\CMS\Date\Date('2026-10-11 01:01:00', 'UTC');
         if ($purged) {
             $this->assertSame(1, $this->store->purge($now));
         }
@@ -472,7 +472,7 @@ class DraftServiceTest extends UnitTestCase
     public function testResumeRejectsInvalidAuthorityWithoutRenewingExpiry(string $change, string $code): void
     {
         [$draft, $admission] = $this->rendered();
-        $request = ['draft_id' => $draft['draft_id'], 'schema_version' => 1];
+        $request             = ['draft_id' => $draft['draft_id'], 'schema_version' => 1];
         switch ($change) {
             case 'missing':
                 $admission = null;
@@ -525,7 +525,7 @@ class DraftServiceTest extends UnitTestCase
     public function testResumeRechecksRevokedAuthorityAfterPurge(): void
     {
         [$draft, $admission] = $this->rendered();
-        $now = new \Joomla\CMS\Date\Date('2026-10-11 01:01:00', 'UTC');
+        $now                 = new \Joomla\CMS\Date\Date('2026-10-11 01:01:00', 'UTC');
         $this->store->purge($now);
         $this->allowed = false;
         $this->expectException(AutosaveException::class);
@@ -536,7 +536,7 @@ class DraftServiceTest extends UnitTestCase
     public function testTerminalDiscardAndNativeRetirementOutliveRenderAdmission(bool $nativeSave): void
     {
         [$draft, $admission] = $this->rendered();
-        $now = new \Joomla\CMS\Date\Date('2026-10-11 01:01:00', 'UTC');
+        $now                 = new \Joomla\CMS\Date\Date('2026-10-11 01:01:00', 'UTC');
         $this->store->purge($now);
         if ($nativeSave) {
             $this->service->reconcile($this->user, ['draft_id' => $draft['draft_id'], 'revision' => '1'], 'com_content.article', '42', [], 'save', '42', null, $now, false, null, $admission);

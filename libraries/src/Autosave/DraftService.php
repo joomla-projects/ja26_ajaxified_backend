@@ -58,9 +58,9 @@ final class DraftService
                 static fn (array $entry): bool => ($entry['expires_at'] ?? '') > $now->toSql()
             );
             $admissions[$binding['draft_id']] = [
-                'draft_id' => $binding['draft_id'], 'owner_id' => (int) $user->id,
+                'draft_id'    => $binding['draft_id'], 'owner_id' => (int) $user->id,
                 'rendered_at' => $binding['created_at'], 'expires_at' => $this->store->getAdmissionExpiry($now),
-                'descriptor' => array_intersect_key($descriptor, array_flip(['context', 'target', 'scope', 'version', 'revision', 'fields'])),
+                'descriptor'  => array_intersect_key($descriptor, array_flip(['context', 'target', 'scope', 'version', 'revision', 'fields'])),
             ];
             $session->set(self::RENDER_ADMISSIONS, \array_slice($admissions, -self::MAX_RENDER_ADMISSIONS, null, true));
         }
@@ -366,7 +366,7 @@ final class DraftService
         try {
             $service     = $application->bootComponent('com_autosave')->getDraftService();
             $resultScope = null;
-            $admission = $application->getSession()?->get(self::RENDER_ADMISSIONS, [])[$metadata['draft_id']] ?? null;
+            $admission   = $application->getSession()?->get(self::RENDER_ADMISSIONS, [])[$metadata['draft_id']] ?? null;
             // Native success may complete a blank creation or change explicitly declared scope keys.
             if (($source === null && $completedScopeKeys !== []) || ($source !== null && $changedScopeKeys !== [])) {
                 try {
