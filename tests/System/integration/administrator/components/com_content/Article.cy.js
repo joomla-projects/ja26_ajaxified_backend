@@ -204,7 +204,7 @@ describe('Native Article draft protection', () => {
       cy.checkForSystemMessage('Article saved.');
       cy.task('queryDB', `SELECT title FROM #__content WHERE id = ${article.id}`)
         .then((rows) => expect(rows[0].title).to.equal('Phase 2 recovered title'));
-      cy.task('queryDB', `SELECT payload, retired_revision FROM #__autosave_drafts WHERE draft_id IN ('${draftIds.join("','")}')`)
+      cy.then(() => cy.task('queryDB', `SELECT payload, retired_revision FROM #__autosave_drafts WHERE draft_id IN ('${draftIds.join("','")}')`))
         .then((rows) => {
           expect(rows).to.have.length(2);
           rows.forEach((row) => {
@@ -235,7 +235,7 @@ describe('Native Article draft protection', () => {
       cy.wait('@detectDraft');
       cy.get('[data-draft-recovery]').should('not.be.visible');
       cy.get('#jform_title').should('have.value', 'Phase 2 recovered title');
-      cy.task('queryDB', `SELECT payload FROM #__autosave_drafts WHERE draft_id = '${draftIds[0]}'`)
+      cy.then(() => cy.task('queryDB', `SELECT payload FROM #__autosave_drafts WHERE draft_id = '${draftIds[0]}'`))
         .then((rows) => expect(rows[0].payload).to.equal(null));
       cy.get('#jform_title').clear().type('Phase 2 autosave fixture');
       cy.wait('@preserveDraft').its('response.body.success').should('equal', true);
@@ -271,7 +271,7 @@ describe('Native Article draft protection', () => {
         cy.wait('@detectDraft').its('response.body.data.candidates').should('have.length', 0);
         cy.get('[data-draft-recovery]').should('not.be.visible');
         cy.get('#jform_title').should('have.value', 'Phase 2 autosave fixture');
-        cy.task('queryDB', `SELECT payload, retired_revision FROM #__autosave_drafts WHERE draft_id = '${draftIds[0]}'`)
+        cy.then(() => cy.task('queryDB', `SELECT payload, retired_revision FROM #__autosave_drafts WHERE draft_id = '${draftIds[0]}'`))
           .then((rows) => {
             expect(rows[0].payload).to.equal(null);
             expect(Number(rows[0].retired_revision)).to.be.greaterThan(0);
@@ -282,7 +282,7 @@ describe('Native Article draft protection', () => {
         cy.get('[data-draft-state="preserved"]').should('be.visible');
         cy.clickToolbarButton('Save & Close');
         cy.checkForSystemMessage('Article saved.');
-        cy.task('queryDB', `SELECT payload FROM #__autosave_drafts WHERE draft_id = '${draftIds[1]}'`)
+        cy.then(() => cy.task('queryDB', `SELECT payload FROM #__autosave_drafts WHERE draft_id = '${draftIds[1]}'`))
           .then((rows) => expect(rows[0].payload).to.equal(null));
         cy.task('queryDB', "SELECT id, introtext FROM #__content WHERE title = 'Phase 2 autosave fixture'")
           .then((rows) => {

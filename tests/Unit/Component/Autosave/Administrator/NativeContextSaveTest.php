@@ -62,7 +62,7 @@ class NativeContextSaveTest extends UnitTestCase
         $prefix     = 'Joomla\\Component\\' . $name . '\\Administrator\\';
         $key        = $entity === 'Language' ? 'lang_id' : ($entity === 'Filter' ? 'filter_id' : 'id');
         $source     = $task === 'create' ? '' : '42';
-        $nativeTask = $task === 'create' ? 'apply' : $task;
+        $nativeTask = $task === 'create' ? 'apply' : ($task === 'direct' ? 'save' : $task);
         $result     = $source === '' ? '84' : '42';
         $scope      = $component === 'com_menus' && $entity === 'Item' && $source === ''
             ? ['menutype' => '', 'menu_id' => '0', 'client_id' => '0', 'type' => 'component', 'link' => 'index.php?option=com_content&view=article']
@@ -108,7 +108,12 @@ class NativeContextSaveTest extends UnitTestCase
         $app->method('getSession')->willReturn($session);
         $app->method('getName')->willReturn('contextsave');
         $app->method('getLanguage')->willReturn(new Language('en-GB', false));
-        $app->method('getDocument')->willReturn(new \Joomla\CMS\Document\HtmlDocument());
+        $document = new \Joomla\CMS\Document\HtmlDocument();
+        if ($task === 'direct') {
+            $document->setType('json');
+            $app->method('getTemplate')->willReturn((object) ['id' => 42]);
+        }
+        $app->method('getDocument')->willReturn($document);
         $app->method('getLogger')->willReturn(new NullLogger());
         $app->method('get')->willReturnCallback(static fn ($key, $default = null) => $key === 'secret' ? 'fixture-secret' : $default);
         $app->method('getUserState')->willReturnCallback(static fn ($key, $default = null) => $states[$key] ?? $default);
@@ -180,7 +185,13 @@ class NativeContextSaveTest extends UnitTestCase
         $controller      = new $controllerClass(['base_path' => JPATH_ADMINISTRATOR . '/components/' . $component], $factory, $app, $input);
         $controller->setDispatcher(new Dispatcher());
         try {
-            $success = $controller->execute($nativeTask);
+            if ($task === 'direct') {
+                $this->assertNull($controller->getTask());
+                $success = $controller->save();
+                $this->assertNull($controller->getTask());
+            } else {
+                $success = $controller->execute($nativeTask);
+            }
         } catch (\Throwable $exception) {
             if ($component !== 'com_menus' || $entity !== 'Item' || $outcome !== 'validation') {
                 throw $exception;
@@ -243,6 +254,11 @@ class NativeContextSaveTest extends UnitTestCase
         foreach ([['com_contact', 'Contact', 'save2menu'], ['com_contact', 'Contact', 'editAssociations'], ['com_newsfeeds', 'Newsfeed', 'editAssociations'], ['com_menus', 'Item', 'editAssociations']] as [$component, $entity, $task]) {
             foreach (['success', 'later', 'validation', 'model'] as $outcome) {
                 $cases[] = [$component, $entity, $task, $outcome];
+            }
+        }
+        foreach ([['com_modules', 'Module'], ['com_templates', 'Style']] as [$component, $entity]) {
+            foreach (['absent', 'later'] as $outcome) {
+                $cases[] = [$component, $entity, 'direct', $outcome];
             }
         }
         foreach ([['com_menus', 'Menu'], ['com_menus', 'Item'], ['com_languages', 'Language']] as [$component, $entity]) {

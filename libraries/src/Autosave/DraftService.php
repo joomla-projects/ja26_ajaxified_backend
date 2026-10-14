@@ -352,13 +352,17 @@ final class DraftService
         string $context,
         ?string $source,
         array $scope,
-        string $task,
+        ?string $task,
         string $result,
         ?string $revision = null,
         bool $identityMayChange = false,
         array $completedScopeKeys = [],
         array $changedScopeKeys = []
     ): void {
+        if ($task === null || $task === '') {
+            return;
+        }
+
         $metadata = $input->post->get('autosave', [], 'array');
 
         if ($metadata === []) {
@@ -433,12 +437,12 @@ final class DraftService
         Input $input,
         \Joomla\CMS\MVC\Model\BaseDatabaseModel $model,
         string $context,
-        string $task,
+        ?string $task,
         string $key = 'id',
         array $completedScopeKeys = [],
         array $changedScopeKeys = []
     ): void {
-        if ($input->post->get('autosave', [], 'array') === []) {
+        if ($task === null || $task === '' || $input->post->get('autosave', [], 'array') === []) {
             return;
         }
         try {

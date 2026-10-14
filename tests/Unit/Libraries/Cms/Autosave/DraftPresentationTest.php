@@ -276,7 +276,12 @@ class DraftPresentationTest extends UnitTestCase
     /** @dataProvider exceptionTemplates */
     public function testNativeExceptionTemplateSuppliesCompleteDraftMounts(string $component, string $template, string $formId): void
     {
-        $document          = new HTMLDocument();
+        $assets = new WebAssetManager(new WebAssetRegistry());
+        // These native widget assets are outside the draft mount boundary and need no built media.
+        $assets->registerStyle('webcomponent.joomla-tab', '');
+        $assets->registerScript('webcomponent.joomla-tab', '');
+        $assets->registerScript('awesomplete', '');
+        $document          = new HTMLDocument(['webAssetManager' => $assets]);
         Factory::$document = $document;
         foreach (['system', 'com_autosave', $component] as $name) {
             $document->getWebAssetManager()->getRegistry()->addRegistryFile('media_source/' . $name . '/joomla.asset.json');
