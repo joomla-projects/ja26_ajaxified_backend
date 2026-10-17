@@ -54,8 +54,7 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $application->expects($this->never())->method('bootComponent');
         $document = $this->document();
         $registry = $document->getWebAssetManager()->getRegistry();
-        $registry->addRegistryFile('media/com_autosave/joomla.asset.json');
-        $registry->get('script', 'com_autosave.draft-form');
+        self::primeAutosaveAssetRegistry($registry);
         $registry->remove('script', 'com_autosave.draft-form');
         $form     = new \Joomla\CMS\Form\Form('native.missing.assets');
         $user     = $this->createMock(\Joomla\CMS\User\User::class);
@@ -72,8 +71,7 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $document = $this->document();
         $assets   = $document->getWebAssetManager();
         $assets->registerScript('native.available', 'native.js')->useScript('native.available');
-        $assets->getRegistry()->addRegistryFile('media/com_autosave/joomla.asset.json');
-        $assets->getRegistry()->get('script', 'com_autosave.draft-form');
+        self::primeAutosaveAssetRegistry($assets->getRegistry());
         $assets->registerScript('com_autosave.draft-form', 'draft.js', [], [], ['draft.missing-dependency']);
         $this->assertFalse($this->draftView()->configure(Factory::$application, $document, $this->createMock(\Joomla\CMS\User\User::class), new \Joomla\CMS\Form\Form('native.broken.asset'), (object) [], [
             'context' => 'com_content.article', 'formId' => 'broken-form',
@@ -186,9 +184,7 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
     public function testSharedAssetUsesCoreEditorAndDialogDependenciesWithoutAnAutosaveImportMap(): void
     {
         $registry = new WebAssetRegistry();
-        foreach (['system', 'com_autosave'] as $name) {
-            $registry->addRegistryFile('media/' . $name . '/joomla.asset.json');
-        }
+        self::registerSourceAssetManifests($registry, ['system', 'com_autosave']);
         $manager = new WebAssetManager($registry);
         $manager->useScript('com_autosave.draft-form');
         $names = array_keys($manager->getAssets('script', true));
@@ -198,12 +194,27 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $this->assertFalse((bool) $registry->get('script', 'com_autosave.draft-form')->getOption('importmap'));
     }
 
+    private static function registerSourceAssetManifests(WebAssetRegistry $registry, array $names): void
+    {
+        foreach ($names as $name) {
+            $registry->addRegistryFile('media_source/' . $name . '/joomla.asset.json');
+        }
+    }
+
+    private static function primeAutosaveAssetRegistry(WebAssetRegistry $registry): void
+    {
+        $registry->addRegistryFile('media/com_autosave/joomla.asset.json');
+        self::registerSourceAssetManifests($registry, ['com_autosave']);
+        $registry->get('script', 'com_autosave.draft-form');
+    }
+
     private function document(): HTMLDocument
     {
         $registry = new WebAssetRegistry();
-        foreach (['vendor', 'system', 'legacy'] as $name) {
-            $registry->addRegistryFile('media/' . $name . '/joomla.asset.json');
-        }
+        $registry->addRegistryFile('media/com_autosave/joomla.asset.json');
+
+        self::registerSourceAssetManifests($registry, ['system', 'com_autosave']);
+
         return new HTMLDocument(['webAssetManager' => new WebAssetManager($registry)]);
     }
 
@@ -262,9 +273,10 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         Factory::getContainer()->set('DraftviewtestRouter', new \Joomla\CMS\Router\Router());
         $document = $this->document();
         $application->method('getDocument')->willReturn($document);
-        foreach (['system', 'com_autosave', 'com_categories'] as $name) {
-            $document->getWebAssetManager()->getRegistry()->addRegistryFile('media/' . $name . '/joomla.asset.json');
-        }
+        self::registerSourceAssetManifests(
+            $document->getWebAssetManager()->getRegistry(),
+            ['system', 'com_autosave', 'com_categories']
+        );
         $helper->configure($application, $document, $user, $form, $item, [
             'context' => 'com_categories.category', 'formId' => 'item-form', 'statusId' => 'category-autosave-status',
 
@@ -336,9 +348,10 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $assets->registerScript('awesomplete', '');
         $document          = new HTMLDocument(['webAssetManager' => $assets]);
         Factory::$document = $document;
-        foreach (['system', 'com_autosave', $component] as $name) {
-            $document->getWebAssetManager()->getRegistry()->addRegistryFile('media/' . $name . '/joomla.asset.json');
-        }
+        self::registerSourceAssetManifests(
+            $document->getWebAssetManager()->getRegistry(),
+            ['system', 'com_autosave', $component]
+        );
         $application = $this->getMockBuilder(CMSApplication::class)->disableOriginalConstructor()
             ->onlyMethods(['getName', 'getClientId', 'isClient', 'getLanguage', 'getDocument', 'getInput', 'bootComponent', 'get', 'getTemplate'])
             ->addMethods(['getLanguageFilter'])->getMockForAbstractClass();
@@ -522,14 +535,14 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $toolbarFactory->setContainer(new Container());
         $toolbar = new Toolbar('toolbar', $toolbarFactory);
         $document->setToolbar('toolbar', $toolbar);
-        foreach (['system', 'com_autosave', $component] as $name) {
-            $document->getWebAssetManager()->getRegistry()->addRegistryFile('media/' . $name . '/joomla.asset.json');
-        }
+        self::registerSourceAssetManifests(
+            $document->getWebAssetManager()->getRegistry(),
+            ['system', 'com_autosave', $component]
+        );
         if (!$assetsAvailable) {
             $registry = $document->getWebAssetManager()->getRegistry();
-            $script   = 'com_autosave.draft-form';
-            $registry->get('script', $script);
-            $registry->remove('script', $script);
+            self::primeAutosaveAssetRegistry($registry);
+            $registry->remove('script', 'com_autosave.draft-form');
         }
         $form = new \Joomla\CMS\Form\Form('native.lifecycle', ['control' => 'jform']);
         $form->load('<form><fieldset><field name="title" type="text"/></fieldset></form>');
