@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Workflow\Administrator\View\Stage;
 
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -29,6 +30,21 @@ use Joomla\Component\Workflow\Administrator\Model\StageModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether draft controls are shown for this form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
+    /**
+     * Layout ID for the draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
+    public string $autosaveStatusId = 'stage-autosave-status';
     /**
      * The model state
      *
@@ -106,11 +122,43 @@ class HtmlView extends BaseHtmlView
 
         // Set the toolbar
         $this->addToolbar();
-
+        $this->prepareAutosave();
         // Display the template
         parent::display($tpl);
     }
 
+    /**
+     * Configure optional drafts only for supported native edit layouts.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            return;
+        }
+        $item                  = clone $this->item;
+        $item->draftExtension  = (string) $this->state->get('filter.extension');
+        if (empty($item->id)) {
+            $item->workflow_id = Factory::getApplication()->getInput()->getInt('workflow_id');
+        }
+        $this->form->addControlField('workflow_id', (string) $item->workflow_id);
+        $this->form->addControlField('extension', $item->draftExtension);
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+                'context'   => 'com_workflow.stage', 'formId' => 'workflow-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['stage.apply', 'stage.save', 'stage.save2new', 'stage.save2copy'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+        }
+    }
     /**
      * Add the page title and toolbar.
      *

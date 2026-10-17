@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Modules\Administrator\Controller;
 
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
@@ -213,6 +214,7 @@ class ModuleController extends FormController
         }
 
         $this->app->setUserState('com_modules.add.module.params', null);
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_modules.module', $this->getTask(), 'id', []);
     }
 
     /**

@@ -2,7 +2,7 @@
 <form>
 	<fields name="fieldparams">
 		<fieldset name="fieldparams">
-			<field
+			<field autosave="true"
 				name="directory"
 				type="media"
 				label="PLG_FIELDS_MEDIA_PARAMS_DIRECTORY_LABEL"
@@ -10,7 +10,7 @@
 				types="directories"
 			/>
 
-			<field
+			<field autosave="true"
 				name="preview"
 				type="list"
 				label="PLG_FIELDS_MEDIA_PARAMS_PREVIEW_LABEL"
@@ -21,7 +21,7 @@
 				<option value="false">JNO</option>
 			</field>
 
-			<field
+			<field autosave="true"
 				name="css_class"
 				type="textarea"
 				label="PLG_FIELDS_MEDIA_PARAMS_CSS_CLASS_LABEL"
@@ -35,7 +35,7 @@
 				default="videos"
 			/>
 
-			<field
+			<field autosave="true"
 				type="radio"
 				name="video_poster"
 				label="PLG_FIELDS_MEDIA_PARAMS_VIDEO_POSTER_LABEL"
@@ -47,7 +47,7 @@
 				<option value="1">JYES</option>
 			</field>
 
-			<field
+			<field autosave="true"
 				type="radio"
 				name="controls"
 				label="PLG_FIELDS_MEDIA_PARAMS_CONTROLS_LABEL"
@@ -59,7 +59,7 @@
 				<option value="1">JYES</option>
 			</field>
 
-			<field
+			<field autosave="true"
 				type="radio"
 				name="autoplay"
 				label="PLG_FIELDS_MEDIA_PARAMS_AUTOPLAY_LABEL"
@@ -71,7 +71,7 @@
 				<option value="1">JYES</option>
 			</field>
 
-			<field
+			<field autosave="true"
 				type="radio"
 				name="muted"
 				label="PLG_FIELDS_MEDIA_PARAMS_MUTED_LABEL"
@@ -84,7 +84,7 @@
 				<option value="1">JYES</option>
 			</field>
 
-			<field
+			<field autosave="true"
 				type="radio"
 				name="loop"
 				label="PLG_FIELDS_MEDIA_PARAMS_LOOP_LABEL"
@@ -96,7 +96,7 @@
 				<option value="1">JYES</option>
 			</field>
 
-			<field
+			<field autosave="true"
 				type="radio"
 				name="video_playsinline"
 				label="PLG_FIELDS_MEDIA_PARAMS_VIDEO_PLAYSINLINE_LABEL"
@@ -108,7 +108,7 @@
 				<option value="1">JYES</option>
 			</field>
 
-			<field
+			<field autosave="true"
 				type="list"
 				name="preload"
 				label="PLG_FIELDS_MEDIA_PARAMS_PRELOAD_LABEL"

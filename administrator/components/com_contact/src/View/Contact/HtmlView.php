@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Contact\Administrator\View\Contact;
 
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -27,6 +28,22 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
  */
 class HtmlView extends FormView
 {
+    /**
+     * Whether draft controls are shown for this form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
+    /**
+     * Layout ID for the draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
+    public string $autosaveStatusId = 'contact-autosave-status';
+
     /**
      * Set to true, if saving to menu should be supported
      *
@@ -96,6 +113,31 @@ class HtmlView extends FormView
         $this->form
             ->addControlField('task')
             ->addControlField('forcedLanguage', $forcedLanguage);
+
+        $this->prepareAutosave();
+    }
+
+    /**
+     * Configure optional drafts only for supported native edit layouts.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            return;
+        }
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
+                'context'   => 'com_contact.contact', 'formId' => 'contact-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['contact.apply', 'contact.save', 'contact.save2new', 'contact.save2copy', 'contact.save2menu', 'contact.editAssociations'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
     }
 
     /**
@@ -109,11 +151,17 @@ class HtmlView extends FormView
     {
         if ($this->getLayout() === 'modal') {
             $this->addModalToolbar();
+            if ($this->autosaveEnabled) {
+                DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+            }
 
             return;
         }
 
         parent::addToolbar();
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+        }
 
         return;
     }

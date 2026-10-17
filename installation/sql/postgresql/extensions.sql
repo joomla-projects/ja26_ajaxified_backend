@@ -855,6 +855,34 @@ CREATE INDEX "#__action_logs_users_idx_notify" ON "#__action_logs_users" ("notif
 
 -- --------------------------------------------------------
 
+-- Private recoverable draft instances. Canonical records remain native Joomla records.
+CREATE TABLE IF NOT EXISTS "#__autosave_drafts" (
+  "id" bigserial NOT NULL,
+  "draft_id" char(32) NOT NULL,
+  "owner_id" integer NOT NULL,
+  "owner_slot" smallint NOT NULL,
+  "row_version" bigint NOT NULL DEFAULT 0,
+  "context" varchar(255) NOT NULL,
+  "target_id" varchar(255) DEFAULT NULL,
+  "scope" text NOT NULL,
+  "schema_version" integer NOT NULL,
+  "fields" text NOT NULL,
+  "baseline_revision" varchar(64) DEFAULT NULL,
+  "client_revision" bigint NOT NULL DEFAULT 0,
+  "retired_revision" bigint NOT NULL DEFAULT 0,
+  "payload" text DEFAULT NULL,
+  "payload_digest" char(64) DEFAULT NULL,
+  "result_id" varchar(255) DEFAULT NULL,
+  "created_at" timestamp without time zone NOT NULL,
+  "updated_at" timestamp without time zone NOT NULL,
+  "expires_at" timestamp without time zone NOT NULL,
+  PRIMARY KEY ("id"),
+  CONSTRAINT "#__autosave_drafts_idx_draft_id" UNIQUE ("draft_id"),
+  CONSTRAINT "#__autosave_drafts_idx_owner_slot" UNIQUE ("owner_id", "owner_slot")
+);
+CREATE INDEX "#__autosave_drafts_idx_owner_id" ON "#__autosave_drafts" ("owner_id","context","target_id");
+CREATE INDEX "#__autosave_drafts_idx_expires_at" ON "#__autosave_drafts" ("expires_at");
+
 --
 -- Table structure for table "#__scheduler_tasks"
 --
@@ -897,9 +925,10 @@ CREATE INDEX "#__scheduler_tasks_idx_checked_out" ON "#__scheduler_tasks" ("chec
 INSERT INTO "#__scheduler_tasks" ("id", "asset_id", "title", "type", "execution_rules", "cron_rules", "state", "last_execution", "next_execution", "locked", "params", "created", "created_by") VALUES
 (1, 97, 'Rotate Logs', 'rotation.logs', CONCAT('{"rule-type":"interval-days","interval-days":"30","exec-day":"', TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'FMDD'), '","exec-time":"', TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'HH24:00'), '"}'), '{"type":"interval","exp":"P30D"}', 1, NULL, TO_TIMESTAMP(TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' + INTERVAL '30 days', 'YYYY-MM-DD HH24:00:00'), 'YYYY-MM-DD HH24:MI:SS'), NULL, '{"individual_log":false,"log_file":"","notifications":{"success_mail":"0","failure_mail":"1","fatal_failure_mail":"1","orphan_mail":"1"},"logstokeep":1}', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 42),
 (2, 98, 'Session GC', 'session.gc', CONCAT('{"rule-type":"interval-hours","interval-hours":"24","exec-day":"01","exec-time":"', TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'HH24:00'), '"}'), '{"type":"interval","exp":"PT24H"}', 1, NULL, TO_TIMESTAMP(TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' + INTERVAL '24 hours', 'YYYY-MM-DD HH24:00:00'), 'YYYY-MM-DD HH24:MI:SS'), NULL, '{"individual_log":false,"log_file":"","notifications":{"success_mail":"0","failure_mail":"1","fatal_failure_mail":"1","orphan_mail":"1"},"enable_session_gc":1,"enable_session_metadata_gc":1}', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 42),
-(3, 99, 'Update Notification', 'update.notification', CONCAT('{"rule-type":"interval-hours","interval-hours":"24","exec-day":"01","exec-time":"', TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'HH24:00'), '"}'), '{"type":"interval","exp":"PT24H"}', 1, NULL, TO_TIMESTAMP(TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' + INTERVAL '24 hours', 'YYYY-MM-DD HH24:00:00'), 'YYYY-MM-DD HH24:MI:SS'), NULL, '{"individual_log":false,"log_file":"","notifications":{"success_mail":"0","failure_mail":"1","fatal_failure_mail":"1","orphan_mail":"1"},"email":"","language_override":""}', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 42);
+(3, 99, 'Update Notification', 'update.notification', CONCAT('{"rule-type":"interval-hours","interval-hours":"24","exec-day":"01","exec-time":"', TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'HH24:00'), '"}'), '{"type":"interval","exp":"PT24H"}', 1, NULL, TO_TIMESTAMP(TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' + INTERVAL '24 hours', 'YYYY-MM-DD HH24:00:00'), 'YYYY-MM-DD HH24:MI:SS'), NULL, '{"individual_log":false,"log_file":"","notifications":{"success_mail":"0","failure_mail":"1","fatal_failure_mail":"1","orphan_mail":"1"},"email":"","language_override":""}', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 42),
+(4, 100, 'Autosave Retention Cleanup', 'autosave.cleanup', CONCAT('{"rule-type":"interval-hours","interval-hours":"1","exec-day":"01","exec-time":"', TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'HH24:00'), '"}'), '{"type":"interval","exp":"PT1H"}', 1, NULL, TO_TIMESTAMP(TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' + INTERVAL '1 hour', 'YYYY-MM-DD HH24:00:00'), 'YYYY-MM-DD HH24:MI:SS'), NULL, '{"individual_log":false,"log_file":"","notifications":{"success_mail":"0","failure_mail":"1","fatal_failure_mail":"1","orphan_mail":"1"}}', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 42);
 
-SELECT setval('#__scheduler_tasks_id_seq', 4, false);
+SELECT setval('#__scheduler_tasks_id_seq', 5, false);
 -- --------------------------------------------------------
 
 --

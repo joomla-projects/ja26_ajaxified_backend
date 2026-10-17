@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Tags\Administrator\View\Tag;
 
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -30,6 +31,21 @@ use Joomla\Component\Tags\Administrator\Model\TagModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether draft controls are shown for this form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
+    /**
+     * Layout ID for the draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
+    public string $autosaveStatusId = 'tag-autosave-status';
     /**
      * The Form object
      *
@@ -96,10 +112,36 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form
             ->addControlField('task');
-
         $this->addToolbar();
+        $this->prepareAutosave();
 
         parent::display($tpl);
+    }
+
+    /**
+     * Configure optional drafts only for supported native edit layouts.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            return;
+        }
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
+                'context'   => 'com_tags.tag', 'formId' => 'item-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['tag.apply', 'tag.save', 'tag.save2new', 'tag.save2copy'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+        }
     }
 
     /**

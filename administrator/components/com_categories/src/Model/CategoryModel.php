@@ -397,7 +397,7 @@ class CategoryModel extends AdminModel implements VersionableModelInterface
         $lang      = Factory::getLanguage();
         $component = $this->getState('category.component');
         $section   = $this->getState('category.section');
-        $extension = Factory::getApplication()->getInput()->get('extension', null);
+        $extension = $this->getState('category.extension');
 
         // Get the component form if it exists
         $name = 'category' . ($section ? ('.' . $section) : '');

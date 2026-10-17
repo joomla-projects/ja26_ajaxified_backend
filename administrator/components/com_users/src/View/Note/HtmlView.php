@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Users\Administrator\View\Note;
 
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -31,6 +32,21 @@ use Joomla\Component\Users\Administrator\Model\NoteModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether draft controls are shown for this form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
+    /**
+     * Layout ID for the draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
+    public string $autosaveStatusId = 'note-autosave-status';
     /**
      * The edit form.
      *
@@ -75,7 +91,6 @@ class HtmlView extends BaseHtmlView
         $this->state = $model->getState();
         $this->item  = $model->getItem();
         $this->form  = $model->getForm();
-
         // Check for errors.
         if (\count($errors = $model->getErrors())) {
             throw new GenericDataException(implode("\n", $errors), 500);
@@ -85,10 +100,41 @@ class HtmlView extends BaseHtmlView
         $this->form
             ->addControlField('task');
 
+        $this->prepareAutosave();
         parent::display($tpl);
         $this->addToolbar();
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+        }
     }
 
+    /**
+     * Configure optional drafts only for supported native edit layouts.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            return;
+        }
+        $item                  = clone $this->item;
+        if (empty($item->id)) {
+            $item->user_id = (int) $this->form->getValue('user_id', null, 0);
+            $item->catid   = (int) $this->form->getValue('catid', null, 0);
+        }
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+                'context'   => 'com_users.note', 'formId' => 'note-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['note.apply', 'note.save', 'note.save2new', 'note.save2copy'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
+    }
     /**
      * Display the toolbar.
      *

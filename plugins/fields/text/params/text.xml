@@ -2,7 +2,7 @@
 <form>
 	<fields name="fieldparams">
 		<fieldset name="fieldparams">
-			<field
+			<field autosave="true"
 				name="filter"
 				type="list"
 				label="PLG_FIELDS_TEXT_PARAMS_FILTER_LABEL"
@@ -20,7 +20,7 @@
 				<option value="tel">JLIB_FILTER_PARAMS_TEL</option>
 			</field>
 
-			<field
+			<field autosave="true"
 				name="maxlength"
 				type="number"
 				label="PLG_FIELDS_TEXT_PARAMS_MAXLENGTH_LABEL"

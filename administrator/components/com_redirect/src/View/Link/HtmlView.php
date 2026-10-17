@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Redirect\Administrator\View\Link;
 
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -30,6 +31,22 @@ use Joomla\Component\Redirect\Administrator\Model\LinkModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether draft controls are shown for this form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
+    /**
+     * Layout ID for the draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
+    public string $autosaveStatusId = 'link-autosave-status';
+
     /**
      * The active item
      *
@@ -79,7 +96,34 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task');
 
         $this->addToolbar();
+        $this->prepareAutosave();
         parent::display($tpl);
+    }
+
+    /**
+     * Configure Autosave for one existing Redirect link.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            return;
+        }
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
+                'context'   => 'com_redirect.link', 'formId' => 'link-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['link.apply', 'link.save', 'link.save2new', 'link.save2copy'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+        }
     }
 
     /**

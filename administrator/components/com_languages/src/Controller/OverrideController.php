@@ -11,6 +11,7 @@
 namespace Joomla\Component\Languages\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSWebApplicationInterface;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\Router\Route;
@@ -175,6 +176,19 @@ class OverrideController extends FormController
                 $this->setRedirect(Route::_('index.php?option=' . $this->option . '&view=' . $this->view_list . $this->getRedirectToListAppend(), false));
                 break;
         }
+
+        // This native custom save does not invoke FormController.postSaveHook.
+        DraftService::reconcileNativeSave(
+            $app,
+            $this->input,
+            'com_languages.override',
+            $recordId === null || $recordId === '' ? null : (string) $recordId,
+            ['client' => (string) $model->getState('filter.client'), 'language' => (string) $model->getState('filter.language')],
+            $task,
+            (string) $validData['key'],
+            null,
+            $recordId !== null && $recordId !== '' && (string) $recordId !== (string) $validData['key']
+        );
     }
 
     /**

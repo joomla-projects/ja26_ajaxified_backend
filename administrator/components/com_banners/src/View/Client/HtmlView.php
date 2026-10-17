@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Banners\Administrator\View\Client;
 
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
@@ -32,6 +33,22 @@ use Joomla\Component\Banners\Administrator\Model\ClientModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether draft controls are shown for this form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
+    /**
+     * Layout ID for the draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
+    public string $autosaveStatusId = 'client-autosave-status';
+
     /**
      * The Form object
      *
@@ -95,7 +112,35 @@ class HtmlView extends BaseHtmlView
         $this->form
             ->addControlField('task');
 
+        $this->prepareAutosave();
+
         parent::display($tpl);
+    }
+
+    /**
+     * Configure Autosave for one existing Banner client.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            return;
+        }
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
+                'context'   => 'com_banners.client', 'formId' => 'client-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['client.apply', 'client.save', 'client.save2new', 'client.save2copy'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+        }
     }
 
     /**

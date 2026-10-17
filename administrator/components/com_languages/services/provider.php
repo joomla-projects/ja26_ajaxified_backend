@@ -16,6 +16,8 @@ use Joomla\CMS\Extension\Service\Provider\ComponentDispatcherFactory;
 use Joomla\CMS\Extension\Service\Provider\MVCFactory;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Languages\Administrator\Autosave\LanguageAutosaveProvider;
+use Joomla\Component\Languages\Administrator\Autosave\OverrideAutosaveProvider;
 use Joomla\Component\Languages\Administrator\Extension\LanguagesComponent;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
@@ -46,7 +48,10 @@ return new class () implements ServiceProviderInterface {
                 $component = new LanguagesComponent($container->get(ComponentDispatcherFactoryInterface::class));
                 $component->setMVCFactory($container->get(MVCFactoryInterface::class));
                 $component->setRegistry($container->get(Registry::class));
-
+                $provider = new LanguageAutosaveProvider($container->get(MVCFactoryInterface::class));
+                $component->setAutosaveProvider($provider->getContext(), $provider);
+                $provider = new OverrideAutosaveProvider($container->get(MVCFactoryInterface::class));
+                $component->setAutosaveProvider($provider->getContext(), $provider);
                 return $component;
             }
         );

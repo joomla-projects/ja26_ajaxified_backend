@@ -12,6 +12,7 @@ defined('_JEXEC') or die;
 
 use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\Layout\LayoutHelper;
 use Joomla\CMS\Router\Route;
 
 /** @var \Joomla\Component\Users\Administrator\View\Level\HtmlView $this */
@@ -23,10 +24,14 @@ $wa->useScript('keepalive')
 ?>
 
 <form action="<?php echo Route::_('index.php?option=com_users&id=' . (int) $this->item->id); ?>" method="post" name="adminForm" id="level-form" aria-label="<?php echo Text::_('COM_USERS_LEVEL_FORM_' . ((int) $this->item->id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="form-validate main-card">
+    <?php if ($this->autosaveEnabled) : ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'feedback', 'id' => $this->autosaveStatusId]); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'recovery', 'id' => $this->autosaveStatusId]); ?>
+    <?php endif; ?>
     <?php echo HTMLHelper::_('uitab.startTabSet', 'myTab', ['active' => 'groups', 'recall' => true, 'breakpoint' => 768]); ?>
         <?php echo HTMLHelper::_('uitab.addTab', 'myTab', 'groups', Text::_('COM_USERS_USERGROUP_DETAILS')); ?>
             <?php echo $this->form->renderField('title'); ?>
-            <fieldset class="options-form">
+            <fieldset id="level-rules" class="options-form">
                 <legend><?php echo Text::_('COM_USERS_USER_GROUPS_HAVING_ACCESS'); ?></legend>
                 <?php echo HTMLHelper::_('access.usergroups', 'jform[rules]', $this->item->rules, true); ?>
             </fieldset>

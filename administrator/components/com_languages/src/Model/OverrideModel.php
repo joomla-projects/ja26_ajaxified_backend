@@ -123,13 +123,13 @@ class OverrideModel extends AdminModel
     public function getItem($pk = null)
     {
         $input    = Factory::getApplication()->getInput();
-        $pk       = !empty($pk) ? $pk : $input->get('id');
+        $pk       = $pk !== null ? $pk : $input->get('id');
         $fileName = \constant('JPATH_' . strtoupper($this->getState('filter.client')))
             . '/language/overrides/' . $this->getState('filter.language', 'en-GB') . '.override.ini';
         $strings  = LanguageHelper::parseIniFile($fileName);
 
         $result           = new \stdClass();
-        $result->key      = '';
+        $result->key      = (string) ($pk ?? '');
         $result->override = '';
 
         if (isset($strings[$pk])) {
@@ -140,7 +140,13 @@ class OverrideModel extends AdminModel
         $oppositeFileName = \constant('JPATH_' . strtoupper($this->getState('filter.client') == 'site' ? 'administrator' : 'site'))
             . '/language/overrides/' . $this->getState('filter.language', 'en-GB') . '.override.ini';
         $oppositeStrings  = LanguageHelper::parseIniFile($oppositeFileName);
-        $result->both     = isset($oppositeStrings[$pk]) && ($oppositeStrings[$pk] == $strings[$pk]);
+        $result->both     = isset($strings[$pk], $oppositeStrings[$pk]) && ($oppositeStrings[$pk] == $strings[$pk]);
+        // Capture both key-level values with this native read, before another writer can change them.
+        $client                = $this->getState('filter.client');
+        $result->draftRevision = [
+            'site'          => ($client === 'site' ? $strings : $oppositeStrings)[$pk] ?? null,
+            'administrator' => ($client === 'administrator' ? $strings : $oppositeStrings)[$pk] ?? null,
+        ];
 
         return $result;
     }

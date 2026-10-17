@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Languages\Administrator\View\Language;
 
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -29,6 +30,21 @@ use Joomla\Component\Languages\Administrator\Model\LanguageModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether draft controls are shown for this form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
+    /**
+     * Layout ID for the draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
+    public string $autosaveStatusId = 'language-autosave-status';
     /**
      * The active item
      *
@@ -82,9 +98,35 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task');
 
         $this->addToolbar();
+        $this->prepareAutosave();
         parent::display($tpl);
     }
 
+    /**
+     * Configure optional drafts only for supported native edit layouts.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            return;
+        }
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
+                'context'   => 'com_languages.language', 'formId' => 'language-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['language.apply', 'language.save', 'language.save2new', 'language.save2copy'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+        }
+    }
     /**
      * Add the page title and toolbar.
      *

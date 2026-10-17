@@ -11,6 +11,7 @@
 defined('_JEXEC') or die;
 
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\Layout\LayoutHelper;
 use Joomla\CMS\Router\Route;
 
 /** @var \Joomla\Component\Users\Administrator\View\Note\HtmlView $this */
@@ -22,6 +23,10 @@ $wa->useScript('keepalive')
 
 ?>
 <form action="<?php echo Route::_('index.php?option=com_users&view=note&id=' . (int) $this->item->id); ?>" method="post" name="adminForm" id="note-form" aria-label="<?php echo Text::_('COM_USERS_NOTE_FORM_' . ((int) $this->item->id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="form-validate">
+    <?php if ($this->autosaveEnabled) : ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'feedback', 'id' => $this->autosaveStatusId]); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'recovery', 'id' => $this->autosaveStatusId]); ?>
+    <?php endif; ?>
     <fieldset class="adminform">
     <div class="card mt-4">
         <div class="card-body">

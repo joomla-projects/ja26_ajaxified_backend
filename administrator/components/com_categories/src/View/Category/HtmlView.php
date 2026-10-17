@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Categories\Administrator\View\Category;
 
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -34,6 +35,22 @@ use Joomla\Component\Categories\Administrator\Model\CategoryModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether draft controls are shown for this form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
+    /**
+     * Layout ID for the draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
+    public string $autosaveStatusId = 'category-autosave-status';
+
     /**
      * The Form object
      *
@@ -145,13 +162,49 @@ class HtmlView extends BaseHtmlView
             ->addControlField('return', $input->getBase64('return', ''))
             ->addControlField('forcedLanguage', $forcedLanguage);
 
+        $this->prepareAutosave();
         if ($this->getLayout() !== 'modal') {
             $this->addToolbar();
         } else {
             $this->addModalToolbar();
         }
 
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+        }
         parent::display($tpl);
+    }
+
+    /**
+     * Prepare draft controls for this form.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            return;
+        }
+        $item                  = clone $this->item;
+        $item->draftExtension  = (string) $this->state->get('category.extension');
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(
+                Factory::getApplication(),
+                $this->getDocument(),
+                $this->getCurrentUser(),
+                $this->form,
+                $item,
+                [
+                    'context'   => 'com_categories.category',
+                    'formId'    => 'item-form',
+                    'statusId'  => $this->autosaveStatusId,
+                    'saveTasks' => ['category.apply', 'category.save', 'category.save2new', 'category.save2copy', 'category.save2menulist', 'category.save2menublog', 'category.editAssociations'],
+                ]
+            );
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
     }
 
     /**

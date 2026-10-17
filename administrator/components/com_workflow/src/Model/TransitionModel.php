@@ -316,7 +316,7 @@ class TransitionModel extends AdminModel
      */
     protected function preprocessForm(Form $form, $data, $group = 'content')
     {
-        $extension = Factory::getApplication()->getInput()->get('extension');
+        $extension = $this->getState('filter.extension');
 
         $parts = explode('.', $extension);
 

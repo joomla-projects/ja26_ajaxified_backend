@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Menus\Administrator\View\Item;
 
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -31,6 +32,22 @@ use Joomla\Component\Menus\Administrator\Model\ItemModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether draft controls are shown for this form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
+    /**
+     * Layout ID for the draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
+    public string $autosaveStatusId = 'item-autosave-status';
+
     /**
      * The Form object
      *
@@ -136,13 +153,44 @@ class HtmlView extends BaseHtmlView
             ->addControlField('menutype', $input->get('menutype', ''))
             ->addControlField('fieldtype', '', ['id' => 'fieldtype']);
 
+
         if ($this->getLayout() !== 'modal') {
             $this->addToolbar();
         } else {
             $this->addModalToolbar();
         }
 
+        $this->prepareAutosave();
+
         parent::display($tpl);
+    }
+
+    /**
+     * Configure optional drafts only for supported native edit layouts.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            return;
+        }
+        $item                  = clone $this->item;
+
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+                'context'   => 'com_menus.item', 'formId' => 'item-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['item.apply', 'item.save', 'item.save2new', 'item.save2copy', 'item.editAssociations'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+        }
     }
 
     /**

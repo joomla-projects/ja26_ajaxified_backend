@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Menus\Administrator\View\Menu;
 
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -30,6 +31,22 @@ use Joomla\Component\Menus\Administrator\Model\MenuModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether draft controls are shown for this form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
+    /**
+     * Layout ID for the draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
+    public string $autosaveStatusId = 'menu-autosave-status';
+
     /**
      * The Form object
      *
@@ -86,8 +103,41 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form->addControlField('task');
 
+        $this->prepareAutosave();
         parent::display($tpl);
         $this->addToolbar();
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+        }
+    }
+
+    /**
+     * Configure optional drafts only for supported native edit layouts.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            return;
+        }
+        $item                  = clone $this->item;
+        if (empty($item->id)) {
+            $item->client_id = (int) $this->state->get('client_id', 0);
+            $item->menutype  = (string) $this->form->getValue('menutype', null, '');
+        }
+        $this->form->addControlField('client_id', (string) $item->client_id);
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+                'context'   => 'com_menus.menu', 'formId' => 'item-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['menu.apply', 'menu.save', 'menu.save2new', 'menu.save2copy'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
     }
 
     /**

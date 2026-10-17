@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Languages\Administrator\View\Override;
 
+use Joomla\CMS\Autosave\DraftView;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -29,6 +30,22 @@ use Joomla\Component\Languages\Administrator\Model\OverrideModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    /**
+     * Whether draft controls are shown for this form.
+     *
+     * @var    boolean
+     * @since  __DEPLOY_VERSION__
+     */
+    public bool $autosaveEnabled = false;
+
+    /**
+     * Layout ID for the draft status.
+     *
+     * @var    string
+     * @since  __DEPLOY_VERSION__
+     */
+    public string $autosaveStatusId = 'override-autosave-status';
+
     /**
      * The form to use for the view.
      *
@@ -99,11 +116,52 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form
             ->addControlField('task')
-            ->addControlField('id', $this->item->key);
+            ->addControlField('id', $this->item->key)
+            ->addControlField('filter_client', $this->state->get('filter.client') === 'administrator' ? 1 : 0)
+            ->addControlField('filter_language', $this->state->get('filter.language'));
+
+        $this->prepareAutosave();
 
         $this->addToolbar();
+        if ($this->autosaveEnabled) {
+            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
+        }
         parent::display($tpl);
     }
+
+    /**
+     * Prepare draft controls for this form.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    private function prepareAutosave(): void
+    {
+        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            return;
+        }
+        $item                  = clone $this->item;
+        $item->client          = (string) $this->state->get('filter.client');
+        $item->language        = (string) $this->state->get('filter.language');
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(
+                Factory::getApplication(),
+                $this->getDocument(),
+                $this->getCurrentUser(),
+                $this->form,
+                $item,
+                [
+                    'context'   => 'com_languages.override',
+                    'formId'    => 'override-form',
+                    'statusId'  => $this->autosaveStatusId,
+                    'saveTasks' => ['override.apply', 'override.save', 'override.save2new'],
+                ]
+            );
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
+    }
+
 
     /**
      * Adds the page title and toolbar.
