@@ -14,7 +14,6 @@ use Joomla\CMS\Date\Date;
 use Joomla\CMS\Factory;
 use Joomla\CMS\User\User;
 use Joomla\Input\Input;
-use Joomla\Session\SessionInterface;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -27,12 +26,6 @@ use Joomla\Session\SessionInterface;
  */
 final class DraftService
 {
-    /** @since  __DEPLOY_VERSION__ */
-    public const RENDER_ADMISSIONS = 'com_autosave.rendered';
-
-    /** Bound session metadata; evicted forms keep drafts but cannot resume an empty purged row. */
-    private const MAX_RENDER_ADMISSIONS = 128;
-
     /**
      * Constructor.
      *
@@ -47,27 +40,13 @@ final class DraftService
      *
      * @since  __DEPLOY_VERSION__
      */
-    public function open(User $user, array $descriptor, Date $now, ?SessionInterface $session = null): array
+    public function open(User $user, array $descriptor, Date $now): array
     {
         if ($descriptor['fields'] === []) {
             throw new AutosaveException('unsupported_context', 'No supported protected controls are available.');
         }
 
-        $binding = $this->store->open((int) $user->id, $descriptor, $now);
-        if ($session !== null) {
-            $admissions = array_filter(
-                (array) $session->get(self::RENDER_ADMISSIONS, []),
-                static fn (array $entry): bool => ($entry['expires_at'] ?? '') > $now->toSql()
-            );
-            $admissions[$binding['draft_id']] = [
-                'draft_id'    => $binding['draft_id'], 'owner_id' => (int) $user->id,
-                'rendered_at' => $binding['created_at'], 'expires_at' => $this->store->getAdmissionExpiry($now),
-                'descriptor'  => array_intersect_key($descriptor, array_flip(['context', 'target', 'scope', 'version', 'revision', 'fields'])),
-            ];
-            $session->set(self::RENDER_ADMISSIONS, \array_slice($admissions, -self::MAX_RENDER_ADMISSIONS, null, true));
-        }
-
-        return $binding;
+        return $this->store->open((int) $user->id, $descriptor, $now);
     }
 
     /**
@@ -75,11 +54,10 @@ final class DraftService
      *
      * @since  __DEPLOY_VERSION__
      */
-    public function execute(string $operation, array $request, User $user, Date $now, ?array $admission = null): array
+    public function execute(string $operation, array $request, User $user, Date $now): array
     {
         $keys = match ($operation) {
             'preserve'          => ['draft_id', 'client_revision', 'schema_version', 'payload'],
-            'resume'            => ['draft_id', 'schema_version'],
             'read'              => ['draft_id', 'source_id'],
             'detect', 'discard' => ['draft_id'],
             default             => throw new \InvalidArgumentException('Unsupported draft operation.'),
@@ -98,40 +76,9 @@ final class DraftService
         $id    = $request['draft_id'];
 
         if ($operation === 'discard') {
-            $this->store->discard($owner, $id, $now, $admission);
+            $this->store->discard($owner, $id, $now);
 
             return ['discarded' => true];
-        }
-
-        if ($operation === 'resume') {
-            if ($admission === null) {
-                throw new AutosaveException('render_admission_missing', 'Trusted render admission is unavailable.');
-            }
-            if (!\is_int($request['schema_version'])) {
-                throw new \InvalidArgumentException('Invalid draft schema.');
-            }
-            $row = $this->store->resume($owner, $id, $admission, $now, function (array $binding) use ($user, $request): void {
-                if ($request['schema_version'] !== $binding['schema_version']) {
-                    throw new AutosaveException('unsupported_schema_version', 'The draft schema is incompatible.');
-                }
-                $current = $this->provider($binding['context'])->read($binding, $user);
-                if ($current['version'] !== $binding['schema_version']) {
-                    throw new AutosaveException('schema_version_conflict', 'The protected schema changed.');
-                }
-                if ($current['revision'] !== $binding['baseline_revision']) {
-                    throw new AutosaveException('base_revision_conflict', 'The saved item changed after this form opened.');
-                }
-                foreach ($binding['fields'] as $key => $field) {
-                    if (
-                        !isset($current['fields'][$key]) || $current['fields'][$key]['control'] !== $field['control']
-                        || $current['fields'][$key]['name'] !== $field['name']
-                    ) {
-                        throw new AutosaveException('schema_version_conflict', 'The protected controls changed.');
-                    }
-                }
-            });
-
-            return ['resumed' => true, 'draft_id' => $row['draft_id'], 'schema_version' => $row['schema_version']];
         }
 
         if ($operation === 'preserve') {
@@ -297,8 +244,7 @@ final class DraftService
         ?string $revision,
         Date $now,
         bool $identityMayChange = false,
-        ?array $resultScope = null,
-        ?array $admission = null
+        ?array $resultScope = null
     ): void {
         if (
             array_diff_key($metadata, ['draft_id' => true, 'revision' => true, 'source_id' => true, 'source_revision' => true])
@@ -336,8 +282,7 @@ final class DraftService
             $now,
             $recovery,
             $identityMayChange,
-            $resultScope,
-            $admission
+            $resultScope
         );
     }
 
@@ -372,17 +317,9 @@ final class DraftService
         try {
             $service     = Factory::getContainer()->get(self::class);
             $resultScope = null;
-            $admission   = $application->getSession()?->get(self::RENDER_ADMISSIONS, [])[$metadata['draft_id']] ?? null;
             // Native success may complete a blank creation or change explicitly declared scope keys.
             if (($source === null && $completedScopeKeys !== []) || ($source !== null && $changedScopeKeys !== [])) {
-                try {
-                    $binding = $service->store->read((int) $application->getIdentity()->id, $metadata['draft_id'], new Date('now', 'UTC'));
-                } catch (AutosaveException $exception) {
-                    if (!\in_array($exception->getErrorCode(), ['draft_expired', 'draft_not_found'], true) || $admission === null) {
-                        throw $exception;
-                    }
-                    $binding = $admission['descriptor'] + ['target_id' => $admission['descriptor']['target']];
-                }
+                $binding = $service->store->read((int) $application->getIdentity()->id, $metadata['draft_id'], new Date('now', 'UTC'));
                 if ($binding['context'] === $context && $binding['target_id'] === $source && array_keys($binding['scope']) === array_keys($scope)) {
                     $compatible = true;
                     foreach ($scope as $name => $value) {
@@ -412,8 +349,7 @@ final class DraftService
                 $revision,
                 new Date('now', 'UTC'),
                 $identityMayChange,
-                $resultScope,
-                $admission
+                $resultScope
             );
         } catch (\Throwable $exception) {
             try {

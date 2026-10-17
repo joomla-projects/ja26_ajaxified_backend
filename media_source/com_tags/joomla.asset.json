@@ -6,19 +6,6 @@
   "license": "GPL-2.0-or-later",
   "assets": [
     {
-      "name": "com_tags.tag-autosave",
-      "type": "script",
-      "uri": "com_tags/tag-autosave.min.js",
-      "dependencies": [
-        "core",
-        "editors",
-        "com_autosave.drafts"
-      ],
-      "attributes": {
-        "type": "module"
-      }
-    },
-    {
       "name": "com_tags.tag-default",
       "type": "script",
       "uri": "com_tags/tag-default.min.js",

@@ -151,7 +151,7 @@ class ArticleAutosaveProviderTest extends UnitTestCase
     {
         $paths         = new \ReflectionProperty(FormHelper::class, 'paths');
         $originalPaths = $paths->getValue();
-        $paths->setValue(null, ['form' => [JPATH_ADMINISTRATOR . '/components/com_autosave/forms']]);
+        $paths->setValue(null, ['form' => [JPATH_PLUGINS . '/system/autosave/forms']]);
 
         try {
             $user  = $this->user();

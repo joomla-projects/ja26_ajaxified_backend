@@ -6,45 +6,6 @@
   "license": "GPL-2.0-or-later",
   "assets": [
     {
-      "name": "com_users.group-autosave",
-      "type": "script",
-      "uri": "com_users/group-autosave.min.js",
-      "dependencies": [
-        "core",
-        "editors",
-        "com_autosave.drafts"
-      ],
-      "attributes": {
-        "type": "module"
-      }
-    },
-    {
-      "name": "com_users.level-autosave",
-      "type": "script",
-      "uri": "com_users/level-autosave.min.js",
-      "dependencies": [
-        "core",
-        "editors",
-        "com_autosave.drafts"
-      ],
-      "attributes": {
-        "type": "module"
-      }
-    },
-    {
-      "name": "com_users.note-autosave",
-      "type": "script",
-      "uri": "com_users/note-autosave.min.js",
-      "dependencies": [
-        "core",
-        "editors",
-        "com_autosave.drafts"
-      ],
-      "attributes": {
-        "type": "module"
-      }
-    },
-    {
       "name": "com_users.admin-users-groups",
       "type": "script",
       "uri": "com_users/admin-users-groups.min.js",

@@ -28,10 +28,13 @@ CREATE INDEX "#__users_email" ON "#__users" ("email");
 
 CREATE INDEX "#__users_email_lower" ON "#__users" (lower("email"));
 
+-- Private recoverable draft instances. Canonical records remain native Joomla records.
 CREATE TABLE IF NOT EXISTS "#__autosave_drafts" (
   "id" bigserial NOT NULL,
   "draft_id" char(32) NOT NULL,
   "owner_id" integer NOT NULL,
+  "owner_slot" smallint NOT NULL,
+  "row_version" bigint NOT NULL DEFAULT 0,
   "context" varchar(255) NOT NULL,
   "target_id" varchar(255) DEFAULT NULL,
   "scope" text NOT NULL,
@@ -47,12 +50,11 @@ CREATE TABLE IF NOT EXISTS "#__autosave_drafts" (
   "updated_at" timestamp without time zone NOT NULL,
   "expires_at" timestamp without time zone NOT NULL,
   PRIMARY KEY ("id"),
-  CONSTRAINT "#__autosave_draft_public" UNIQUE ("draft_id")
+  CONSTRAINT "#__autosave_drafts_idx_draft_id" UNIQUE ("draft_id"),
+  CONSTRAINT "#__autosave_drafts_idx_owner_slot" UNIQUE ("owner_id", "owner_slot")
 );
-
-CREATE INDEX "#__autosave_draft_owner" ON "#__autosave_drafts" ("owner_id","context","target_id");
-
-CREATE INDEX "#__autosave_draft_expiry" ON "#__autosave_drafts" ("expires_at");
+CREATE INDEX "#__autosave_drafts_idx_owner_id" ON "#__autosave_drafts" ("owner_id","context","target_id");
+CREATE INDEX "#__autosave_drafts_idx_expires_at" ON "#__autosave_drafts" ("expires_at");
 
 CREATE TABLE IF NOT EXISTS "#__extensions" (
   "extension_id" serial NOT NULL,
@@ -125,3 +127,27 @@ CREATE INDEX "#__scheduler_tasks_idx_priority" ON "#__scheduler_tasks" ("priorit
 CREATE INDEX "#__scheduler_tasks_idx_cli_exclusive" ON "#__scheduler_tasks" ("cli_exclusive");
 
 CREATE INDEX "#__scheduler_tasks_idx_checked_out" ON "#__scheduler_tasks" ("checked_out");
+
+CREATE TABLE IF NOT EXISTS "#__assets" (
+  "id" serial NOT NULL,
+  "parent_id" bigint DEFAULT 0 NOT NULL,
+  "lft" bigint DEFAULT 0 NOT NULL,
+  "rgt" bigint DEFAULT 0 NOT NULL,
+  "level" integer NOT NULL,
+  "name" varchar(50) NOT NULL,
+  "title" varchar(100) NOT NULL,
+  "rules" varchar(5120) NOT NULL,
+  PRIMARY KEY ("id"),
+  CONSTRAINT "#__assets_idx_asset_name" UNIQUE ("name")
+);
+CREATE INDEX "#__assets_idx_lft_rgt" ON "#__assets" ("lft", "rgt");
+CREATE INDEX "#__assets_idx_parent_id" ON "#__assets" ("parent_id");
+
+COMMENT ON COLUMN "#__assets"."id" IS 'Primary Key';
+COMMENT ON COLUMN "#__assets"."parent_id" IS 'Nested set parent.';
+COMMENT ON COLUMN "#__assets"."lft" IS 'Nested set lft.';
+COMMENT ON COLUMN "#__assets"."rgt" IS 'Nested set rgt.';
+COMMENT ON COLUMN "#__assets"."level" IS 'The cached level in the nested tree.';
+COMMENT ON COLUMN "#__assets"."name" IS 'The unique name for the asset.';
+COMMENT ON COLUMN "#__assets"."title" IS 'The descriptive title for the asset.';
+COMMENT ON COLUMN "#__assets"."rules" IS 'JSON encoded access control.';

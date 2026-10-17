@@ -31,7 +31,7 @@ use Joomla\Component\Languages\Administrator\Model\OverrideModel;
 class HtmlView extends BaseHtmlView
 {
     /**
-     * Whether optional draft controls are mounted for this native form.
+     * Whether draft controls are shown for this form.
      *
      * @var    boolean
      * @since  __DEPLOY_VERSION__
@@ -39,7 +39,7 @@ class HtmlView extends BaseHtmlView
     public bool $autosaveEnabled = false;
 
     /**
-     * Native layout ID for the compact draft status.
+     * Layout ID for the draft status.
      *
      * @var    string
      * @since  __DEPLOY_VERSION__
@@ -130,7 +130,7 @@ class HtmlView extends BaseHtmlView
     }
 
     /**
-     * Bind the prepared native form to the shared private-draft runtime.
+     * Prepare draft controls for this form.
      *
      * @since  __DEPLOY_VERSION__
      */
@@ -142,21 +142,24 @@ class HtmlView extends BaseHtmlView
         $item                  = clone $this->item;
         $item->client          = (string) $this->state->get('filter.client');
         $item->language        = (string) $this->state->get('filter.language');
-        $this->autosaveEnabled = DraftView::configure(
-            Factory::getApplication(),
-            $this->getDocument(),
-            $this->getCurrentUser(),
-            $this->form,
-            $item,
-            [
-                'context'    => 'com_languages.override',
-                'formId'     => 'override-form',
-                'statusId'   => $this->autosaveStatusId,
-                'optionsKey' => 'com_languages.autosave.override',
-                'script'     => 'com_languages.override-autosave',
-                'saveTasks'  => ['override.apply', 'override.save', 'override.save2new'],
-            ]
-        );
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(
+                Factory::getApplication(),
+                $this->getDocument(),
+                $this->getCurrentUser(),
+                $this->form,
+                $item,
+                [
+                    'context'   => 'com_languages.override',
+                    'formId'    => 'override-form',
+                    'statusId'  => $this->autosaveStatusId,
+                    'saveTasks' => ['override.apply', 'override.save', 'override.save2new'],
+                ]
+            );
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
     }
 
 

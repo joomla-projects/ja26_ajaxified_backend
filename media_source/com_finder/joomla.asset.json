@@ -22,19 +22,6 @@
       }
     },
     {
-      "name": "com_finder.filter-autosave",
-      "type": "script",
-      "uri": "com_finder/filter-autosave.min.js",
-      "dependencies": [
-        "core",
-        "editors",
-        "com_autosave.drafts"
-      ],
-      "attributes": {
-        "type": "module"
-      }
-    },
-    {
       "name": "com_finder.filters",
       "type": "script",
       "uri": "com_finder/filters.min.js",

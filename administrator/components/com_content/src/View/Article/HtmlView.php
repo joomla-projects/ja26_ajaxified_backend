@@ -30,14 +30,7 @@ use Joomla\Component\Content\Site\Helper\RouteHelper;
 class HtmlView extends FormView
 {
     /**
-     * Whether the generic Autosave interface should be rendered.
-     *
-     * @var boolean
-     *
-     * @since __DEPLOY_VERSION__
-     */
-    /**
-     * Whether optional draft controls are mounted for this native form.
+     * Whether draft controls are shown for this form.
      *
      * @var    boolean
      * @since  __DEPLOY_VERSION__
@@ -45,12 +38,7 @@ class HtmlView extends FormView
     public bool $autosaveEnabled = false;
 
     /**
-     * Native toolbar status binding for this form.
-     *
-     * @since __DEPLOY_VERSION__
-     */
-    /**
-     * Native layout ID for the compact draft status.
+     * Layout ID for the draft status.
      *
      * @var    string
      * @since  __DEPLOY_VERSION__
@@ -149,7 +137,7 @@ class HtmlView extends FormView
     }
 
     /**
-     * Admit a private draft against the canonical Article and its prepared native form.
+     * Prepare draft controls for the article form.
      *
      * @return  void
      *
@@ -160,21 +148,24 @@ class HtmlView extends FormView
         if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-        $this->autosaveEnabled = DraftView::configure(
-            Factory::getApplication(),
-            $this->getDocument(),
-            $this->getCurrentUser(),
-            $this->form,
-            $this->item,
-            [
-                'context'    => 'com_content.article',
-                'formId'     => 'item-form',
-                'statusId'   => $this->autosaveStatusId,
-                'optionsKey' => 'com_content.autosave.article',
-                'script'     => 'com_content.article-autosave',
-                'saveTasks'  => ['article.apply', 'article.save', 'article.save2new', 'article.save2copy', 'article.save2menu', 'article.editAssociations'],
-            ]
-        );
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(
+                Factory::getApplication(),
+                $this->getDocument(),
+                $this->getCurrentUser(),
+                $this->form,
+                $this->item,
+                [
+                    'context'   => 'com_content.article',
+                    'formId'    => 'item-form',
+                    'statusId'  => $this->autosaveStatusId,
+                    'saveTasks' => ['article.apply', 'article.save', 'article.save2new', 'article.save2copy', 'article.save2menu', 'article.editAssociations'],
+                ]
+            );
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
     }
 
     /**

@@ -6,15 +6,14 @@
   "license": "GNU General Public License version 2 or later; see LICENSE.txt",
   "assets": [
     {
-      "name": "com_autosave.drafts",
+      "name": "com_autosave.draft-form",
       "type": "script",
-      "uri": "com_autosave/drafts.min.js",
+      "uri": "com_autosave/draft-form-startup.min.js",
       "dependencies": [
         "core",
         "editors",
         "joomla.dialog"
       ],
-      "importmap": true,
       "attributes": {
         "type": "module"
       }

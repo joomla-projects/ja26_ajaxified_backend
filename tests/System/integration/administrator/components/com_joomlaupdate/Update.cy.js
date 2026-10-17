@@ -12,12 +12,7 @@ describe('Test the update retrieval logic', () => {
 
     cy.visit('/administrator/index.php?option=com_joomlaupdate');
 
-    // The update layout omits the toolbar button; exercise the same native action in either layout.
-    cy.window().then((win) => {
-      const token = win.Joomla.getOptions('csrf.token');
-      expect(token).to.be.a('string').and.not.be.empty;
-      cy.visit(`/administrator/index.php?option=com_joomlaupdate&task=update.purge&${token}=1`);
-    });
+    cy.get('#toolbar joomla-toolbar-button[task="update.purge"] button').click();
 
     cy.checkForSystemMessage('Checked for updates.');
   });

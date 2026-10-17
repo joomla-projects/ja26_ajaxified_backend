@@ -3,6 +3,8 @@ CREATE TABLE IF NOT EXISTS `#__autosave_drafts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `draft_id` char(32) NOT NULL,
   `owner_id` int unsigned NOT NULL,
+  `owner_slot` smallint NOT NULL,
+  `row_version` bigint NOT NULL DEFAULT 0,
   `context` varchar(255) NOT NULL,
   `target_id` varchar(255) DEFAULT NULL,
   `scope` text NOT NULL,
@@ -19,16 +21,15 @@ CREATE TABLE IF NOT EXISTS `#__autosave_drafts` (
   `expires_at` datetime NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_autosave_draft_public` (`draft_id`),
+  UNIQUE KEY `idx_autosave_owner_slot` (`owner_id`,`owner_slot`),
   KEY `idx_autosave_draft_owner` (`owner_id`,`context`,`target_id`),
   KEY `idx_autosave_draft_expiry` (`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO `#__extensions`
-(`package_id`, `name`, `type`, `element`, `folder`, `client_id`, `enabled`, `access`, `protected`, `locked`, `manifest_cache`, `params`, `custom_data`)
-SELECT 0, 'com_autosave', 'component', 'com_autosave', '', 1, 1, 1, 1, 1, '', '', ''
+INSERT INTO `#__extensions` (`package_id`, `name`, `type`, `element`, `folder`, `client_id`, `enabled`, `access`, `protected`, `locked`, `manifest_cache`, `params`, `custom_data`, `ordering`, `state`)
+SELECT 0, 'plg_system_autosave', 'plugin', 'autosave', 'system', 0, 1, 1, 0, 1, '', '{}', '', 10, 0
 WHERE NOT EXISTS (
-  SELECT 1 FROM `#__extensions`
-  WHERE `type` = 'component' AND `element` = 'com_autosave' AND `client_id` = 1
+  SELECT 1 FROM `#__extensions` WHERE `type` = 'plugin' AND `element` = 'autosave' AND `folder` = 'system'
 );
 
 INSERT INTO `#__extensions` (`package_id`, `name`, `type`, `element`, `folder`, `client_id`, `enabled`, `access`, `protected`, `locked`, `manifest_cache`, `params`, `custom_data`, `ordering`, `state`)

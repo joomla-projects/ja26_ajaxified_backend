@@ -20,9 +20,13 @@ use Joomla\Database\Mysqli\MysqliQuery;
 trait NativeReadFixture
 {
     private mixed $previousNativeDatabase;
+    private mixed $previousNativePlugins;
 
     private function installNativeReadFixture(): void
     {
+        $plugins                     = new \ReflectionProperty(\Joomla\CMS\Plugin\PluginHelper::class, 'plugins');
+        $this->previousNativePlugins = $plugins->getValue();
+        $plugins->setValue(null, [(object) ['type' => 'system', 'name' => 'autosave', 'params' => '{}', 'id' => 1]]);
         $this->previousNativeDatabase = Factory::$database;
         $database                     = $this->createMock(\Joomla\Database\DatabaseDriver::class);
         $database->method('createQuery')->willReturnCallback(fn () => new MysqliQuery($database));
@@ -61,13 +65,15 @@ trait NativeReadFixture
     private function restoreNativeReadFixture(): void
     {
         Factory::getContainer()->registerServiceProvider(new \Joomla\CMS\Service\Provider\Autosave());
+        (new \ReflectionProperty(\Joomla\CMS\Plugin\PluginHelper::class, 'plugins'))->setValue(null, $this->previousNativePlugins);
         Factory::$database = $this->previousNativeDatabase;
         Access::clearStatics();
         UserGroupsHelper::getInstance()->setGroups([]);
     }
 
-    private function registerDraftService(\Joomla\CMS\Autosave\DraftService $service, bool $available = true): void
+    private function registerDraftService(\Joomla\CMS\Autosave\DraftService $service, bool $available = true, ?\Joomla\CMS\Autosave\AutosaveContextResolver $resolver = null): void
     {
+        Factory::getContainer()->share(\Joomla\CMS\Autosave\AutosaveContextResolver::class, $resolver ?? new \Joomla\CMS\Autosave\AutosaveContextResolver(Factory::getApplication()));
         Factory::getContainer()->share(\Joomla\CMS\Autosave\DraftService::class, static function () use ($service, $available) {
             if (!$available) {
                 throw new \RuntimeException('Draft storage unavailable');

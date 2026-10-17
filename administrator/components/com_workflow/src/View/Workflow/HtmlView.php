@@ -31,7 +31,7 @@ use Joomla\Component\Workflow\Administrator\Model\WorkflowModel;
 class HtmlView extends BaseHtmlView
 {
     /**
-     * Whether optional draft controls are mounted for this native form.
+     * Whether draft controls are shown for this form.
      *
      * @var    boolean
      * @since  __DEPLOY_VERSION__
@@ -39,7 +39,7 @@ class HtmlView extends BaseHtmlView
     public bool $autosaveEnabled = false;
 
     /**
-     * Native layout ID for the compact draft status.
+     * Layout ID for the draft status.
      *
      * @var    string
      * @since  __DEPLOY_VERSION__
@@ -149,11 +149,15 @@ class HtmlView extends BaseHtmlView
             $item->extension = $item->draftExtension;
         }
         $this->form->addControlField('extension', $item->draftExtension);
-        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
-            'context'    => 'com_workflow.workflow', 'formId' => 'workflow-form', 'statusId' => $this->autosaveStatusId,
-            'optionsKey' => 'com_workflow.autosave.workflow', 'script' => 'com_workflow.workflow-autosave',
-            'saveTasks'  => ['workflow.apply', 'workflow.save', 'workflow.save2new', 'workflow.save2copy'],
-        ]);
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+                'context'   => 'com_workflow.workflow', 'formId' => 'workflow-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['workflow.apply', 'workflow.save', 'workflow.save2new', 'workflow.save2copy'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
         if ($this->autosaveEnabled) {
             DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }

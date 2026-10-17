@@ -37,7 +37,7 @@ describe('Test in backend that the article form', () => {
 describe('Native Article draft protection', () => {
   let draftIds;
   const rememberInstance = () => cy.window().then((win) => {
-    const binding = win.Joomla.getOptions('com_content.autosave.article');
+    const binding = win.Joomla.getOptions('com_autosave.forms')['item-form'];
     expect(binding.available).to.equal(true);
     expect(binding.draftId).to.match(/^[a-f0-9]{32}$/);
     draftIds.push(binding.draftId);
@@ -55,7 +55,7 @@ describe('Native Article draft protection', () => {
 
   afterEach(() => {
     draftIds.forEach((id) => cy.task('queryDB', `DELETE FROM #__autosave_drafts WHERE draft_id = '${id}'`));
-    cy.task('queryDB', "DELETE FROM #__content WHERE title IN ('Phase 2 autosave fixture', 'Phase 2 recovered title')");
+    cy.task('queryDB', "DELETE FROM #__content WHERE title IN ('Autosave fixture', 'Recovered autosave title')");
   });
 
   it('starts detection and presents compact readiness without exposed retention paragraphs', () => {
@@ -106,7 +106,7 @@ describe('Native Article draft protection', () => {
       if (new URL(request.url).searchParams.get('task') === 'draft.detect') {
         request.alias = 'detectDraft';
         detections += 1;
-        if (detections <= 2) request.reply({ statusCode: 503, body: { success: false, error: { code: 'service_unavailable' } } });
+        if (detections <= 2) request.reply({ statusCode: 503, body: { success: false, data: { code: 'service_unavailable' } } });
       }
     });
     cy.visit('/administrator/index.php?option=com_content&task=article.add');
@@ -136,7 +136,7 @@ describe('Native Article draft protection', () => {
     cy.get('[data-draft-action="show-recovery"]').should('not.exist');
     cy.window().then((win) => {
       expect(win.history.state?.joomlaAutosaveCreation).to.equal(undefined);
-      const id = win.Joomla.getOptions('com_content.autosave.article').draftId;
+      const id = win.Joomla.getOptions('com_autosave.forms')['item-form'].draftId;
       cy.task('queryDB', `SELECT payload FROM #__autosave_drafts WHERE draft_id = '${id}'`)
         .then((rows) => expect(rows[0].payload).to.equal(null));
     });
@@ -179,10 +179,10 @@ describe('Native Article draft protection', () => {
   });
 
   it('recovers only selected fields into a fresh native form', () => {
-    cy.db_createArticle({ title: 'Phase 2 autosave fixture' }).then((article) => {
+    cy.db_createArticle({ title: 'Autosave fixture' }).then((article) => {
       cy.visit(`/administrator/index.php?option=com_content&task=article.edit&id=${article.id}`);
       rememberInstance();
-      cy.get('#jform_title').clear().type('Phase 2 recovered title');
+      cy.get('#jform_title').clear().type('Recovered autosave title');
       cy.wait('@preserveDraft').its('response.body.success').should('equal', true);
       cy.reload();
       rememberInstance();
@@ -192,18 +192,18 @@ describe('Native Article draft protection', () => {
           expect(recovery[0].getBoundingClientRect().bottom).to.be.at.most(title[0].getBoundingClientRect().top);
         });
       });
-      cy.get('#jform_title').should('have.value', 'Phase 2 autosave fixture');
+      cy.get('#jform_title').should('have.value', 'Autosave fixture');
       cy.get('[data-draft-action="review"]').click();
       cy.get('[data-draft-comparison] tr').should('have.length.greaterThan', 0);
-      cy.get('#jform_title').should('have.value', 'Phase 2 autosave fixture');
+      cy.get('#jform_title').should('have.value', 'Autosave fixture');
       cy.get('[data-draft-action="restore"]').should('be.enabled').click();
       cy.wait('@preserveDraft').its('response.body.success').should('equal', true);
-      cy.get('#jform_title').should('have.value', 'Phase 2 recovered title');
+      cy.get('#jform_title').should('have.value', 'Recovered autosave title');
       cy.get('#jform_access option:selected').should('have.text', 'Special');
       cy.clickToolbarButton('Save & Close');
       cy.checkForSystemMessage('Article saved.');
       cy.task('queryDB', `SELECT title FROM #__content WHERE id = ${article.id}`)
-        .then((rows) => expect(rows[0].title).to.equal('Phase 2 recovered title'));
+        .then((rows) => expect(rows[0].title).to.equal('Recovered autosave title'));
       cy.then(() => cy.task('queryDB', `SELECT payload, retired_revision FROM #__autosave_drafts WHERE draft_id IN ('${draftIds.join("','")}')`))
         .then((rows) => {
           expect(rows).to.have.length(2);
@@ -216,38 +216,38 @@ describe('Native Article draft protection', () => {
       rememberInstance();
       cy.wait('@detectDraft');
       cy.get('[data-draft-recovery]').should('not.be.visible');
-      cy.get('#jform_title').should('have.value', 'Phase 2 recovered title');
+      cy.get('#jform_title').should('have.value', 'Recovered autosave title');
       cy.get('[data-draft-state="clean"]').should('be.visible').and('contain.text', 'Autosave ready');
     });
   });
 
   it('retires the working draft on Apply and offers only later unsaved work on reopening', () => {
-    cy.db_createArticle({ title: 'Phase 2 autosave fixture' }).then((article) => {
+    cy.db_createArticle({ title: 'Autosave fixture' }).then((article) => {
       cy.visit(`/administrator/index.php?option=com_content&task=article.edit&id=${article.id}`);
       rememberInstance();
       cy.wait('@detectDraft');
       cy.get('#toolbar [data-draft-action="show-recovery"]').should('not.exist');
-      cy.get('#jform_title').clear().type('Phase 2 recovered title');
+      cy.get('#jform_title').clear().type('Recovered autosave title');
       cy.wait('@preserveDraft').its('response.body.success').should('equal', true);
       cy.clickToolbarButton('Save');
       cy.checkForSystemMessage('Article saved.');
       rememberInstance();
       cy.wait('@detectDraft');
       cy.get('[data-draft-recovery]').should('not.be.visible');
-      cy.get('#jform_title').should('have.value', 'Phase 2 recovered title');
+      cy.get('#jform_title').should('have.value', 'Recovered autosave title');
       cy.then(() => cy.task('queryDB', `SELECT payload FROM #__autosave_drafts WHERE draft_id = '${draftIds[0]}'`))
         .then((rows) => expect(rows[0].payload).to.equal(null));
-      cy.get('#jform_title').clear().type('Phase 2 autosave fixture');
+      cy.get('#jform_title').clear().type('Autosave fixture');
       cy.wait('@preserveDraft').its('response.body.success').should('equal', true);
       cy.clickToolbarButton('Cancel');
       cy.visit(`/administrator/index.php?option=com_content&task=article.edit&id=${article.id}`);
       rememberInstance();
       cy.wait('@detectDraft');
-      cy.get('#jform_title').should('have.value', 'Phase 2 recovered title');
+      cy.get('#jform_title').should('have.value', 'Recovered autosave title');
       cy.get('[data-draft-recovery]').should('be.visible');
       cy.get('[data-draft-action="review"]').click();
-      cy.get('[data-draft-comparison]').should('contain.text', 'Phase 2 autosave fixture');
-      cy.get('#jform_title').should('have.value', 'Phase 2 recovered title');
+      cy.get('[data-draft-comparison]').should('contain.text', 'Autosave fixture');
+      cy.get('#jform_title').should('have.value', 'Recovered autosave title');
     });
   });
 
@@ -255,13 +255,13 @@ describe('Native Article draft protection', () => {
     it(`retires TinyMCE drafts through native Apply and Save & Close for ${creating ? 'new' : 'existing'} Articles`, () => {
       const open = creating
         ? cy.visit('/administrator/index.php?option=com_content&task=article.add')
-        : cy.db_createArticle({ title: 'Phase 2 autosave fixture' }).then((article) => {
+        : cy.db_createArticle({ title: 'Autosave fixture' }).then((article) => {
             cy.visit(`/administrator/index.php?option=com_content&task=article.edit&id=${article.id}`);
           });
       open.then(() => {
         rememberInstance();
         cy.wait('@detectDraft');
-        cy.get('#jform_title').clear().type('Phase 2 autosave fixture');
+        cy.get('#jform_title').clear().type('Autosave fixture');
         cy.get('#jform_articletext_ifr').its('0.contentDocument.body').should('not.be.empty')
           .then((body) => cy.wrap(body).clear().type('Canonical body saved through TinyMCE'));
         cy.get('[data-draft-state="preserved"]').should('be.visible');
@@ -270,7 +270,7 @@ describe('Native Article draft protection', () => {
         rememberInstance();
         cy.wait('@detectDraft').its('response.body.data.candidates').should('have.length', 0);
         cy.get('[data-draft-recovery]').should('not.be.visible');
-        cy.get('#jform_title').should('have.value', 'Phase 2 autosave fixture');
+        cy.get('#jform_title').should('have.value', 'Autosave fixture');
         cy.then(() => cy.task('queryDB', `SELECT payload, retired_revision FROM #__autosave_drafts WHERE draft_id = '${draftIds[0]}'`))
           .then((rows) => {
             expect(rows[0].payload).to.equal(null);
@@ -284,7 +284,7 @@ describe('Native Article draft protection', () => {
         cy.checkForSystemMessage('Article saved.');
         cy.then(() => cy.task('queryDB', `SELECT payload FROM #__autosave_drafts WHERE draft_id = '${draftIds[1]}'`))
           .then((rows) => expect(rows[0].payload).to.equal(null));
-        cy.task('queryDB', "SELECT id, introtext FROM #__content WHERE title = 'Phase 2 autosave fixture'")
+        cy.task('queryDB', "SELECT id, introtext FROM #__content WHERE title = 'Autosave fixture'")
           .then((rows) => {
             expect(rows).to.have.length(1);
             expect(rows[0].introtext).to.contain('Later canonical body saved through TinyMCE');
@@ -306,15 +306,15 @@ describe('Native Article draft protection', () => {
     cy.intercept('POST', '**/administrator/index.php*', (request) => {
       if (new URL(request.url).searchParams.get('task') === 'draft.preserve') {
         request.alias = 'unavailableDraft';
-        request.reply({ statusCode: 503, body: { success: false, error: { code: 'service_unavailable' } } });
+        request.reply({ statusCode: 503, body: { success: false, data: { code: 'service_unavailable' } } });
       }
     });
-    cy.get('#jform_title').clear().type('Phase 2 autosave fixture');
+    cy.get('#jform_title').clear().type('Autosave fixture');
     cy.wait('@unavailableDraft');
     cy.get('[data-draft-state="offline"]').should('be.visible');
     cy.clickToolbarButton('Save & Close');
     cy.checkForSystemMessage('Article saved.');
-    cy.task('queryDB', "SELECT COUNT(*) AS total FROM #__content WHERE title = 'Phase 2 autosave fixture'")
+    cy.task('queryDB', "SELECT COUNT(*) AS total FROM #__content WHERE title = 'Autosave fixture'")
       .then((rows) => expect(Number(rows[0].total)).to.equal(1));
   });
 });

@@ -33,7 +33,7 @@ use Joomla\Component\Users\Administrator\Model\NoteModel;
 class HtmlView extends BaseHtmlView
 {
     /**
-     * Whether optional draft controls are mounted for this native form.
+     * Whether draft controls are shown for this form.
      *
      * @var    boolean
      * @since  __DEPLOY_VERSION__
@@ -41,7 +41,7 @@ class HtmlView extends BaseHtmlView
     public bool $autosaveEnabled = false;
 
     /**
-     * Native layout ID for the compact draft status.
+     * Layout ID for the draft status.
      *
      * @var    string
      * @since  __DEPLOY_VERSION__
@@ -125,11 +125,15 @@ class HtmlView extends BaseHtmlView
             $item->user_id = (int) $this->form->getValue('user_id', null, 0);
             $item->catid   = (int) $this->form->getValue('catid', null, 0);
         }
-        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
-            'context'    => 'com_users.note', 'formId' => 'note-form', 'statusId' => $this->autosaveStatusId,
-            'optionsKey' => 'com_users.autosave.note', 'script' => 'com_users.note-autosave',
-            'saveTasks'  => ['note.apply', 'note.save', 'note.save2new', 'note.save2copy'],
-        ]);
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+                'context'   => 'com_users.note', 'formId' => 'note-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['note.apply', 'note.save', 'note.save2new', 'note.save2copy'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
     }
     /**
      * Display the toolbar.

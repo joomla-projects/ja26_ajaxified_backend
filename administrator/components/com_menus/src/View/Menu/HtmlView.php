@@ -32,7 +32,7 @@ use Joomla\Component\Menus\Administrator\Model\MenuModel;
 class HtmlView extends BaseHtmlView
 {
     /**
-     * Whether optional draft controls are mounted for this native form.
+     * Whether draft controls are shown for this form.
      *
      * @var    boolean
      * @since  __DEPLOY_VERSION__
@@ -40,7 +40,7 @@ class HtmlView extends BaseHtmlView
     public bool $autosaveEnabled = false;
 
     /**
-     * Native layout ID for the compact draft status.
+     * Layout ID for the draft status.
      *
      * @var    string
      * @since  __DEPLOY_VERSION__
@@ -129,11 +129,15 @@ class HtmlView extends BaseHtmlView
             $item->menutype  = (string) $this->form->getValue('menutype', null, '');
         }
         $this->form->addControlField('client_id', (string) $item->client_id);
-        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
-            'context'    => 'com_menus.menu', 'formId' => 'item-form', 'statusId' => $this->autosaveStatusId,
-            'optionsKey' => 'com_menus.autosave.menu', 'script' => 'com_menus.menu-autosave',
-            'saveTasks'  => ['menu.apply', 'menu.save', 'menu.save2new', 'menu.save2copy'],
-        ]);
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+                'context'   => 'com_menus.menu', 'formId' => 'item-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['menu.apply', 'menu.save', 'menu.save2new', 'menu.save2copy'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
     }
 
     /**

@@ -101,7 +101,7 @@ final class ArticleAutosaveProvider implements DraftProviderInterface
             $data['catid'] = $category;
         }
 
-        // Draft requests run in com_autosave; retain the native Article form and preparation.
+        // Draft requests run through com_ajax; retain the native Article form and preparation.
         Form::addFormPath(JPATH_ADMINISTRATOR . '/components/com_content/forms');
         $form = $model->getForm($data, false);
 

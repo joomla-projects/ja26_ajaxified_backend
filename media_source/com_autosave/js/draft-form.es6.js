@@ -3,7 +3,7 @@
  * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
-import DraftRuntime, { creationRecovery } from 'com_autosave.drafts';
+import DraftRuntime, { creationRecovery } from './drafts.es6.js';
 import { JoomlaEditor } from 'editor-api';
 import JoomlaDialog from 'joomla.dialog';
 import { availableControl, readControl, restoreControl } from './draft-controls.es6.js';

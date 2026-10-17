@@ -6,19 +6,6 @@
   "license": "GPL-2.0-or-later",
   "assets": [
     {
-      "name": "com_categories.category-autosave",
-      "type": "script",
-      "uri": "com_categories/category-autosave.min.js",
-      "dependencies": [
-        "core",
-        "editors",
-        "com_autosave.drafts"
-      ],
-      "attributes": {
-        "type": "module"
-      }
-    },
-    {
       "name": "com_categories.shared-categories-accordion",
       "type": "preset",
       "dependencies": [

@@ -38,7 +38,7 @@ describe('Native Category draft protection', () => {
   let ids;
   let title;
   const remember = () => cy.window().then((win) => {
-    const binding = win.Joomla.getOptions('com_categories.autosave.category');
+    const binding = win.Joomla.getOptions('com_autosave.forms')['item-form'];
     expect(binding.available).to.equal(true);
     ids.push(binding.draftId);
   });

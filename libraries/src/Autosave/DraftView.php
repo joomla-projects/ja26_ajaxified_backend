@@ -10,13 +10,12 @@
 namespace Joomla\CMS\Autosave;
 
 use Joomla\CMS\Application\CMSApplicationInterface;
-use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Date\Date;
 use Joomla\CMS\Document\HtmlDocument;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Layout\LayoutHelper;
+use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\Router\Route;
 use Joomla\CMS\Toolbar\Button\HelpButton;
 use Joomla\CMS\Toolbar\Button\InlinehelpButton;
@@ -24,33 +23,43 @@ use Joomla\CMS\Toolbar\Button\SeparatorButton;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\CMS\User\User;
 use Joomla\CMS\WebAsset\WebAssetManager;
+use Joomla\Registry\Registry;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Shared native form configuration and toolbar status; no canonical business logic.
+ * Draft controls and toolbar status for administrator forms.
  *
  * @since  __DEPLOY_VERSION__
  */
 final class DraftView
 {
     /**
-     * Open a private instance against canonical data while keeping prepared error-form values.
+     * Constructor.
+     *
+     * @since  __DEPLOY_VERSION__
+     */
+    public function __construct(private readonly DraftService $drafts, private readonly AutosaveContextResolver $resolver)
+    {
+    }
+
+    /**
+     * Prepare draft controls without changing the form values.
      *
      * @param   CMSApplicationInterface  $application  The native administrator application.
      * @param   HtmlDocument             $document     The native edit document.
      * @param   User                     $user         The authenticated native editor.
-     * @param   Form                     $form         The finalized native form.
-     * @param   object                   $item         The canonical item, separate from error-form values.
-     * @param   array                    $integration  Context, asset, form/status IDs, options key and committing tasks.
+     * @param   Form                     $form         The prepared edit form.
+     * @param   object                   $item         The saved item, separate from form values.
+     * @param   array                    $integration  Context, form/status IDs and save tasks.
      *
      * @return  boolean  Whether optional draft controls can be mounted.
      *
      * @since  __DEPLOY_VERSION__
      */
-    public static function configure(
+    public function configure(
         CMSApplicationInterface $application,
         HtmlDocument $document,
         User $user,
@@ -59,14 +68,22 @@ final class DraftView
         array $integration
     ): bool {
         try {
-            $params = ComponentHelper::getParams('com_autosave');
-            $application->getLanguage()->load('com_autosave', JPATH_ADMINISTRATOR);
+            if (!$application->isClient('administrator') || !PluginHelper::isEnabled('system', 'autosave')) {
+                return false;
+            }
+            $forms = $document->getScriptOptions('com_autosave.forms');
+            if (isset($forms[$integration['formId']])) {
+                return false;
+            }
+            $params = new Registry(PluginHelper::getPlugin('system', 'autosave')->params);
+            $application->getLanguage()->load('plg_system_autosave', JPATH_ADMINISTRATOR)
+                || $application->getLanguage()->load('plg_system_autosave', JPATH_PLUGINS . '/system/autosave');
             $assets = $document->getWebAssetManager();
-            $assets->getRegistry()->addExtensionRegistryFile('com_autosave');
+            $assets->getRegistry()->addRegistryFile('media/com_autosave/joomla.asset.json');
             // Resolve only the optional asset graph before activating it on the native document.
             $validation = new WebAssetManager($assets->getRegistry());
-            $validation->useScript($integration['script'])->getAssets('script', true);
-            $assets->useScript($integration['script']);
+            $validation->useScript('com_autosave.draft-form')->getAssets('script', true);
+            $assets->useScript('com_autosave.draft-form');
             Text::script('JYES');
             Text::script('JNO');
         } catch (\Throwable) {
@@ -82,11 +99,10 @@ final class DraftView
         ];
 
         try {
-            $component = AutosaveContext::getComponentName($integration['context']);
-            $provider  = $application->bootComponent($component)->getAutosaveProvider($integration['context']);
+            $provider = $this->resolver->resolve($integration['context']);
 
             $descriptor = $provider->describe($form, $item, $user);
-            $binding    = Factory::getContainer()->get(DraftService::class)->open($user, $descriptor, new Date('now', 'UTC'), $application->getSession());
+            $binding    = $this->drafts->open($user, $descriptor, new Date('now', 'UTC'));
             $configuration += [
                 'draftId'     => $binding['draft_id'],
                 'version'     => $descriptor['version'],
@@ -97,7 +113,7 @@ final class DraftView
                 'unsupported' => $descriptor['unsupported'] ?? [],
                 'locale'      => $application->getLanguage()->getTag(),
                 'timeZone'    => (string) $user->getParam('timezone', $application->get('offset', 'UTC')),
-                'endpoint'    => Route::_('index.php?option=com_autosave&format=json', false),
+                'endpoint'    => Route::_('index.php?option=com_ajax&plugin=autosave&group=system&format=json', false),
             ];
             foreach ($configuration['fields'] as &$field) {
                 $field['label'] = Text::_($field['label']);
@@ -110,7 +126,8 @@ final class DraftView
             $configuration['errorCode'] = 'service_unavailable';
         }
 
-        $document->addScriptOptions($integration['optionsKey'], $configuration, false);
+        $forms[$integration['formId']] = $configuration;
+        $document->addScriptOptions('com_autosave.forms', $forms, false);
 
         return true;
     }

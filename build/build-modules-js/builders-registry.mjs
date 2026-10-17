@@ -40,8 +40,6 @@ export const builders = [
   'com_media',
   'com_menus',
   'com_modules',
-  'com_newsfeeds',
-  'com_redirect',
   'com_scheduler',
   'com_tags',
   'com_templates',

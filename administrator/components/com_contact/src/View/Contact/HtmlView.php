@@ -29,7 +29,7 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
 class HtmlView extends FormView
 {
     /**
-     * Whether optional draft controls are mounted for this native form.
+     * Whether draft controls are shown for this form.
      *
      * @var    boolean
      * @since  __DEPLOY_VERSION__
@@ -37,7 +37,7 @@ class HtmlView extends FormView
     public bool $autosaveEnabled = false;
 
     /**
-     * Native layout ID for the compact draft status.
+     * Layout ID for the draft status.
      *
      * @var    string
      * @since  __DEPLOY_VERSION__
@@ -129,11 +129,15 @@ class HtmlView extends FormView
         if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
             return;
         }
-        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
-            'context'    => 'com_contact.contact', 'formId' => 'contact-form', 'statusId' => $this->autosaveStatusId,
-            'optionsKey' => 'com_contact.autosave.contact', 'script' => 'com_contact.contact-autosave',
-            'saveTasks'  => ['contact.apply', 'contact.save', 'contact.save2new', 'contact.save2copy', 'contact.save2menu', 'contact.editAssociations'],
-        ]);
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
+                'context'   => 'com_contact.contact', 'formId' => 'contact-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['contact.apply', 'contact.save', 'contact.save2new', 'contact.save2copy', 'contact.save2menu', 'contact.editAssociations'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
     }
 
     /**

@@ -202,7 +202,7 @@ export default class DraftRuntime {
           const body = await result.json();
           if (!result.ok || body.success !== true) {
             throw Object.assign(new Error('Draft request failed'), {
-              code: body.error?.code || (result.status === 401 ? 'authentication_required' : 'service_unavailable'),
+              code: body.data?.code || (result.status === 401 ? 'authentication_required' : 'service_unavailable'),
             });
           }
           return body.data;
@@ -272,29 +272,7 @@ export default class DraftRuntime {
     this.status('preserving');
     this.inFlight = (async () => {
       try {
-        let result;
-        try {
-          result = await this.request('preserve', snapshot);
-        } catch (error) {
-          if (!['draft_expired', 'draft_not_found'].includes(error.code) || this.lastPreserved
-            || this.submitting || this.retired) throw error;
-          const resumed = await this.request('resume', { draft_id: snapshot.draft_id, schema_version: snapshot.schema_version });
-          if (this.destroyed || epoch !== this.epoch
-            || this.submitting || this.retired) {
-            this.pending = true;
-            return false;
-          }
-          if (resumed?.draft_id !== snapshot.draft_id || resumed.schema_version !== snapshot.schema_version
-            || resumed.resumed !== true) {
-            throw Object.assign(new Error('Invalid draft resumption'), { code: 'service_unavailable' });
-          }
-          // Admission is not persistence. Recapture edits made during negotiation.
-          snapshot = { ...snapshot, client_revision: this.revision, payload: this.capture() };
-          attempt.revision = snapshot.client_revision;
-          this.pending = false;
-          this.dirtySince = null;
-          result = await this.request('preserve', snapshot);
-        }
+        const result = await this.request('preserve', snapshot);
         if (this.destroyed || epoch !== this.epoch) return false;
         if (!result || typeof result.updated_at !== 'string' || !Number.isFinite(Date.parse(result.updated_at))
           || typeof result.conflict !== 'boolean') {
@@ -373,7 +351,12 @@ export default class DraftRuntime {
   }
 
   async discard(id) {
-    await this.request('discard', { draft_id: id });
+    try {
+      await this.request('discard', { draft_id: id });
+    } catch (error) {
+      // Missing and foreign IDs have the same response; an absent choice can be dismissed.
+      if (error.code !== 'draft_not_found') throw error;
+    }
     if (id === this.binding.draftId) {
       this.epoch += 1;
       this.blocked = true;

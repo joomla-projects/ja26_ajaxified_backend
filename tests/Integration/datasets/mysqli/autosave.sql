@@ -23,10 +23,13 @@ CREATE TABLE IF NOT EXISTS `#__users` (
   KEY `email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
+-- Private recoverable draft instances. Canonical records remain native Joomla records.
 CREATE TABLE IF NOT EXISTS `#__autosave_drafts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `draft_id` char(32) NOT NULL,
   `owner_id` int unsigned NOT NULL,
+  `owner_slot` smallint NOT NULL,
+  `row_version` bigint NOT NULL DEFAULT 0,
   `context` varchar(255) NOT NULL,
   `target_id` varchar(255) DEFAULT NULL,
   `scope` text NOT NULL,
@@ -43,6 +46,7 @@ CREATE TABLE IF NOT EXISTS `#__autosave_drafts` (
   `expires_at` datetime NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_autosave_draft_public` (`draft_id`),
+  UNIQUE KEY `idx_autosave_owner_slot` (`owner_id`,`owner_slot`),
   KEY `idx_autosave_draft_owner` (`owner_id`,`context`,`target_id`),
   KEY `idx_autosave_draft_expiry` (`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
@@ -107,3 +111,18 @@ CREATE TABLE IF NOT EXISTS `#__scheduler_tasks` (
   KEY `idx_cli_exclusive` (`cli_exclusive`),
   KEY `idx_checked_out` (`checked_out`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 DEFAULT COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `#__assets` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT COMMENT 'Primary Key',
+  `parent_id` int NOT NULL DEFAULT 0 COMMENT 'Nested set parent.',
+  `lft` int NOT NULL DEFAULT 0 COMMENT 'Nested set lft.',
+  `rgt` int NOT NULL DEFAULT 0 COMMENT 'Nested set rgt.',
+  `level` int unsigned NOT NULL COMMENT 'The cached level in the nested tree.',
+  `name` varchar(50) NOT NULL COMMENT 'The unique name for the asset.',
+  `title` varchar(100) NOT NULL COMMENT 'The descriptive title for the asset.',
+  `rules` varchar(5120) NOT NULL COMMENT 'JSON encoded access control.',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_asset_name` (`name`),
+  KEY `idx_lft_rgt` (`lft`,`rgt`),
+  KEY `idx_parent_id` (`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;

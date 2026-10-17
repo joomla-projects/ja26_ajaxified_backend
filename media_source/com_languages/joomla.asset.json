@@ -6,32 +6,6 @@
   "license": "GPL-2.0-or-later",
   "assets": [
     {
-      "name": "com_languages.override-autosave",
-      "type": "script",
-      "uri": "com_languages/override-autosave.min.js",
-      "dependencies": [
-        "core",
-        "editors",
-        "com_autosave.drafts"
-      ],
-      "attributes": {
-        "type": "module"
-      }
-    },
-    {
-      "name": "com_languages.language-autosave",
-      "type": "script",
-      "uri": "com_languages/language-autosave.min.js",
-      "dependencies": [
-        "core",
-        "editors",
-        "com_autosave.drafts"
-      ],
-      "attributes": {
-        "type": "module"
-      }
-    },
-    {
       "name": "com_languages.admin-language-edit-change-flag",
       "type": "script",
       "uri": "com_languages/admin-language-edit-change-flag.min.js",

@@ -3,6 +3,8 @@ CREATE TABLE IF NOT EXISTS "#__autosave_drafts" (
   "id" bigserial NOT NULL,
   "draft_id" char(32) NOT NULL,
   "owner_id" integer NOT NULL,
+  "owner_slot" smallint NOT NULL,
+  "row_version" bigint NOT NULL DEFAULT 0,
   "context" varchar(255) NOT NULL,
   "target_id" varchar(255) DEFAULT NULL,
   "scope" text NOT NULL,
@@ -18,17 +20,16 @@ CREATE TABLE IF NOT EXISTS "#__autosave_drafts" (
   "updated_at" timestamp without time zone NOT NULL,
   "expires_at" timestamp without time zone NOT NULL,
   PRIMARY KEY ("id"),
-  CONSTRAINT "#__autosave_draft_public" UNIQUE ("draft_id")
+  CONSTRAINT "#__autosave_drafts_idx_draft_id" UNIQUE ("draft_id"),
+  CONSTRAINT "#__autosave_drafts_idx_owner_slot" UNIQUE ("owner_id", "owner_slot")
 );
-CREATE INDEX IF NOT EXISTS "#__autosave_draft_owner" ON "#__autosave_drafts" ("owner_id","context","target_id");
-CREATE INDEX IF NOT EXISTS "#__autosave_draft_expiry" ON "#__autosave_drafts" ("expires_at");
+CREATE INDEX IF NOT EXISTS "#__autosave_drafts_idx_owner_id" ON "#__autosave_drafts" ("owner_id","context","target_id");
+CREATE INDEX IF NOT EXISTS "#__autosave_drafts_idx_expires_at" ON "#__autosave_drafts" ("expires_at");
 
-INSERT INTO "#__extensions"
-("package_id", "name", "type", "element", "folder", "client_id", "enabled", "access", "protected", "locked", "manifest_cache", "params", "custom_data", "ordering", "state")
-SELECT 0, 'com_autosave', 'component', 'com_autosave', '', 1, 1, 1, 1, 1, '', '', '', 0, 0
+INSERT INTO "#__extensions" ("package_id", "name", "type", "element", "folder", "client_id", "enabled", "access", "protected", "locked", "manifest_cache", "params", "custom_data", "ordering", "state")
+SELECT 0, 'plg_system_autosave', 'plugin', 'autosave', 'system', 0, 1, 1, 0, 1, '', '{}', '', 10, 0
 WHERE NOT EXISTS (
-  SELECT 1 FROM "#__extensions"
-  WHERE "type" = 'component' AND "element" = 'com_autosave' AND "client_id" = 1
+  SELECT 1 FROM "#__extensions" WHERE "type" = 'plugin' AND "element" = 'autosave' AND "folder" = 'system'
 );
 
 INSERT INTO "#__extensions" ("package_id", "name", "type", "element", "folder", "client_id", "enabled", "access", "protected", "locked", "manifest_cache", "params", "custom_data", "ordering", "state")

@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS `#__assets` (
 --
 
 INSERT INTO `#__assets` (`id`, `parent_id`, `lft`, `rgt`, `level`, `name`, `title`, `rules`) VALUES
-(1, 0, 0, 183, 0, 'root.1', 'Root Asset', '{"core.login.site":{"6":1,"2":1},"core.login.admin":{"6":1},"core.login.api":{"8":1},"core.login.offline":{"6":1},"core.admin":{"8":1},"core.manage":{"7":1},"core.create":{"6":1,"3":1},"core.delete":{"6":1},"core.edit":{"6":1,"4":1},"core.edit.state":{"6":1,"5":1},"core.edit.own":{"6":1,"3":1}}'),
+(1, 0, 0, 185, 0, 'root.1', 'Root Asset', '{"core.login.site":{"6":1,"2":1},"core.login.admin":{"6":1},"core.login.api":{"8":1},"core.login.offline":{"6":1},"core.admin":{"8":1},"core.manage":{"7":1},"core.create":{"6":1,"3":1},"core.delete":{"6":1},"core.edit":{"6":1,"4":1},"core.edit.state":{"6":1,"5":1},"core.edit.own":{"6":1,"3":1}}'),
 (2, 1, 1, 2, 1, 'com_admin', 'com_admin', '{}'),
 (3, 1, 3, 6, 1, 'com_banners', 'com_banners', '{"core.admin":{"7":1},"core.manage":{"6":1}}'),
 (4, 1, 7, 8, 1, 'com_cache', 'com_cache', '{"core.admin":{"7":1},"core.manage":{"7":1}}'),
@@ -107,16 +107,17 @@ INSERT INTO `#__assets` (`id`, `parent_id`, `lft`, `rgt`, `level`, `name`, `titl
 (87, 18, 124, 125, 2, 'com_modules.module.97', 'Recently Added Articles', '{}'),
 (88, 18, 126, 127, 2, 'com_modules.module.98', 'Logged-in Users', '{}'),
 (89, 18, 128, 129, 2, 'com_modules.module.90', 'Login Support', '{}'),
-(90, 1, 165, 172, 1, 'com_scheduler', 'com_scheduler', '{}'),
-(91, 1, 173, 174, 1, 'com_associations', 'com_associations', '{}'),
-(92, 1, 175, 176, 1, 'com_categories', 'com_categories', '{}'),
-(93, 1, 177, 178, 1, 'com_fields', 'com_fields', '{}'),
-(94, 1, 179, 180, 1, 'com_workflow', 'com_workflow', '{}'),
-(95, 1, 181, 182, 1, 'com_guidedtours', 'com_guidedtours', '{}'),
+(90, 1, 165, 174, 1, 'com_scheduler', 'com_scheduler', '{}'),
+(91, 1, 175, 176, 1, 'com_associations', 'com_associations', '{}'),
+(92, 1, 177, 178, 1, 'com_categories', 'com_categories', '{}'),
+(93, 1, 179, 180, 1, 'com_fields', 'com_fields', '{}'),
+(94, 1, 181, 182, 1, 'com_workflow', 'com_workflow', '{}'),
+(95, 1, 183, 184, 1, 'com_guidedtours', 'com_guidedtours', '{}'),
 (96, 18, 130, 131, 2, 'com_modules.module.109', 'Guided Tours', '{}'),
 (97, 90, 166, 167, 2, 'com_scheduler.task.1', 'Rotate Logs', '{}'),
 (98, 90, 168, 169, 2, 'com_scheduler.task.2', 'Session GC', '{}'),
-(99, 90, 170, 171, 2, 'com_scheduler.task.3', 'Update Notification', '{}');
+(99, 90, 170, 171, 2, 'com_scheduler.task.3', 'Update Notification', '{}'),
+(100, 90, 172, 173, 2, 'com_scheduler.task.4', 'Autosave Retention Cleanup', '{}');
 
 -- --------------------------------------------------------
 
@@ -184,7 +185,6 @@ INSERT INTO `#__extensions` (`package_id`, `name`, `type`, `element`, `folder`, 
 (0, 'com_tags', 'component', 'com_tags', '', 1, 1, 1, 0, 1, '', '{"tag_layout":"_:default","save_history":"1","history_limit":5,"show_tag_title":"0","tag_list_show_tag_image":"0","tag_list_show_tag_description":"0","tag_list_image":"","tag_list_orderby":"title","tag_list_orderby_direction":"ASC","show_headings":"0","tag_list_show_date":"0","tag_list_show_item_image":"0","tag_list_show_item_description":"0","tag_list_item_maximum_characters":0,"return_any_or_all":"1","include_children":"0","maximum":200,"tag_list_language_filter":"all","tags_layout":"_:default","all_tags_orderby":"title","all_tags_orderby_direction":"ASC","all_tags_show_tag_image":"0","all_tags_show_tag_description":"0","all_tags_tag_maximum_characters":20,"all_tags_show_tag_hits":"0","filter_field":"1","show_pagination_limit":"1","show_pagination":"2","show_pagination_results":"1","tag_field_ajax_mode":"1","show_feed_link":"1"}', ''),
 (0, 'com_contenthistory', 'component', 'com_contenthistory', '', 1, 1, 1, 0, 1, '', '', ''),
 (0, 'com_ajax', 'component', 'com_ajax', '', 1, 1, 1, 1, 1, '', '', ''),
-(0, 'com_autosave', 'component', 'com_autosave', '', 1, 1, 1, 1, 1, '', '', ''),
 (0, 'com_postinstall', 'component', 'com_postinstall', '', 1, 1, 1, 1, 1, '', '', ''),
 (0, 'com_fields', 'component', 'com_fields', '', 1, 1, 1, 0, 1, '', '', ''),
 (0, 'com_associations', 'component', 'com_associations', '', 1, 1, 1, 0, 1, '', '', ''),
@@ -381,6 +381,7 @@ INSERT INTO `#__extensions` (`package_id`, `name`, `type`, `element`, `folder`, 
 (0, 'plg_task_sessiongc', 'plugin', 'sessiongc', 'task', 0, 1, 1, 0, 1, '', '{}', '', 7, 0),
 (0, 'plg_task_sitestatus', 'plugin', 'sitestatus', 'task', 0, 1, 1, 0, 1, '', '{}', '', 8, 0),
 (0, 'plg_task_updatenotification', 'plugin', 'updatenotification', 'task', 0, 1, 1, 0, 1, '', '{}', '', 9, 0),
+(0, 'plg_system_autosave', 'plugin', 'autosave', 'system', 0, 1, 1, 0, 1, '', '{}', '', 10, 0),
 (0, 'plg_task_autosave', 'plugin', 'autosave', 'task', 0, 1, 1, 0, 1, '', '{}', '', 10, 0),
 (0, 'plg_multifactorauth_totp', 'plugin', 'totp', 'multifactorauth', 0, 1, 1, 0, 1, '', '', '', 1, 0),
 (0, 'plg_multifactorauth_yubikey', 'plugin', 'yubikey', 'multifactorauth', 0, 1, 1, 0, 1, '', '', '', 2, 0),
@@ -1268,28 +1269,3 @@ INSERT INTO `#__workflow_transitions` (`id`, `asset_id`, `published`, `ordering`
 (5, 62, 1, 5, 1, 'FEATURE', '', -1, 1, '{"featuring":"1"}'),
 (6, 63, 1, 6, 1, 'UNFEATURE', '', -1, 1, '{"featuring":"0"}'),
 (7, 64, 1, 7, 1, 'PUBLISH_AND_FEATURE', '', -1, 1, '{"publishing":"1","featuring":"1"}');
-
--- Private recoverable draft instances. Canonical records remain native Joomla records.
-CREATE TABLE IF NOT EXISTS `#__autosave_drafts` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `draft_id` char(32) NOT NULL,
-  `owner_id` int unsigned NOT NULL,
-  `context` varchar(255) NOT NULL,
-  `target_id` varchar(255) DEFAULT NULL,
-  `scope` text NOT NULL,
-  `schema_version` int unsigned NOT NULL,
-  `fields` text NOT NULL,
-  `baseline_revision` varchar(64) DEFAULT NULL,
-  `client_revision` bigint unsigned NOT NULL DEFAULT 0,
-  `retired_revision` bigint unsigned NOT NULL DEFAULT 0,
-  `payload` mediumtext DEFAULT NULL,
-  `payload_digest` char(64) DEFAULT NULL,
-  `result_id` varchar(255) DEFAULT NULL,
-  `created_at` datetime NOT NULL,
-  `updated_at` datetime NOT NULL,
-  `expires_at` datetime NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `idx_autosave_draft_public` (`draft_id`),
-  KEY `idx_autosave_draft_owner` (`owner_id`,`context`,`target_id`),
-  KEY `idx_autosave_draft_expiry` (`expires_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;

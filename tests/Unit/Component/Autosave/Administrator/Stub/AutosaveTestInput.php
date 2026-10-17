@@ -14,7 +14,7 @@ final class AutosaveTestInput extends Input
         string $token = 'token',
         ?string $contentLength = null
     ) {
-        parent::__construct(['task' => $task, 'format' => 'json']);
+        parent::__construct(['option' => 'com_ajax', 'plugin' => 'autosave', 'group' => 'system', 'task' => $task, 'format' => 'json']);
 
         $this->inputs['server'] = new Input(
             [

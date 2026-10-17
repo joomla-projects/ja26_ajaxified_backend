@@ -10,14 +10,14 @@ describe('Native Language Override draft protection', () => {
     `/administrator/index.php?option=com_languages&view=override&layout=edit&id=${source}&filter_language=en-GB&filter_client=${client}&language_client=en-GB${client}`,
   );
   const remember = () => cy.window().then((win) => {
-    const binding = win.Joomla.getOptions('com_languages.autosave.override');
+    const binding = win.Joomla.getOptions('com_autosave.forms')['override-form'];
     expect(binding.available).to.equal(true);
     ids.push(binding.draftId);
   });
 
   beforeEach(() => {
     ids = [];
-    key = `COM_AUTOSAVE_TEST_${Date.now()}_${Cypress._.random(10000, 99999)}`;
+    key = `PLG_SYSTEM_AUTOSAVE_TEST_${Date.now()}_${Cypress._.random(10000, 99999)}`;
     cy.doAdministratorLogin();
     cy.intercept('POST', '**/administrator/index.php*', (request) => {
       const task = new URL(request.url).searchParams.get('task');

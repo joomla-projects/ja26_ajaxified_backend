@@ -31,7 +31,7 @@ use Joomla\Registry\Registry;
 class HtmlView extends BaseHtmlView
 {
     /**
-     * Whether optional draft controls are mounted for this native form.
+     * Whether draft controls are shown for this form.
      *
      * @var    boolean
      * @since  __DEPLOY_VERSION__
@@ -39,7 +39,7 @@ class HtmlView extends BaseHtmlView
     public bool $autosaveEnabled = false;
 
     /**
-     * Native layout ID for the compact draft status.
+     * Layout ID for the draft status.
      *
      * @var    string
      * @since  __DEPLOY_VERSION__
@@ -118,11 +118,15 @@ class HtmlView extends BaseHtmlView
         }
         $item                  = clone $this->item;
         $this->form->addControlField('tour_id', (string) $item->tour_id);
-        $this->autosaveEnabled = DraftView::configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
-            'context'    => 'com_guidedtours.step', 'formId' => 'guidedtour-dates-form', 'statusId' => $this->autosaveStatusId,
-            'optionsKey' => 'com_guidedtours.autosave.step', 'script' => 'com_guidedtours.step-autosave',
-            'saveTasks'  => ['step.apply', 'step.save', 'step.save2new', 'step.save2copy'],
-        ]);
+        try {
+            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
+                'context'   => 'com_guidedtours.step', 'formId' => 'guidedtour-dates-form', 'statusId' => $this->autosaveStatusId,
+                'saveTasks' => ['step.apply', 'step.save', 'step.save2new', 'step.save2copy'],
+            ]);
+        } catch (\Throwable) {
+            // Draft setup is optional; keep the form and its save actions available.
+            $this->autosaveEnabled = false;
+        }
         if ($this->autosaveEnabled) {
             DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
         }
