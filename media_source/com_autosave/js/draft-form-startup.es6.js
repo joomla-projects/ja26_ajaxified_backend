@@ -12,7 +12,7 @@ const start = () => {
   const elements = Array.from(document.querySelectorAll('[id]'));
   Object.entries(configurations).forEach(([id, configuration]) => {
     if (!configuration || configuration.formId !== id) return;
-    const matches = elements.filter((element) => element.id === id);
+    const matches = elements.filter((element) => element.getAttribute('id') === id);
     const form = matches.length === 1 ? matches[0] : null;
     if (!form || form.tagName !== 'FORM' || mounted.has(form)) return;
     mounted.add(form);
