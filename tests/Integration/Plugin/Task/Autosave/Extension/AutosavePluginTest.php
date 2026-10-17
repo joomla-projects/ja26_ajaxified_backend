@@ -96,7 +96,19 @@ class AutosavePluginTest extends IntegrationTestCase implements \Joomla\Tests\In
         $remaining = (int) $this->db->setQuery('SELECT COUNT(*) FROM #__autosave_drafts')->loadResult();
         $this->assertGreaterThanOrEqual(101, $remaining);
         $this->assertLessThan(1101, $remaining);
-        $this->assertSame(Status::OK, $this->runTask());
+
+        $status = Status::WILL_RESUME;
+
+        for ($attempt = 0; $attempt < 20 && $status === Status::WILL_RESUME; $attempt++) {
+            $status       = $this->runTask();
+            $newRemaining = (int) $this->db->setQuery('SELECT COUNT(*) FROM #__autosave_drafts')->loadResult();
+            $this->assertLessThan($remaining, $newRemaining);
+            $remaining = $newRemaining;
+            $this->assertContains($status, [Status::WILL_RESUME, Status::OK]);
+        }
+
+        $this->assertSame(Status::OK, $status);
+        $this->assertSame(0, $remaining);
         $this->assertFalse($this->store->hasExpired($this->now));
     }
 
