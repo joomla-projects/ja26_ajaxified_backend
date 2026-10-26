@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package   Joomla.IntegrationTest
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @package     Joomla.IntegrationTest
+ * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Libraries\Cms\Autosave;
@@ -35,12 +35,9 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
     {
         $this->db = $this->getDBDriver();
         $this->initializeStore();
-        (new \ReflectionProperty(\Joomla\CMS\Plugin\PluginHelper::class, 'plugins'))->setValue(
-            null,
-            [
+        (new \ReflectionProperty(\Joomla\CMS\Plugin\PluginHelper::class, 'plugins'))->setValue(null, [
             (object) ['type' => 'system', 'name' => 'autosave', 'params' => json_encode(['interval' => $interval]), 'id' => 1],
-            ]
-        );
+        ]);
         $application = $this->createMock(CMSApplication::class);
         $application->method('getName')->willReturn('draftviewtest');
         $application->method('isClient')->willReturnCallback(static fn (string $client): bool => $client === 'administrator');
@@ -68,13 +65,11 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $item   = (object) ['id' => 42, 'title' => 'Canonical value'];
         $policy = $this->createMock(\Joomla\CMS\Autosave\DraftProviderInterface::class);
         $policy->method('getContext')->willReturn('com_categories.category');
-        $policy->expects($this->once())->method('describe')->with($form, $item, $user)->willReturn(
-            [
+        $policy->expects($this->once())->method('describe')->with($form, $item, $user)->willReturn([
             'context' => 'com_categories.category', 'target' => '42', 'scope' => ['extension' => 'com_content'],
             'version' => 1, 'revision' => 'native snapshot', 'values' => ['title' => 'Canonical value'],
             'fields'  => ['title' => ['control' => 'text', 'label' => 'Title', 'id' => 'jform_title', 'name' => 'jform[title]']], 'excluded' => [],
-            ]
-        );
+        ]);
         $component = new \Joomla\Component\Categories\Administrator\Extension\CategoriesComponent(
             $this->createMock(\Joomla\CMS\Dispatcher\ComponentDispatcherFactoryInterface::class)
         );
@@ -95,18 +90,11 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
             $document->getWebAssetManager()->getRegistry(),
             ['system', 'com_autosave', 'com_categories']
         );
-        $helper->configure(
-            $application,
-            $document,
-            $user,
-            $form,
-            $item,
-            [
+        $helper->configure($application, $document, $user, $form, $item, [
             'context' => 'com_categories.category', 'formId' => 'item-form', 'statusId' => 'category-autosave-status',
 
             'saveTasks' => ['category.apply', 'category.save'],
-            ]
-        );
+        ]);
         $configuration = $document->getScriptOptions('com_autosave.forms')['item-form'];
         $this->assertSame($expectedInterval, $configuration['interval']);
         $this->assertSame($available, $configuration['available']);
@@ -236,12 +224,10 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $app      = Factory::getApplication();
         $provider = $this->createMock(\Joomla\CMS\Autosave\DraftProviderInterface::class);
         $provider->method('getContext')->willReturn('com_content.article');
-        $provider->expects($this->exactly(2))->method('describe')->willReturn(
-            [
+        $provider->expects($this->exactly(2))->method('describe')->willReturn([
             'context'  => 'com_content.article', 'target' => '42', 'scope' => [], 'version' => 1,
             'revision' => 'saved item', 'values' => ['title' => 'Saved'], 'fields' => ['title' => ['control' => 'text', 'label' => 'Title']], 'excluded' => [],
-            ]
-        );
+        ]);
         $component = new \Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\ResolverTestCapableComponent(['com_content.article' => true]);
         $component->setAutosaveProvider('com_content.article', $provider);
         $app->method('bootComponent')->willReturn($component);
@@ -256,18 +242,9 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $app->method('getDocument')->willReturn($document);
         $form = new \Joomla\CMS\Form\Form('two.forms');
         foreach (['first', 'second'] as $id) {
-            $this->assertTrue(
-                $helper->configure(
-                    $app,
-                    $document,
-                    $user,
-                    $form,
-                    (object) [],
-                    [
-                    'context' => 'com_content.article', 'formId' => $id, 'statusId' => $id . '-status', 'saveTasks' => ['article.save'],
-                    ]
-                )
-            );
+            $this->assertTrue($helper->configure($app, $document, $user, $form, (object) [], [
+                'context' => 'com_content.article', 'formId' => $id, 'statusId' => $id . '-status', 'saveTasks' => ['article.save'],
+            ]));
         }
         $before = $document->getScriptOptions('com_autosave.forms');
         $this->assertNotSame($before['first']['draftId'], $before['second']['draftId']);
@@ -281,9 +258,7 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         return [[true, 45, 45000], [false, 45, 45000], [true, 0, 1000], [false, 45, 45000, true]];
     }
 
-    /**
-     * @dataProvider nativeToolbarLifecycles
-     */
+    /** @dataProvider nativeToolbarLifecycles */
     public function testActualNativeViewLifecycleMountsStatusAfterActions(string $component, string $entity, string $layout, bool $assetsAvailable = true): void
     {
         $this->db = $this->getDBDriver();
@@ -375,9 +350,7 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         ];
     }
 
-    /**
-     * @dataProvider sharedNativeViews
-     */
+    /** @dataProvider sharedNativeViews */
     public function testEveryNativeViewUsesTheSharedServiceAndKeepsItsSaveTasks(string $component, string $entity, string $context, string $formId, array $tasks, bool $serviceAvailable): void
     {
         $this->db = $this->getDBDriver();

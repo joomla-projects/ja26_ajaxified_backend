@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_categories
+ * @package     Joomla.Administrator
+ * @subpackage  com_categories
  *
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Categories\Administrator\Autosave;
@@ -26,7 +26,7 @@ use Joomla\CMS\User\User;
 /**
  * Category drafts reuse native forms and permission rules, without nested-set writes.
  *
- * @since __DEPLOY_VERSION__
+ * @since  __DEPLOY_VERSION__
  */
 final class CategoryAutosaveProvider implements DraftProviderInterface
 {
@@ -35,23 +35,19 @@ final class CategoryAutosaveProvider implements DraftProviderInterface
     /**
      * Constructor.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_categories.category';
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function describe(Form $form, object $item, User $user): array
     {
         $extension = $this->extension((string) ($item->extension ?? ''));
@@ -69,21 +65,16 @@ final class CategoryAutosaveProvider implements DraftProviderInterface
             'scope'    => $scope,
             'version'  => 1,
             'fields'   => $fields,
-            'revision' => $target === null ? null : hash(
-                'sha256',
-                json_encode(
-                    [$target, $scope, $this->values($item), $item->modified_time ?? null, $item->modified_user_id ?? null],
-                    JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-                )
-            ),
+            'revision' => $target === null ? null : hash('sha256', json_encode(
+                [$target, $scope, $this->values($item), $item->modified_time ?? null, $item->modified_user_id ?? null],
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            )),
             'values'   => $this->values($item),
             'excluded' => array_values(array_diff(self::KEYS, array_keys($fields))),
         ];
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function read(array $binding, User $user, ?array $payload = null): array
     {
         if ($binding['context'] !== $this->getContext() || array_keys($binding['scope']) !== ['extension']) {

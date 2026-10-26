@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package   Joomla.IntegrationTest
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @package     Joomla.IntegrationTest
+ * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Plugin\System\Autosave\Extension;
@@ -28,9 +28,7 @@ use Joomla\Tests\Unit\Component\Autosave\Administrator\Stub\AutosaveTestInput;
 use Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\ResolverTestCapableComponent;
 use Psr\Log\LoggerInterface;
 
-/**
- * Actual administrator com_ajax dispatch, native response and real draft store.
- */
+/** Actual administrator com_ajax dispatch, native response and real draft store. */
 class AutosaveTest extends IntegrationTestCase implements \Joomla\Tests\Integration\DBTestInterface
 {
     use DraftDatabaseFixture;
@@ -80,9 +78,7 @@ class AutosaveTest extends IntegrationTestCase implements \Joomla\Tests\Integrat
         parent::tearDown();
     }
 
-    /**
-     * @dataProvider transportFailures
-     */
+    /** @dataProvider transportFailures */
     public function testInvalidTransportCannotResolveService(array $options, string $code, int $status): void
     {
         $this->provider->expects($this->never())->method('read');
@@ -122,12 +118,10 @@ class AutosaveTest extends IntegrationTestCase implements \Joomla\Tests\Integrat
 
     public function testFourOperationsUseOneNativeEnvelopeAndReleaseSessionBeforeProviderWork(): void
     {
-        $this->provider->method('read')->willReturnCallback(
-            function (): array {
-                $this->assertTrue($this->closed);
-                return $this->descriptor;
-            }
-        );
+        $this->provider->method('read')->willReturnCallback(function (): array {
+            $this->assertTrue($this->closed);
+            return $this->descriptor;
+        });
         [$detect] = $this->request('draft.detect', ['draft_id' => $this->draftId]);
         $this->assertTrue($detect['success']);
         $this->assertSame(['candidates' => [], 'conflict' => false], $detect['data']);
@@ -148,9 +142,7 @@ class AutosaveTest extends IntegrationTestCase implements \Joomla\Tests\Integrat
         $this->assertSame(0, (int) $this->db->setQuery('SELECT COUNT(*) FROM #__autosave_drafts WHERE draft_id = ' . $this->db->quote($source))->loadResult());
     }
 
-    /**
-     * @dataProvider missingBindings
-     */
+    /** @dataProvider missingBindings */
     public function testForeignMissingAndExpiredIdsCannotReachProvider(string $kind, string $code, int $status): void
     {
         $id = match ($kind) {
@@ -180,9 +172,7 @@ class AutosaveTest extends IntegrationTestCase implements \Joomla\Tests\Integrat
         $this->assertNull($this->store->read(7, $this->draftId, $this->now)['payload']);
     }
 
-    /**
-     * @dataProvider loggerFailures
-     */
+    /** @dataProvider loggerFailures */
     public function testUnexpectedFailuresExposeNeitherPayloadNorInternalMessages(bool $loggerFails): void
     {
         $this->provider->method('read')->willThrowException(new \RuntimeException('Private SQL and credentials'));
@@ -217,11 +207,9 @@ class AutosaveTest extends IntegrationTestCase implements \Joomla\Tests\Integrat
         $this->resolved = false;
         $session        = $this->createMock(SessionInterface::class);
         $session->method('isNew')->willReturn($options['newSession'] ?? false);
-        $session->method('close')->willReturnCallback(
-            function (): void {
-                $this->closed = true;
-            }
-        );
+        $session->method('close')->willReturnCallback(function (): void {
+            $this->closed = true;
+        });
         $headers = [];
         $app     = $this->createMock(CMSApplication::class);
         $app->method('getName')->willReturn(($options['client'] ?? 1) === 1 ? 'administrator' : 'site');
@@ -231,11 +219,9 @@ class AutosaveTest extends IntegrationTestCase implements \Joomla\Tests\Integrat
         $app->method('getIdentity')->willReturn($user);
         $app->method('getSession')->willReturn($session);
         $app->method('checkToken')->with('post')->willReturn($options['validToken'] ?? true);
-        $app->method('setHeader')->willReturnCallback(
-            static function (string $name, mixed $value) use (&$headers): void {
-                $headers[$name] = $value;
-            }
-        );
+        $app->method('setHeader')->willReturnCallback(static function (string $name, mixed $value) use (&$headers): void {
+            $headers[$name] = $value;
+        });
         $app->expects($this->never())->method('close');
         $app->expects($this->never())->method('sendHeaders');
         $app->expects($this->never())->method('getMessageQueue');
@@ -245,14 +231,11 @@ class AutosaveTest extends IntegrationTestCase implements \Joomla\Tests\Integrat
         $dispatcher          = new Dispatcher();
         self::$dispatchers[] = $dispatcher;
         $app->method('getDispatcher')->willReturn($dispatcher);
-        $plugin = new Autosave(
-            [],
-            function (): DraftService {
-                $this->assertTrue($this->closed);
-                $this->resolved = true;
-                return $this->service;
-            }
-        );
+        $plugin = new Autosave([], function (): DraftService {
+            $this->assertTrue($this->closed);
+            $this->resolved = true;
+            return $this->service;
+        });
         $plugin->setApplication($app);
         $app->method('bootPlugin')->with('autosave', 'system')->willReturn($plugin);
         Factory::$application = $app;
@@ -260,7 +243,7 @@ class AutosaveTest extends IntegrationTestCase implements \Joomla\Tests\Integrat
         try {
             // The administrator wrapper requires this unchanged core route once per HTTP request.
             // Include its target directly so repeated requests execute within this test process.
-            include JPATH_SITE . '/components/com_ajax/ajax.php';
+            require JPATH_SITE . '/components/com_ajax/ajax.php';
             $raw = ob_get_contents();
         } finally {
             ob_end_clean();

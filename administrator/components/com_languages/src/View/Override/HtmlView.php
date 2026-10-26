@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_languages
+ * @package     Joomla.Administrator
+ * @subpackage  com_languages
  *
- * @copyright (C) 2011 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2011 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Languages\Administrator\View\Override;
@@ -26,7 +26,7 @@ use Joomla\Component\Languages\Administrator\Model\OverrideModel;
 /**
  * View to edit a language override
  *
- * @since 2.5
+ * @since  2.5
  */
 class HtmlView extends BaseHtmlView
 {
@@ -35,41 +35,39 @@ class HtmlView extends BaseHtmlView
     /**
      * The form to use for the view.
      *
-     * @var   object
-     * @since 2.5
+     * @var     object
+     * @since   2.5
      */
     protected $form;
 
     /**
      * The item to edit.
      *
-     * @var   object
-     * @since 2.5
+     * @var     object
+     * @since   2.5
      */
     protected $item;
 
     /**
      * The model state.
      *
-     * @var   object
-     * @since 2.5
+     * @var     object
+     * @since   2.5
      */
     protected $state;
 
     /**
      * Displays the view.
      *
-     * @param string $tpl The name of the template file to parse
+     * @param   string  $tpl  The name of the template file to parse
      *
-     * @return void
+     * @return  void
      *
-     * @since 2.5
+     * @since   2.5
      */
     public function display($tpl = null)
     {
-        /**
- * @var OverrideModel $model
-*/
+        /** @var OverrideModel $model */
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -134,7 +132,7 @@ class HtmlView extends BaseHtmlView
      *
      * @return void
      *
-     * @since 2.5
+     * @since   2.5
      */
     protected function addToolbar()
     {

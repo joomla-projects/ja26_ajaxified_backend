@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_fields
+ * @package     Joomla.Administrator
+ * @subpackage  com_fields
  *
- * @copyright (C) 2016 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2016 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Fields\Administrator\View\Group;
@@ -29,7 +29,7 @@ use Joomla\Filesystem\Path;
 /**
  * Group View
  *
- * @since 3.7.0
+ * @since  3.7.0
  */
 class HtmlView extends BaseHtmlView
 {
@@ -38,47 +38,45 @@ class HtmlView extends BaseHtmlView
     /**
      * @var \Joomla\CMS\Form\Form
      *
-     * @since 3.7.0
+     * @since  3.7.0
      */
     protected $form;
 
     /**
-     * @var \stdClass
+     * @var    \stdClass
      *
-     * @since 3.7.0
+     * @since  3.7.0
      */
     protected $item;
 
     /**
-     * @var \Joomla\Registry\Registry
+     * @var    \Joomla\Registry\Registry
      *
-     * @since 3.7.0
+     * @since  3.7.0
      */
     protected $state;
 
     /**
      * The actions the user is authorised to perform
      *
-     * @var \Joomla\Registry\Registry
+     * @var    \Joomla\Registry\Registry
      *
-     * @since 3.7.0
+     * @since  3.7.0
      */
     protected $canDo;
 
     /**
      * Execute and display a template script.
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      *
-     * @since 3.7.0
+     * @since   3.7.0
      */
     public function display($tpl = null)
     {
-        /**
- * @var GroupModel $model
-*/
+        /** @var GroupModel $model */
         $model = $this->getModel();
 
         $this->form  = $model->getForm();
@@ -129,9 +127,9 @@ class HtmlView extends BaseHtmlView
     /**
      * Adds the toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 3.7.0
+     * @since   3.7.0
      */
     protected function addToolbar()
     {

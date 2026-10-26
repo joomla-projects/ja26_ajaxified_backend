@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package   Joomla.IntegrationTest
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @package     Joomla.IntegrationTest
+ * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Libraries\Cms\Autosave;
@@ -93,14 +93,9 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
 
     private function write(array $draft, int $revision, string $title): array
     {
-        return $this->service->execute(
-            'preserve',
-            [
+        return $this->service->execute('preserve', [
             'draft_id' => $draft['draft_id'], 'client_revision' => $revision, 'schema_version' => 1, 'payload' => ['title' => $title],
-            ],
-            $this->user,
-            $this->now
-        );
+        ], $this->user, $this->now);
     }
 
     public function testQuotaMetadataIsOwnerOnlyWithoutBootingDisabledOrRevokedComponents(): void

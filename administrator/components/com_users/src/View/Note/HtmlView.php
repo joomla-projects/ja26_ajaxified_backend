@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_users
+ * @package     Joomla.Administrator
+ * @subpackage  com_users
  *
- * @copyright (C) 2011 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2011 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Users\Administrator\View\Note;
@@ -28,7 +28,7 @@ use Joomla\Component\Users\Administrator\Model\NoteModel;
 /**
  * User note edit view
  *
- * @since 2.5
+ * @since  2.5
  */
 class HtmlView extends BaseHtmlView
 {
@@ -37,43 +37,41 @@ class HtmlView extends BaseHtmlView
     /**
      * The edit form.
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var    \Joomla\CMS\Form\Form
      *
-     * @since 2.5
+     * @since  2.5
      */
     protected $form;
 
     /**
      * The item data.
      *
-     * @var   object
-     * @since 2.5
+     * @var    object
+     * @since  2.5
      */
     protected $item;
 
     /**
      * The model state.
      *
-     * @var   \Joomla\Registry\Registry
-     * @since 2.5
+     * @var    \Joomla\Registry\Registry
+     * @since  2.5
      */
     protected $state;
 
     /**
      * Override the display method for the view.
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      *
-     * @since  2.5
-     * @throws \Exception
+     * @since   2.5
+     * @throws  \Exception
      */
     public function display($tpl = null)
     {
-        /**
- * @var NoteModel $model
-*/
+        /** @var NoteModel $model */
         $model = $this->getModel();
 
         // Initialise view variables.
@@ -114,10 +112,10 @@ class HtmlView extends BaseHtmlView
     /**
      * Display the toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since  2.5
-     * @throws \Exception
+     * @since   2.5
+     * @throws  \Exception
      */
     protected function addToolbar()
     {

@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.UnitTest
- * @subpackage Autosave
+ * @package     Joomla.UnitTest
+ * @subpackage  Autosave
  *
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Unit\Libraries\Cms\Autosave;
@@ -22,7 +22,7 @@ use Joomla\Tests\Unit\UnitTestCase;
 /**
  * Tests exact-context component capability discovery.
  *
- * @since __DEPLOY_VERSION__
+ * @since  __DEPLOY_VERSION__
  */
 class AutosaveContextResolverTest extends UnitTestCase
 {

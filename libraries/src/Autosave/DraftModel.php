@@ -3,8 +3,8 @@
 /**
  * Joomla! Content Management System
  *
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\CMS\Autosave;
@@ -20,7 +20,7 @@ use Joomla\CMS\User\User;
 /**
  * Small native read/form helpers; component policy and scope stay in their providers.
  *
- * @since __DEPLOY_VERSION__
+ * @since  __DEPLOY_VERSION__
  */
 final class DraftModel
 {
@@ -69,7 +69,7 @@ final class DraftModel
     /**
      * Check a workflow route against its parent workflow's extension.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public static function extension(string $canonical, ?string $prepared = null): string
     {
@@ -80,7 +80,7 @@ final class DraftModel
     }
 
     /**
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public static function form(FormModel $model, string $component, object $item, array $data = []): Form
     {

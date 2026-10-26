@@ -3,8 +3,8 @@
 /**
  * Joomla! Content Management System
  *
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\CMS\Autosave;
@@ -19,24 +19,24 @@ use Joomla\CMS\User\User;
 /**
  * Read-only component policy for a prepared native form and its private drafts.
  *
- * @since __DEPLOY_VERSION__
+ * @since  __DEPLOY_VERSION__
  */
 interface DraftProviderInterface
 {
     /**
      * Return the component's registered form context.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function getContext(): string;
 
     /**
      * Describe supported fields and saved item values.
      *
-     * @return array{context: string, target: ?string, scope: array, version: int, fields: array,
+     * @return  array{context: string, target: ?string, scope: array, version: int, fields: array,
      *                revision: ?string, values: array, excluded: array}
      *
-     * @since __DEPLOY_VERSION__
+     * @since   __DEPLOY_VERSION__
      */
     public function describe(Form $form, object $item, User $user): array;
 
@@ -49,7 +49,7 @@ interface DraftProviderInterface
      * @param User                                                     $user    The current user.
      * @param array|null                                               $payload Proposed field values, separate from the identity.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function read(array $binding, User $user, ?array $payload = null): array;
 }

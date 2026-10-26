@@ -1,10 +1,10 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
+ * @package Joomla.Administrator
  * @subpackage com_contact
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Contact\Administrator\Autosave;
@@ -29,23 +29,19 @@ final class ContactAutosaveProvider implements DraftProviderInterface
     private const KEYS = ['name', 'alias', 'version_note', 'misc', 'image', 'con_position', 'email_to', 'address', 'suburb', 'state', 'postcode', 'country', 'telephone', 'mobile', 'fax', 'webpage', 'sortname1', 'sortname2', 'sortname3', 'publish_up', 'publish_down', 'metakey', 'metadesc', 'catid'];
 
     /**
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_contact.contact';
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function describe(Form $form, object $item, User $user): array
     {
         $target = empty($item->id) ? null : (string) $item->id;
@@ -61,9 +57,7 @@ final class ContactAutosaveProvider implements DraftProviderInterface
         );
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function read(array $binding, User $user, ?array $payload = null): array
     {
         $target = DraftModel::target($binding, $this->getContext());

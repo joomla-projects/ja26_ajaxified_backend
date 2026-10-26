@@ -3,8 +3,8 @@
 /**
  * Joomla! Content Management System
  *
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\CMS\Autosave;
@@ -22,14 +22,14 @@ use Joomla\Input\Input;
 /**
  * Draft-only operations and optional reconciliation after a native successful save.
  *
- * @since __DEPLOY_VERSION__
+ * @since  __DEPLOY_VERSION__
  */
 final class DraftService
 {
     /**
      * Constructor.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function __construct(private readonly AutosaveContextResolver $resolver, private readonly DraftStore $store)
     {
@@ -38,7 +38,7 @@ final class DraftService
     /**
      * Open a draft for a prepared form with supported fields.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function open(User $user, array $descriptor, Date $now): array
     {
@@ -74,7 +74,7 @@ final class DraftService
     /**
      * Execute a request validated by the Autosave plugin.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function execute(string $operation, array $request, User $user, Date $now): array
     {
@@ -246,7 +246,7 @@ final class DraftService
     /**
      * Called only by the native controller's successful path, never by a browser draft endpoint.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function reconcile(
         User $user,
@@ -304,7 +304,7 @@ final class DraftService
     /**
      * Absence or failure of draft storage cannot alter native controller success or navigation.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public static function reconcileNativeSave(
         CMSApplicationInterface $application,
@@ -380,7 +380,7 @@ final class DraftService
     /**
      * Prepare the saved item's scope and reconcile its submitted draft.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public static function reconcileNativeModelSave(
         CMSApplicationInterface $application,

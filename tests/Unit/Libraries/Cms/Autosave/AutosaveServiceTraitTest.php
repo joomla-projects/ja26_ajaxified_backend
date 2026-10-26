@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.UnitTest
- * @subpackage Autosave
+ * @package     Joomla.UnitTest
+ * @subpackage  Autosave
  *
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Unit\Libraries\Cms\Autosave;
@@ -17,7 +17,7 @@ use Joomla\Tests\Unit\UnitTestCase;
 /**
  * Tests component-owned provider registration assistance.
  *
- * @since __DEPLOY_VERSION__
+ * @since  __DEPLOY_VERSION__
  */
 class AutosaveServiceTraitTest extends UnitTestCase
 {

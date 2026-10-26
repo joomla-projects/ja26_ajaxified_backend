@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.IntegrationTest
- * @subpackage Task.autosave
+ * @package     Joomla.IntegrationTest
+ * @subpackage  Task.autosave
  *
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Plugin\Task\Autosave\Extension;
@@ -63,14 +63,10 @@ class AutosavePluginTest extends IntegrationTestCase implements \Joomla\Tests\In
 
     private function open(int $owner = 7): array
     {
-        return $this->store->open(
-            $owner,
-            [
+        return $this->store->open($owner, [
             'context'  => 'com_content.article', 'target' => null, 'scope' => [], 'version' => 1,
             'revision' => null, 'fields' => ['title' => ['control' => 'text']],
-            ],
-            $this->now
-        );
+        ], $this->now);
     }
 
     private function expire(int $count): void

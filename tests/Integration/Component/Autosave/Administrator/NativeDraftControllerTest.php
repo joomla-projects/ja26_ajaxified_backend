@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package   Joomla.IntegrationTest
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @package     Joomla.IntegrationTest
+ * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Component\Autosave\Administrator;
@@ -22,16 +22,12 @@ use Joomla\Input\Input;
 use Joomla\Tests\Integration\IntegrationTestCase;
 use Psr\Log\NullLogger;
 
-/**
- * Execute public native tasks and real optional draft reconciliation.
- */
+/** Execute public native tasks and real optional draft reconciliation. */
 class NativeDraftControllerTest extends IntegrationTestCase implements \Joomla\Tests\Integration\DBTestInterface
 {
     use \Joomla\Tests\Integration\Component\Autosave\Administrator\NativeControllerFixture;
 
-    /**
-     * @dataProvider outcomes
-     */
+    /** @dataProvider outcomes */
     public function testNativeResultsAndFailuresKeepTheirExistingContract(
         string $kind,
         string $task,
@@ -52,15 +48,11 @@ class NativeDraftControllerTest extends IntegrationTestCase implements \Joomla\T
         $app->method('getLogger')->willReturn(new NullLogger());
 
         $context = $componentName . '.' . $kind;
-        $draft   = $this->store->open(
-            7,
-            [
+        $draft   = $this->store->open(7, [
             'context' => $context, 'target' => $source === '' ? null : $source,
             'scope'   => $scope, 'version' => 1, 'revision' => $source === '' ? null : 'rendered',
             'fields'  => [($kind === 'category' ? 'title' : 'override') => ['control' => 'text']],
-            ],
-            $this->now
-        );
+        ], $this->now);
         $payload = [($kind === 'category' ? 'title' : 'override') => 'recoverable'];
         $this->store->preserve(7, $draft['draft_id'], 1, $payload, $this->now, static fn ($row, $values) => $values);
         if ($metadata !== null) {

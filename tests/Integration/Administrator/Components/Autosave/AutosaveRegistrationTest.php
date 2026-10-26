@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package   Joomla.IntegrationTest
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @package     Joomla.IntegrationTest
+ * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Administrator\Components\Autosave;
@@ -15,9 +15,7 @@ use Joomla\Tests\Integration\DBTestInterface;
 use Joomla\Tests\Integration\DBTestTrait;
 use Joomla\Tests\Integration\IntegrationTestCase;
 
-/**
- * Actual native table definitions and first-introduction migration on both CI database families.
- */
+/** Actual native table definitions and first-introduction migration on both CI database families. */
 class AutosaveRegistrationTest extends IntegrationTestCase implements DBTestInterface
 {
     use DBTestTrait;
@@ -71,10 +69,8 @@ class AutosaveRegistrationTest extends IntegrationTestCase implements DBTestInte
         if ($this->family() === 'postgresql') {
             $db->setQuery("SELECT setval('#__assets_id_seq', 1000, false)")->execute();
         }
-        $db->setQuery(
-            'DELETE FROM #__extensions WHERE element = ' . $db->quote('com_autosave')
-            . ' OR (element = ' . $db->quote('autosave') . ' AND folder IN (' . $db->quote('task') . ',' . $db->quote('system') . '))'
-        )->execute();
+        $db->setQuery('DELETE FROM #__extensions WHERE element = ' . $db->quote('com_autosave')
+            . ' OR (element = ' . $db->quote('autosave') . ' AND folder IN (' . $db->quote('task') . ',' . $db->quote('system') . '))')->execute();
         $db->setQuery('DELETE FROM #__scheduler_tasks WHERE type = ' . $db->quote('autosave.cleanup'))->execute();
         $this->execute($this->migration());
     }
@@ -89,15 +85,13 @@ class AutosaveRegistrationTest extends IntegrationTestCase implements DBTestInte
 
     private function updateAssets(): void
     {
-        include_once JPATH_ADMINISTRATOR . '/components/com_admin/script.php';
+        require_once JPATH_ADMINISTRATOR . '/components/com_admin/script.php';
         $installer = $this->createMock(Installer::class);
         $installer->expects($this->never())->method('abort');
         $script = new \JoomlaInstallerScript();
-        $script->setErrorCollector(
-            function (string $context, \Throwable $error): void {
-                $this->fail($context . ': ' . $error->getMessage());
-            }
-        );
+        $script->setErrorCollector(function (string $context, \Throwable $error): void {
+            $this->fail($context . ': ' . $error->getMessage());
+        });
         $this->assertTrue($script->updateAssets($installer));
     }
 
@@ -143,10 +137,8 @@ class AutosaveRegistrationTest extends IntegrationTestCase implements DBTestInte
         $this->execute($this->migration());
         $db = $this->getDBDriver();
         foreach ([['plugin', 'autosave', 'system'], ['plugin', 'autosave', 'task']] as [$type, $element, $folder]) {
-            $rows = $db->setQuery(
-                'SELECT * FROM #__extensions WHERE type = ' . $db->quote($type)
-                . ' AND element = ' . $db->quote($element) . ' AND folder = ' . $db->quote($folder)
-            )->loadAssocList();
+            $rows = $db->setQuery('SELECT * FROM #__extensions WHERE type = ' . $db->quote($type)
+                . ' AND element = ' . $db->quote($element) . ' AND folder = ' . $db->quote($folder))->loadAssocList();
             $this->assertCount(1, $rows);
             $this->assertSame(1, (int) $rows[0]['enabled']);
             $this->assertSame(1, (int) $rows[0]['locked']);
@@ -163,20 +155,14 @@ class AutosaveRegistrationTest extends IntegrationTestCase implements DBTestInte
     {
         $db     = $this->getDBDriver();
         $choice = '{"administrator_choice":true}';
-        $db->setQuery(
-            'UPDATE #__scheduler_tasks SET state = 0, execution_rules = ' . $db->quote($choice)
-            . ' WHERE type = ' . $db->quote('autosave.cleanup')
-        )->execute();
-        $db->setQuery(
-            'UPDATE #__extensions SET enabled = 0, params = ' . $db->quote($choice)
-            . ' WHERE folder IN (' . $db->quote('task') . ',' . $db->quote('system') . ') AND element = ' . $db->quote('autosave')
-        )->execute();
+        $db->setQuery('UPDATE #__scheduler_tasks SET state = 0, execution_rules = ' . $db->quote($choice)
+            . ' WHERE type = ' . $db->quote('autosave.cleanup'))->execute();
+        $db->setQuery('UPDATE #__extensions SET enabled = 0, params = ' . $db->quote($choice)
+            . ' WHERE folder IN (' . $db->quote('task') . ',' . $db->quote('system') . ') AND element = ' . $db->quote('autosave'))->execute();
         $this->execute($this->migration());
         $task    = $db->setQuery('SELECT state, execution_rules FROM #__scheduler_tasks WHERE type = ' . $db->quote('autosave.cleanup'))->loadAssoc();
-        $plugins = $db->setQuery(
-            'SELECT enabled, params FROM #__extensions WHERE folder IN (' . $db->quote('task') . ',' . $db->quote('system')
-            . ') AND element = ' . $db->quote('autosave')
-        )->loadAssocList();
+        $plugins = $db->setQuery('SELECT enabled, params FROM #__extensions WHERE folder IN (' . $db->quote('task') . ',' . $db->quote('system')
+            . ') AND element = ' . $db->quote('autosave'))->loadAssocList();
         $this->assertSame(0, (int) $task['state']);
         $this->assertSame($choice, $task['execution_rules']);
         $this->assertCount(2, $plugins);

@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package   Joomla.UnitTest
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @package     Joomla.UnitTest
+ * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Unit\Component\Autosave\Administrator;
@@ -89,11 +89,9 @@ class NativeDraftProvidersTest extends UnitTestCase
         $model           = $this->createMock(CategoryModel::class);
         $model->expects($this->never())->method('save');
         $model->expects($this->never())->method('rebuild');
-        $model->method('setState')->willReturnCallback(
-            static function ($key, $value) use (&$states) {
-                $states[$key] = $value;
-            }
-        );
+        $model->method('setState')->willReturnCallback(static function ($key, $value) use (&$states) {
+            $states[$key] = $value;
+        });
         $model->method('getItem')->with(42)->willReturn($item);
         $model->method('getForm')->with($this->isType('array'), false)->willReturn($this->form('com_categories', 'category'));
         $factory = $this->createMock(MVCFactoryInterface::class);
@@ -108,9 +106,7 @@ class NativeDraftProvidersTest extends UnitTestCase
         $this->assertSame(42, $states['category.id']);
     }
 
-    /**
-     * @dataProvider deniedCategoryCases
-     */
+    /** @dataProvider deniedCategoryCases */
     public function testCategoryRechecksNativeAuthorityAndCheckout(array $denied, array $changes, string $code): void
     {
         $item = (object) array_replace((array) $this->category(), $changes);
@@ -176,11 +172,9 @@ class NativeDraftProvidersTest extends UnitTestCase
         $states = [];
         $model  = $this->createMock(OverrideModel::class);
         $model->expects($this->never())->method('save');
-        $model->method('setState')->willReturnCallback(
-            static function ($key, $value) use (&$states) {
-                $states[$key] = $value;
-            }
-        );
+        $model->method('setState')->willReturnCallback(static function ($key, $value) use (&$states) {
+            $states[$key] = $value;
+        });
         $model->expects($this->once())->method('getItem')->with('COM_EXAMPLE')->willReturn($this->override());
         $model->method('getForm')->with($this->isType('array'), false)->willReturn($this->form('com_languages', 'override'));
         $factory = $this->createMock(MVCFactoryInterface::class);
@@ -209,9 +203,7 @@ class NativeDraftProvidersTest extends UnitTestCase
         DraftProjection::normalize(['both' => 'false'], $descriptor['fields']);
     }
 
-    /**
-     * @dataProvider deniedOverrideCases
-     */
+    /** @dataProvider deniedOverrideCases */
     public function testOverrideDeniesWrongScopeIdentityAndNativePermission(array $changes, array $denied, string $code): void
     {
         $item = (object) array_replace((array) $this->override(), $changes);
@@ -263,14 +255,11 @@ class NativeDraftProvidersTest extends UnitTestCase
         $this->assertSame('', $descriptor['values']['override']);
         $this->assertNotNull($descriptor['revision']);
         $item->draftRevision['site'] = 'Reappeared';
-        $this->assertNotSame(
-            $descriptor['revision'],
-            $provider->describe(
-                $this->form('com_languages', 'override'),
-                $item,
-                $this->user()
-            )['revision']
-        );
+        $this->assertNotSame($descriptor['revision'], $provider->describe(
+            $this->form('com_languages', 'override'),
+            $item,
+            $this->user()
+        )['revision']);
     }
 
     public static function deniedOverrideCases(): array

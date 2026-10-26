@@ -1,10 +1,10 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
+ * @package Joomla.Administrator
  * @subpackage com_finder
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Finder\Administrator\Autosave;
@@ -24,30 +24,26 @@ use Joomla\CMS\User\User;
 /**
  * Native Filter identity, prepared form and selected private values.
  *
- * @since __DEPLOY_VERSION__
+ * @since  __DEPLOY_VERSION__
  */
 final class FilterAutosaveProvider implements DraftProviderInterface
 {
     private const KEYS = ['title', 'alias', 'created', 'created_by', 'created_by_alias', 'state', 'params.w1', 'params.d1', 'params.w2', 'params.d2', 't[]'];
 
     /**
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_finder.filter';
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function describe(Form $form, object $item, User $user): array
     {
         $this->authorize($user, $item);
@@ -74,9 +70,7 @@ final class FilterAutosaveProvider implements DraftProviderInterface
         return $descriptor;
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function read(array $binding, User $user, ?array $payload = null): array
     {
         $target = DraftModel::target($binding, $this->getContext());

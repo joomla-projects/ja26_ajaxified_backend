@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_finder
+ * @package     Joomla.Administrator
+ * @subpackage  com_finder
  *
- * @copyright (C) 2011 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2011 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Finder\Administrator\View\Filter;
@@ -27,7 +27,7 @@ use Joomla\Component\Finder\Administrator\Model\FilterModel;
 /**
  * Filter view class for Finder.
  *
- * @since 2.5
+ * @since  2.5
  */
 class HtmlView extends BaseHtmlView
 {
@@ -36,71 +36,69 @@ class HtmlView extends BaseHtmlView
     /**
      * The filter object
      *
-     * @var \Joomla\Component\Finder\Administrator\Table\FilterTable
+     * @var    \Joomla\Component\Finder\Administrator\Table\FilterTable
      *
-     * @since 3.6.2
+     * @since  3.6.2
      */
     protected $filter;
 
     /**
      * The Form object
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var    \Joomla\CMS\Form\Form
      *
-     * @since 3.6.2
+     * @since  3.6.2
      */
     protected $form;
 
     /**
      * The active item
      *
-     * @var \stdClass
+     * @var    \stdClass
      *
-     * @since 3.6.2
+     * @since  3.6.2
      */
     protected $item;
 
     /**
      * The model state
      *
-     * @var \Joomla\Registry\Registry
+     * @var    \Joomla\Registry\Registry
      *
-     * @since 3.6.2
+     * @since  3.6.2
      */
     protected $state;
 
     /**
      * The total indexed items
      *
-     * @var integer
+     * @var    integer
      *
-     * @since 3.8.0
+     * @since  3.8.0
      */
     protected $total;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var string[]
+     * @var    string[]
      *
-     * @since 5.2.0
+     * @since  5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Method to display the view.
      *
-     * @param string $tpl A template file to load. [optional]
+     * @param   string  $tpl  A template file to load. [optional]
      *
-     * @return void
+     * @return  void
      *
-     * @since 2.5
+     * @since   2.5
      */
     public function display($tpl = null)
     {
-        /**
- * @var FilterModel $model
-*/
+        /** @var FilterModel $model */
         $model = $this->getModel();
 
         // Load the view data.
@@ -140,9 +138,9 @@ class HtmlView extends BaseHtmlView
     /**
      * Method to configure the toolbar for this view.
      *
-     * @return void
+     * @return  void
      *
-     * @since 2.5
+     * @since   2.5
      */
     protected function addToolbar()
     {

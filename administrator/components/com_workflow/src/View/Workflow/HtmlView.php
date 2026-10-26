@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_workflow
+ * @package     Joomla.Administrator
+ * @subpackage  com_workflow
  *
- * @copyright (C) 2018 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2018 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Workflow\Administrator\View\Workflow;
@@ -26,7 +26,7 @@ use Joomla\Component\Workflow\Administrator\Model\WorkflowModel;
 /**
  * View class to add or edit a workflow
  *
- * @since 4.0.0
+ * @since  4.0.0
  */
 class HtmlView extends BaseHtmlView
 {
@@ -35,63 +35,61 @@ class HtmlView extends BaseHtmlView
     /**
      * The model state
      *
-     * @var   object
-     * @since 4.0.0
+     * @var    object
+     * @since  4.0.0
      */
     protected $state;
 
     /**
      * The Form object
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var  \Joomla\CMS\Form\Form
      */
     protected $form;
 
     /**
      * The active item
      *
-     * @var object
+     * @var  object
      */
     protected $item;
 
     /**
      * The ID of current workflow
      *
-     * @var   integer
-     * @since 4.0.0
+     * @var    integer
+     * @since  4.0.0
      */
     protected $workflowID;
 
     /**
      * The name of current extension
      *
-     * @var   string
-     * @since 4.0.0
+     * @var    string
+     * @since  4.0.0
      */
     protected $extension;
 
     /**
      * The section of the current extension
      *
-     * @var   string
-     * @since 4.0.0
+     * @var    string
+     * @since  4.0.0
      */
     protected $section;
 
     /**
      * Display item view
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      *
-     * @since 4.0.0
+     * @since  4.0.0
      */
     public function display($tpl = null)
     {
-        /**
- * @var WorkflowModel $model
-*/
+        /** @var WorkflowModel $model */
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -141,9 +139,9 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 4.0.0
+     * @since  4.0.0
      */
     protected function addToolbar()
     {

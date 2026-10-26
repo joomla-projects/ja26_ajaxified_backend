@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_templates
+ * @package     Joomla.Administrator
+ * @subpackage  com_templates
  *
- * @copyright (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Templates\Administrator\View\Style;
@@ -26,7 +26,7 @@ use Joomla\Component\Templates\Administrator\Model\StyleModel;
 /**
  * View to edit a template style.
  *
- * @since 1.6
+ * @since  1.6
  */
 class HtmlView extends BaseHtmlView
 {
@@ -35,56 +35,54 @@ class HtmlView extends BaseHtmlView
     /**
      * The item
      *
-     * @var \stdClass
+     * @var   \stdClass
      */
     protected $item;
 
     /**
      * The form object
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var  \Joomla\CMS\Form\Form
      */
     protected $form;
 
     /**
      * The model state
      *
-     * @var \Joomla\Registry\Registry
+     * @var  \Joomla\Registry\Registry
      */
     protected $state;
 
     /**
      * The actions the user is authorised to perform
      *
-     * @var \Joomla\Registry\Registry
+     * @var    \Joomla\Registry\Registry
      *
-     * @since 4.0.0
+     * @since  4.0.0
      */
     protected $canDo;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var string[]
+     * @var    string[]
      *
-     * @since 5.2.0
+     * @since  5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Execute and display a template script.
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     public function display($tpl = null)
     {
-        /**
- * @var StyleModel $model
-*/
+        /** @var StyleModel $model */
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -116,9 +114,9 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     protected function addToolbar()
     {
@@ -166,9 +164,7 @@ class HtmlView extends BaseHtmlView
         // Get the help information for the template item.
         $lang = $this->getLanguage();
 
-        /**
- * @var StyleModel $model
-*/
+        /** @var StyleModel $model */
         $model = $this->getModel();
         $help  = $model->getHelp();
 

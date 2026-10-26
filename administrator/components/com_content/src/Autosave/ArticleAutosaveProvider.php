@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_content
+ * @package     Joomla.Administrator
+ * @subpackage  com_content
  *
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Content\Administrator\Autosave;
@@ -25,7 +25,7 @@ use Joomla\CMS\User\User;
 /**
  * Article drafts use the native prepared form, ArticleModel read and component permissions.
  *
- * @since __DEPLOY_VERSION__
+ * @since  __DEPLOY_VERSION__
  */
 final class ArticleAutosaveProvider implements DraftProviderInterface
 {
@@ -34,7 +34,7 @@ final class ArticleAutosaveProvider implements DraftProviderInterface
     /**
      * Constructor.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
@@ -146,12 +146,9 @@ final class ArticleAutosaveProvider implements DraftProviderInterface
 
     private function revision(object $item): string
     {
-        return hash(
-            'sha256',
-            json_encode(
-                [$this->getContext(), (string) $item->id, [], (int) $item->version, $this->values($item)],
-                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-            )
-        );
+        return hash('sha256', json_encode(
+            [$this->getContext(), (string) $item->id, [], (int) $item->version, $this->values($item)],
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ));
     }
 }

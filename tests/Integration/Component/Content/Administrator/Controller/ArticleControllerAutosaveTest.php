@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package   Joomla.IntegrationTest
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @package     Joomla.IntegrationTest
+ * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Component\Content\Administrator\Controller;
@@ -28,9 +28,7 @@ class ArticleControllerAutosaveTest extends IntegrationTestCase implements \Joom
 {
     use \Joomla\Tests\Integration\Component\Autosave\Administrator\NativeControllerFixture;
 
-    /**
-     * @dataProvider nativeOutcomes
-     */
+    /** @dataProvider nativeOutcomes */
     public function testNativeTaskKeepsItsResultAndOnlySuccessfulBoundMetadataRetires(
         string $task,
         string $outcome,

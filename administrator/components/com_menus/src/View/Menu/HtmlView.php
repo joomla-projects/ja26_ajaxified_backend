@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_menus
+ * @package     Joomla.Administrator
+ * @subpackage  com_menus
  *
- * @copyright (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Menus\Administrator\View\Menu;
@@ -27,7 +27,7 @@ use Joomla\Component\Menus\Administrator\Model\MenuModel;
 /**
  * The HTML Menus Menu Item View.
  *
- * @since 1.6
+ * @since  1.6
  */
 class HtmlView extends BaseHtmlView
 {
@@ -36,45 +36,43 @@ class HtmlView extends BaseHtmlView
     /**
      * The Form object
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var  \Joomla\CMS\Form\Form
      */
     protected $form;
 
     /**
      * The active item
      *
-     * @var object
+     * @var  object
      */
     protected $item;
 
     /**
      * The model state
      *
-     * @var \Joomla\Registry\Registry
+     * @var  \Joomla\Registry\Registry
      */
     protected $state;
 
     /**
      * The actions the user is authorised to perform
      *
-     * @var \Joomla\Registry\Registry
+     * @var  \Joomla\Registry\Registry
      */
     protected $canDo;
 
     /**
      * Display the view
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     public function display($tpl = null)
     {
-        /**
- * @var MenuModel $model
-*/
+        /** @var MenuModel $model */
         $model = $this->getModel();
 
         $this->form  = $model->getForm();
@@ -117,9 +115,9 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     protected function addToolbar()
     {

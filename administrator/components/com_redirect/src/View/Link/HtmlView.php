@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_redirect
+ * @package     Joomla.Administrator
+ * @subpackage  com_redirect
  *
- * @copyright (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Redirect\Administrator\View\Link;
@@ -27,7 +27,7 @@ use Joomla\Component\Redirect\Administrator\Model\LinkModel;
 /**
  * View to edit a redirect link.
  *
- * @since 1.6
+ * @since  1.6
  */
 class HtmlView extends BaseHtmlView
 {
@@ -36,38 +36,36 @@ class HtmlView extends BaseHtmlView
     /**
      * The active item
      *
-     * @var object
+     * @var  object
      */
     protected $item;
 
     /**
      * The Form object
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var  \Joomla\CMS\Form\Form
      */
     protected $form;
 
     /**
      * The model state
      *
-     * @var \Joomla\Registry\Registry
+     * @var   \Joomla\Registry\Registry
      */
     protected $state;
 
     /**
      * Display the view.
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     public function display($tpl = null)
     {
-        /**
- * @var LinkModel $model
-*/
+        /** @var LinkModel $model */
         $model = $this->getModel();
 
         $this->form  = $model->getForm();
@@ -99,9 +97,9 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     protected function addToolbar()
     {

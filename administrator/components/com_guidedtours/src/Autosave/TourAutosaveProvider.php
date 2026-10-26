@@ -1,10 +1,10 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
+ * @package Joomla.Administrator
  * @subpackage com_guidedtours
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Guidedtours\Administrator\Autosave;
@@ -29,23 +29,19 @@ final class TourAutosaveProvider implements DraftProviderInterface
     private const KEYS = ['title', 'uid', 'description', 'note', 'url', 'autostart'];
 
     /**
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_guidedtours.tour';
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function describe(Form $form, object $item, User $user): array
     {
         $target = empty($item->id) ? null : (string) $item->id;
@@ -61,9 +57,7 @@ final class TourAutosaveProvider implements DraftProviderInterface
         );
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function read(array $binding, User $user, ?array $payload = null): array
     {
         $target = DraftModel::target($binding, $this->getContext());

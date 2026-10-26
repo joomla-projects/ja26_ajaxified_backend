@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_newsfeeds
+ * @package     Joomla.Administrator
+ * @subpackage  com_newsfeeds
  *
- * @copyright (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Newsfeeds\Administrator\View\Newsfeed;
@@ -28,7 +28,7 @@ use Joomla\Component\Newsfeeds\Administrator\Model\NewsfeedModel;
 /**
  * View to edit a newsfeed.
  *
- * @since 1.6
+ * @since  1.6
  */
 class HtmlView extends BaseHtmlView
 {
@@ -37,53 +37,51 @@ class HtmlView extends BaseHtmlView
     /**
      * The item object for the newsfeed
      *
-     * @var \Joomla\Registry\Registry
+     * @var    \Joomla\Registry\Registry
      *
-     * @since 1.6
+     * @since  1.6
      */
     protected $item;
 
     /**
      * The form object for the newsfeed
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var    \Joomla\CMS\Form\Form
      *
-     * @since 1.6
+     * @since  1.6
      */
     protected $form;
 
     /**
      * The model state of the newsfeed
      *
-     * @var \Joomla\Registry\Registry
+     * @var   \Joomla\Registry\Registry
      *
-     * @since 1.6
+     * @since  1.6
      */
     protected $state;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var string[]
+     * @var    string[]
      *
-     * @since 5.2.0
+     * @since  5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Execute and display a template script.
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     public function display($tpl = null)
     {
-        /**
- * @var NewsfeedModel $model
-*/
+        /** @var NewsfeedModel $model */
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -139,9 +137,9 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     protected function addToolbar()
     {
@@ -206,11 +204,11 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the modal toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 5.1.0
+     * @since   5.1.0
      *
-     * @throws \Exception
+     * @throws  \Exception
      */
     protected function addModalToolbar()
     {

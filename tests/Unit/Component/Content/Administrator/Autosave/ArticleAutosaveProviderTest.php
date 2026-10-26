@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package   Joomla.UnitTest
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @package     Joomla.UnitTest
+ * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Unit\Component\Content\Administrator\Autosave;
@@ -111,9 +111,7 @@ class ArticleAutosaveProviderTest extends UnitTestCase
         $this->assertSame(['alias', 'articletext'], $descriptor['excluded']);
     }
 
-    /**
-     * @dataProvider deniedCases
-     */
+    /** @dataProvider deniedCases */
     public function testNativeAccessAndCheckoutAreRechecked(array $denied, int $owner, int $checkout, string $code): void
     {
         $item              = $this->item();
@@ -161,15 +159,13 @@ class ArticleAutosaveProviderTest extends UnitTestCase
             $model->expects($this->never())->method('save');
             $model->expects($this->once())->method('getItem')->with(42)->willReturn($this->item());
             $model->expects($this->once())->method('getForm')->with($this->isType('array'), false)
-                ->willReturnCallback(
-                    static function () use ($user): Form {
-                        $form = new Form('com_content.article', ['control' => 'jform']);
-                        $form->setCurrentUser($user);
-                        $form->loadFile('article');
+                ->willReturnCallback(static function () use ($user): Form {
+                    $form = new Form('com_content.article', ['control' => 'jform']);
+                    $form->setCurrentUser($user);
+                    $form->loadFile('article');
 
-                        return $form;
-                    }
-                );
+                    return $form;
+                });
             $factory = $this->createMock(MVCFactoryInterface::class);
             $factory->method('createModel')->willReturn($model);
             $descriptor = (new ArticleAutosaveProvider($factory))->read(

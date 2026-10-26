@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_banners
+ * @package     Joomla.Administrator
+ * @subpackage  com_banners
  *
- * @copyright (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Banners\Administrator\View\Banner;
@@ -29,7 +29,7 @@ use Joomla\Component\Banners\Administrator\Model\BannerModel;
 /**
  * View to edit a banner.
  *
- * @since 1.5
+ * @since  1.5
  */
 class HtmlView extends BaseHtmlView
 {
@@ -38,43 +38,41 @@ class HtmlView extends BaseHtmlView
     /**
      * The Form object
      *
-     * @var   Form
-     * @since 1.5
+     * @var    Form
+     * @since  1.5
      */
     protected $form;
 
     /**
      * The active item
      *
-     * @var   object
-     * @since 1.5
+     * @var    object
+     * @since  1.5
      */
     protected $item;
 
     /**
      * The model state
      *
-     * @var   object
-     * @since 1.5
+     * @var    object
+     * @since  1.5
      */
     protected $state;
 
     /**
      * Display the view
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.5
+     * @since   1.5
      *
-     * @throws \Exception
+     * @throws  \Exception
      */
     public function display($tpl = null): void
     {
-        /**
- * @var BannerModel $model
-*/
+        /** @var BannerModel $model */
         $model       = $this->getModel();
         $this->form  = $model->getForm();
         $this->item  = $model->getItem();
@@ -107,10 +105,10 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since  1.6
-     * @throws \Exception
+     * @since   1.6
+     * @throws  \Exception
      */
     protected function addToolbar(): void
     {

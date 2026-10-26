@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_categories
+ * @package     Joomla.Administrator
+ * @subpackage  com_categories
  *
- * @copyright (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Categories\Administrator\View\Category;
@@ -31,7 +31,7 @@ use Joomla\Component\Categories\Administrator\Model\CategoryModel;
 /**
  * HTML View class for the Categories component
  *
- * @since 1.6
+ * @since  1.6
  */
 class HtmlView extends BaseHtmlView
 {
@@ -40,67 +40,65 @@ class HtmlView extends BaseHtmlView
     /**
      * The Form object
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var  \Joomla\CMS\Form\Form
      */
     protected $form;
 
     /**
      * The active item
      *
-     * @var object
+     * @var  object
      */
     protected $item;
 
     /**
      * The model state
      *
-     * @var \Joomla\Registry\Registry
+     * @var  \Joomla\Registry\Registry
      */
     protected $state;
 
     /**
      * Flag if an association exists
      *
-     * @var boolean
+     * @var  boolean
      */
     protected $assoc;
 
     /**
      * The actions the user is authorised to perform
      *
-     * @var \Joomla\Registry\Registry
+     * @var  \Joomla\Registry\Registry
      */
     protected $canDo;
 
     /**
      * Is there a content type associated with this category alias
      *
-     * @var   boolean
-     * @since 4.0.0
+     * @var    boolean
+     * @since  4.0.0
      */
     protected $checkTags = false;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var string[]
+     * @var    string[]
      *
-     * @since 5.2.0
+     * @since  5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Display the view.
      *
-     * @param string|null $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string|null  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      */
     public function display($tpl = null)
     {
-        /**
- * @var CategoryModel $model
-*/
+        /** @var CategoryModel $model */
         $model = $this->getModel();
 
         $this->form  = $model->getForm();
@@ -177,9 +175,9 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     protected function addToolbar()
     {
@@ -216,20 +214,15 @@ class HtmlView extends BaseHtmlView
             $title = Text::_($component_title_key);
         } elseif ($lang->hasKey($component_section_key = $component . ($section ? "_$section" : ''))) {
             // Else if the component section string exists, let's use it.
-            $title = Text::sprintf(
-                'COM_CATEGORIES_CATEGORY_' . ($isNew ? 'ADD' : 'EDIT')
-                . '_TITLE',
-                $this->escape(Text::_($component_section_key))
-            );
+            $title = Text::sprintf('COM_CATEGORIES_CATEGORY_' . ($isNew ? 'ADD' : 'EDIT')
+                . '_TITLE', $this->escape(Text::_($component_section_key)));
         } else {
             // Else use the base title
             $title = Text::_('COM_CATEGORIES_CATEGORY_BASE_' . ($isNew ? 'ADD' : 'EDIT') . '_TITLE');
         }
 
         // Load specific css component
-        /**
- * @var \Joomla\CMS\WebAsset\WebAssetManager $wa
-*/
+        /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
         $wa = $this->getDocument()->getWebAssetManager();
         $wa->getRegistry()->addExtensionRegistryFile($component);
 
@@ -306,9 +299,9 @@ class HtmlView extends BaseHtmlView
             }
 
             if (
-                Associations::isEnabled()
-                && ComponentHelper::isEnabled('com_associations')
-                && AssociationsHelper::hasSupport($component)
+                Associations::isEnabled() &&
+                ComponentHelper::isEnabled('com_associations') &&
+                AssociationsHelper::hasSupport($component)
             ) {
                 $toolbar->standardButton('contract', 'JTOOLBAR_ASSOCIATIONS', 'category.editAssociations')
                     ->icon('icon-contract')
@@ -362,11 +355,11 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the modal toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 5.1.0
+     * @since   5.1.0
      *
-     * @throws \Exception
+     * @throws  \Exception
      */
     protected function addModalToolbar()
     {
@@ -394,9 +387,7 @@ class HtmlView extends BaseHtmlView
         $canDo = $this->canDo;
 
         // Load specific css component
-        /**
- * @var \Joomla\CMS\WebAsset\WebAssetManager $wa
-*/
+        /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
         $wa = $this->getDocument()->getWebAssetManager();
         $wa->getRegistry()->addExtensionRegistryFile($component);
 

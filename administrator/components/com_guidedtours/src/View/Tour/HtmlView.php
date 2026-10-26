@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_guidedtours
+ * @package       Joomla.Administrator
+ * @subpackage    com_guidedtours
  *
- * @copyright (C) 2023 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright     (C) 2023 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license       GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Guidedtours\Administrator\View\Tour;
@@ -62,18 +62,16 @@ class HtmlView extends BaseHtmlView
     /**
      * Execute and display a template script.
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string $tpl The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      *
      * @throws \Exception
      * @since  4.3.0
      */
     public function display($tpl = null)
     {
-        /**
- * @var TourModel $model
-*/
+        /** @var TourModel $model */
         $model = $this->getModel();
         $model->setUseExceptions(true);
 

@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_tags
+ * @package     Joomla.Administrator
+ * @subpackage  com_tags
  *
- * @copyright (C) 2013 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2013 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Tags\Administrator\View\Tag;
@@ -27,7 +27,7 @@ use Joomla\Component\Tags\Administrator\Model\TagModel;
 /**
  * HTML View class for the Tags component
  *
- * @since 3.1
+ * @since  3.1
  */
 class HtmlView extends BaseHtmlView
 {
@@ -36,61 +36,59 @@ class HtmlView extends BaseHtmlView
     /**
      * The Form object
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var  \Joomla\CMS\Form\Form
      */
     protected $form;
 
     /**
      * The active item
      *
-     * @var object
+     * @var  object
      */
     protected $item;
 
     /**
      * The model state
      *
-     * @var \Joomla\Registry\Registry
+     * @var  \Joomla\Registry\Registry
      */
     protected $state;
 
     /**
      * Flag if an association exists
      *
-     * @var boolean
+     * @var  boolean
      */
     protected $assoc;
 
     /**
      * The actions the user is authorised to perform
      *
-     * @var \Joomla\Registry\Registry
+     * @var    \Joomla\Registry\Registry
      *
-     * @since 4.0.0
+     * @since  4.0.0
      */
     protected $canDo;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var string[]
+     * @var    string[]
      *
-     * @since 5.2.0
+     * @since  5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Display the view
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      */
     public function display($tpl = null)
     {
-        /**
- * @var TagModel $model
-*/
+        /** @var TagModel $model */
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -118,7 +116,7 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the page title and toolbar.
      *
-     * @since 3.1
+     * @since  3.1
      *
      * @return void
      */

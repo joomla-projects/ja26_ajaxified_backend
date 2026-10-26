@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_users
+ * @package     Joomla.Administrator
+ * @subpackage  com_users
  *
- * @copyright (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Users\Administrator\View\Level;
@@ -27,7 +27,7 @@ use Joomla\Component\Users\Administrator\Model\LevelModel;
 /**
  * View to edit a user view level.
  *
- * @since 1.6
+ * @since  1.6
  */
 class HtmlView extends BaseHtmlView
 {
@@ -36,7 +36,7 @@ class HtmlView extends BaseHtmlView
     /**
      * The Form object
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var  \Joomla\CMS\Form\Form
      */
     protected $form;
 
@@ -59,15 +59,13 @@ class HtmlView extends BaseHtmlView
     /**
      * Display the view
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      */
     public function display($tpl = null)
     {
-        /**
- * @var LevelModel $model
-*/
+        /** @var LevelModel $model */
         $model = $this->getModel();
 
         $this->form  = $model->getForm();
@@ -101,10 +99,10 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since  1.6
-     * @throws \Exception
+     * @since   1.6
+     * @throws  \Exception
      */
     protected function addToolbar()
     {

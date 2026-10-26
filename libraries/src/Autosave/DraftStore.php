@@ -3,8 +3,8 @@
 /**
  * Joomla! Content Management System
  *
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\CMS\Autosave;
@@ -21,13 +21,11 @@ use Joomla\Database\ParameterType;
 /**
  * Store private drafts for individual edit forms.
  *
- * @since __DEPLOY_VERSION__
+ * @since  __DEPLOY_VERSION__
  */
 final class DraftStore
 {
-    /**
-     * @since __DEPLOY_VERSION__
-     */
+    /** @since  __DEPLOY_VERSION__ */
     public const MAX_REVISION = 9007199254740991;
 
     /**
@@ -35,16 +33,12 @@ final class DraftStore
      */
     public const PURGE_BATCH_SIZE = 100;
 
-    /**
-     * @since __DEPLOY_VERSION__
-     */
+    /** @since  __DEPLOY_VERSION__ */
     public const MAX_OWNER_ROWS = 64;
 
     private const MAX_WRITE_ATTEMPTS = 4;
 
-    /**
-     * @since __DEPLOY_VERSION__
-     */
+    /** @since  __DEPLOY_VERSION__ */
     public const POLICY = [
         'max_payload_bytes' => 4194304,
         'empty_ttl'         => 86400,
@@ -56,7 +50,7 @@ final class DraftStore
     /**
      * Constructor.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function __construct(private readonly DatabaseInterface $db, private readonly array $policy = self::POLICY)
     {
@@ -70,7 +64,7 @@ final class DraftStore
     /**
      * Allocate a draft for a prepared edit form.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function open(int $owner, array $descriptor, Date $now): array
     {
@@ -154,7 +148,7 @@ final class DraftStore
     /**
      * Read an unexpired owner-bound instance.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function read(int $owner, string $id, Date $now): array
     {
@@ -169,7 +163,7 @@ final class DraftStore
     /**
      * Missing and foreign IDs are intentionally indistinguishable.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     private function loadRow(int $owner, string $id): array
     {
@@ -195,7 +189,7 @@ final class DraftStore
     /**
      * List the owner's bounded allocations without loading stored field values.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function allocations(int $owner): array
     {
@@ -244,10 +238,8 @@ final class DraftStore
             ->where($this->db->quoteName('context') . ' = :context')
             ->where($this->db->quoteName('scope') . ' = :scope')
             ->where($this->db->quoteName('expires_at') . ' > :now')
-            ->where(
-                $target === null ? $this->db->quoteName('target_id') . ' IS NULL'
-                : $this->db->quoteName('target_id') . ' = :target'
-            )
+            ->where($target === null ? $this->db->quoteName('target_id') . ' IS NULL'
+                : $this->db->quoteName('target_id') . ' = :target')
             ->where($this->db->quoteName('draft_id') . ' <> :draft')
             ->where($this->db->quoteName('payload') . ' IS NOT NULL')
             ->order($this->db->quoteName('updated_at') . ' DESC, ' . $this->db->quoteName('draft_id'))
@@ -268,7 +260,7 @@ final class DraftStore
     /**
      * Validate outside the write and acknowledge only a matching conditional update or retry.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function preserve(int $owner, string $id, int $revision, mixed $payload, Date $now, callable $validate): array
     {
@@ -325,7 +317,7 @@ final class DraftStore
     /**
      * Clear submitted revisions after a successful save.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function reconcile(
         int $owner,
@@ -417,7 +409,7 @@ final class DraftStore
     /**
      * Delete an owner's selected draft.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function discard(int $owner, string $id): void
     {
@@ -436,13 +428,13 @@ final class DraftStore
     /**
      * One physical cleanup batch; the native scheduler supplies the run budget.
      *
-     * @param Date       $now      The expiry cutoff.
-     * @param integer    $limit    The maximum discovery batch size.
-     * @param float|null $deadline Optional monotonic nanosecond deadline from hrtime(true).
+     * @param   Date          $now       The expiry cutoff.
+     * @param   integer       $limit     The maximum discovery batch size.
+     * @param   float|null    $deadline  Optional monotonic nanosecond deadline from hrtime(true).
      *
-     * @return integer  The number of rows physically deleted.
+     * @return  integer  The number of rows physically deleted.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function purge(Date $now, int $limit = self::PURGE_BATCH_SIZE, ?float $deadline = null): int
     {
@@ -474,7 +466,7 @@ final class DraftStore
     /**
      * Let the native Scheduler request continuation without reading expired payloads.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function hasExpired(Date $now): bool
     {
@@ -621,12 +613,8 @@ final class DraftStore
 
         foreach ($values as $column => &$value) {
             $query->set($this->db->quoteName($column) . ' = :set_' . $column)
-                ->bind(
-                    ':set_' . $column,
-                    $value,
-                    $value === null ? ParameterType::NULL
-                    : (\is_int($value) ? ParameterType::INTEGER : ParameterType::STRING)
-                );
+                ->bind(':set_' . $column, $value, $value === null ? ParameterType::NULL
+                    : (\is_int($value) ? ParameterType::INTEGER : ParameterType::STRING));
         }
 
         unset($value);

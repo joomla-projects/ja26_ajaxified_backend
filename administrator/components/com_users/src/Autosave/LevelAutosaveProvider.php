@@ -1,10 +1,10 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
+ * @package Joomla.Administrator
  * @subpackage com_users
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Users\Administrator\Autosave;
@@ -25,30 +25,26 @@ use Joomla\Component\Users\Administrator\Helper\UsersHelper;
 /**
  * Draft fields, scope and access checks for the Level form.
  *
- * @since __DEPLOY_VERSION__
+ * @since  __DEPLOY_VERSION__
  */
 final class LevelAutosaveProvider implements DraftProviderInterface
 {
     private const KEYS = ['title', 'rules'];
 
     /**
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function getContext(): string
     {
         return 'com_users.level';
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function describe(Form $form, object $item, User $user): array
     {
         $this->authorize($user, $item);
@@ -74,9 +70,7 @@ final class LevelAutosaveProvider implements DraftProviderInterface
         return $descriptor;
     }
 
-    /**
-     * @inheritDoc
-     */
+    /** @inheritDoc */
     public function read(array $binding, User $user, ?array $payload = null): array
     {
         $target = DraftModel::target($binding, $this->getContext());

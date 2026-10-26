@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package   Joomla.UnitTest
+ * @package Joomla.UnitTest
  * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Unit\Component\Autosave\Administrator;
@@ -119,9 +119,7 @@ class NativeContextDraftTest extends UnitTestCase
         return [new $providerClass($factory), $form, $item, $model];
     }
 
-    /**
-     * @dataProvider contexts
-     */
+    /** @dataProvider contexts */
     public function testCanonicalProjectionAndMeaningfulRevision(string $component, string $entity, string $first, string $editAsset): void
     {
         [$provider, $form, $item] = $this->fixture($component, $entity);
@@ -138,9 +136,7 @@ class NativeContextDraftTest extends UnitTestCase
         $this->assertNotSame($descriptor['revision'], $provider->describe($form, $item, $this->user())['revision']);
     }
 
-    /**
-     * @dataProvider contexts
-     */
+    /** @dataProvider contexts */
     public function testBoundNativeReadNeverPerformsCanonicalWrites(string $component, string $entity, string $first, string $editAsset): void
     {
         [$provider, $form, $item, $model] = $this->fixture($component, $entity);
@@ -152,9 +148,7 @@ class NativeContextDraftTest extends UnitTestCase
         $this->assertSame($descriptor['revision'], $current['revision']);
     }
 
-    /**
-     * @dataProvider contexts
-     */
+    /** @dataProvider contexts */
     public function testNativeDenialAndCheckoutRemainAuthoritative(string $component, string $entity, string $first, string $editAsset): void
     {
         [$provider, $form, $item] = $this->fixture($component, $entity);
@@ -173,9 +167,7 @@ class NativeContextDraftTest extends UnitTestCase
         }
     }
 
-    /**
-     * @dataProvider contexts
-     */
+    /** @dataProvider contexts */
     public function testCreationAndForeignScope(string $component, string $entity, string $first, string $editAsset): void
     {
         [$provider, $form, $item] = $this->fixture($component, $entity);
@@ -232,9 +224,7 @@ class NativeContextDraftTest extends UnitTestCase
         }
     }
 
-    /**
-     * @dataProvider contexts
-     */
+    /** @dataProvider contexts */
     public function testMalformedIdentityCannotReachTheNativeModel(string $component, string $entity, string $first, string $editAsset): void
     {
         [$provider] = $this->fixture($component, $entity);

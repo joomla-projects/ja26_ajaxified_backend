@@ -3,8 +3,8 @@
 /**
  * Joomla! Content Management System
  *
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\CMS\Autosave;
@@ -34,14 +34,14 @@ use Joomla\Registry\Registry;
 /**
  * Draft controls and toolbar status for administrator forms.
  *
- * @since __DEPLOY_VERSION__
+ * @since  __DEPLOY_VERSION__
  */
 final class DraftView
 {
     /**
      * Constructor.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function __construct(private readonly DraftService $drafts, private readonly AutosaveContextResolver $resolver)
     {
@@ -50,16 +50,16 @@ final class DraftView
     /**
      * Prepare draft controls without changing the form values.
      *
-     * @param CMSApplicationInterface $application The native administrator application.
-     * @param HtmlDocument            $document    The native edit document.
-     * @param User                    $user        The authenticated native editor.
-     * @param Form                    $form        The prepared edit form.
-     * @param object                  $item        The saved item, separate from form values.
-     * @param array                   $integration Context, form/status IDs and save tasks.
+     * @param   CMSApplicationInterface  $application  The native administrator application.
+     * @param   HtmlDocument             $document     The native edit document.
+     * @param   User                     $user         The authenticated native editor.
+     * @param   Form                     $form         The prepared edit form.
+     * @param   object                   $item         The saved item, separate from form values.
+     * @param   array                    $integration  Context, form/status IDs and save tasks.
      *
-     * @return boolean  Whether optional draft controls can be mounted.
+     * @return  boolean  Whether optional draft controls can be mounted.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public function configure(
         CMSApplicationInterface $application,
@@ -168,12 +168,12 @@ final class DraftView
     /**
      * Place compact status after native actions and before utility buttons.
      *
-     * @param Toolbar $toolbar The native edit toolbar.
-     * @param string  $id      The status layout ID.
+     * @param   Toolbar  $toolbar  The native edit toolbar.
+     * @param   string   $id       The status layout ID.
      *
-     * @return void
+     * @return  void
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     public static function addStatus(Toolbar $toolbar, string $id): void
     {

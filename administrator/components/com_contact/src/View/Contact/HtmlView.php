@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_contact
+ * @package     Joomla.Administrator
+ * @subpackage  com_contact
  *
- * @copyright (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Contact\Administrator\View\Contact;
@@ -24,7 +24,7 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
 /**
  * View to edit a contact.
  *
- * @since 1.6
+ * @since  1.6
  */
 class HtmlView extends FormView
 {
@@ -47,9 +47,9 @@ class HtmlView extends FormView
     /**
      * Constructor
      *
-     * @param array $config An optional associative array of configuration settings.
+     * @param   array  $config  An optional associative array of configuration settings.
      *
-     * @since 6.0.0
+     * @since   6.0.0
      */
     public function __construct(array $config)
     {
@@ -66,9 +66,9 @@ class HtmlView extends FormView
     /**
      * Prepare view data
      *
-     * @return void
+     * @return  void
      *
-     * @since 6.0.0
+     * @since   6.0.0
      */
     protected function initializeView()
     {
@@ -113,9 +113,9 @@ class HtmlView extends FormView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     protected function addToolbar()
     {
@@ -135,11 +135,11 @@ class HtmlView extends FormView
     /**
      * Add the modal toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 5.1.0
+     * @since   5.1.0
      *
-     * @throws \Exception
+     * @throws  \Exception
      */
     protected function addModalToolbar()
     {

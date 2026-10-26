@@ -3,8 +3,8 @@
 /**
  * Joomla! Content Management System
  *
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\CMS\Autosave;
@@ -18,14 +18,14 @@ use Joomla\String\StringHelper;
 /**
  * Exact Autosave context validation and component derivation.
  *
- * @since __DEPLOY_VERSION__
+ * @since  __DEPLOY_VERSION__
  */
 final class AutosaveContext
 {
     /**
      * Maximum length for a bounded public exact-context identifier.
      *
-     * @since __DEPLOY_VERSION__
+     * @since  __DEPLOY_VERSION__
      */
     private const MAX_LENGTH = 255;
 
@@ -34,11 +34,11 @@ final class AutosaveContext
      *
      * Contexts use lowercase com_component.entity names; component names may include hyphens.
      *
-     * @param string $context The proposed exact context.
+     * @param   string  $context  The proposed exact context.
      *
-     * @return ?string  The owning component, or null when the context is invalid.
+     * @return  ?string  The owning component, or null when the context is invalid.
      *
-     * @since __DEPLOY_VERSION__
+     * @since   __DEPLOY_VERSION__
      */
     public static function getComponentName(string $context): ?string
     {

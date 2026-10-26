@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package   Joomla.IntegrationTest
+ * @package Joomla.IntegrationTest
  * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @license GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Component\Autosave\Administrator;
@@ -23,9 +23,7 @@ class NativeContextSaveTest extends IntegrationTestCase implements \Joomla\Tests
 {
     use \Joomla\Tests\Integration\Component\Autosave\Administrator\NativeControllerFixture;
 
-    /**
-     * @dataProvider outcomes
-     */
+    /** @dataProvider outcomes */
     public function testRealNativeControllerKeepsCanonicalOutcomeAndRetiresOnlyItsSubmission(string $component, string $entity, string $task, string $outcome): void
     {
         $context    = $component . '.' . strtolower($entity);

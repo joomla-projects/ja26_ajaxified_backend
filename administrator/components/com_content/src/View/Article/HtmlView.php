@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_content
+ * @package     Joomla.Administrator
+ * @subpackage  com_content
  *
- * @copyright (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Content\Administrator\View\Article;
@@ -25,7 +25,7 @@ use Joomla\Component\Content\Site\Helper\RouteHelper;
 /**
  * View to edit an article.
  *
- * @since 1.6
+ * @since  1.6
  */
 class HtmlView extends FormView
 {
@@ -34,7 +34,7 @@ class HtmlView extends FormView
     /**
      * Pagebreak TOC alias
      *
-     * @var string
+     * @var  string
      */
     protected $eName;
 
@@ -55,9 +55,9 @@ class HtmlView extends FormView
     /**
      * Constructor
      *
-     * @param array $config An optional associative array of configuration settings.
+     * @param   array  $config  An optional associative array of configuration settings.
      *
-     * @since 6.0.0
+     * @since   6.0.0
      */
     public function __construct(array $config)
     {
@@ -74,9 +74,9 @@ class HtmlView extends FormView
     /**
      * Prepare view data
      *
-     * @return void
+     * @return  void
      *
-     * @since 6.0.0
+     * @since   6.0.0
      */
     protected function initializeView()
     {
@@ -132,11 +132,11 @@ class HtmlView extends FormView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      *
-     * @throws \Exception
+     * @throws  \Exception
      */
     protected function addToolbar()
     {
@@ -164,11 +164,11 @@ class HtmlView extends FormView
     /**
      * Add the modal toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 5.0.0
+     * @since   5.0.0
      *
-     * @throws \Exception
+     * @throws  \Exception
      */
     protected function addModalToolbar()
     {

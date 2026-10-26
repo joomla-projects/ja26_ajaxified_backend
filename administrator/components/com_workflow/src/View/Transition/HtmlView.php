@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_workflow
+ * @package     Joomla.Administrator
+ * @subpackage  com_workflow
  *
- * @copyright (C) 2018 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2018 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Workflow\Administrator\View\Transition;
@@ -26,7 +26,7 @@ use Joomla\Component\Workflow\Administrator\Model\TransitionModel;
 /**
  * View class to add or edit a transition of a workflow
  *
- * @since 4.0.0
+ * @since  4.0.0
  */
 class HtmlView extends BaseHtmlView
 {
@@ -35,94 +35,92 @@ class HtmlView extends BaseHtmlView
     /**
      * The model state
      *
-     * @var   object
-     * @since 4.0.0
+     * @var     object
+     * @since   4.0.0
      */
     protected $state;
 
     /**
      * Form object to generate fields
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var    \Joomla\CMS\Form\Form
      *
-     * @since 4.0.0
+     * @since  4.0.0
      */
     protected $form;
 
     /**
      * Items array
      *
-     * @var   object
-     * @since 4.0.0
+     * @var    object
+     * @since  4.0.0
      */
     protected $item;
 
     /**
      * That is object of Application
      *
-     * @var   \Joomla\CMS\Application\CMSApplication
-     * @since 4.0.0
+     * @var    \Joomla\CMS\Application\CMSApplication
+     * @since  4.0.0
      */
     protected $app;
 
     /**
      * The application input object.
      *
-     * @var   \Joomla\Input\Input
-     * @since 4.0.0
+     * @var    \Joomla\Input\Input
+     * @since  4.0.0
      */
     protected $input;
 
     /**
      * The ID of current workflow
      *
-     * @var   integer
-     * @since 4.0.0
+     * @var    integer
+     * @since  4.0.0
      */
     protected $workflowID;
 
     /**
      * The name of current extension
      *
-     * @var   string
-     * @since 4.0.0
+     * @var    string
+     * @since  4.0.0
      */
     protected $extension;
 
     /**
      * The section of the current extension
      *
-     * @var   string
-     * @since 4.0.0
+     * @var    string
+     * @since  4.0.0
      */
     protected $section;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var string[]
+     * @var    string[]
      *
-     * @since 5.2.0
+     * @since  5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Display item view
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      *
-     * @since 4.0.0
+     * @since  4.0.0
      */
     public function display($tpl = null)
     {
         $this->app   = Factory::getApplication();
         $this->input = $this->app->getInput();
 
-        /**
- * @var TransitionModel $model
-*/
+        /** @var TransitionModel $model */
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -177,9 +175,9 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 4.0.0
+     * @since  4.0.0
      */
     protected function addToolbar()
     {

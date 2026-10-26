@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_menus
+ * @package     Joomla.Administrator
+ * @subpackage  com_menus
  *
- * @copyright (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Menus\Administrator\View\Item;
@@ -28,7 +28,7 @@ use Joomla\Component\Menus\Administrator\Model\ItemModel;
 /**
  * The HTML Menus Menu Item View.
  *
- * @since 1.6
+ * @since  1.6
  */
 class HtmlView extends BaseHtmlView
 {
@@ -37,68 +37,66 @@ class HtmlView extends BaseHtmlView
     /**
      * The Form object
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var  \Joomla\CMS\Form\Form
      */
     protected $form;
 
     /**
      * The active item
      *
-     * @var \stdClass
+     * @var   \stdClass
      */
     protected $item;
 
     /**
-     * @var mixed
+     * @var  mixed
      */
     protected $modules;
 
     /**
      * The model state
      *
-     * @var \Joomla\Registry\Registry
+     * @var   \Joomla\Registry\Registry
      */
     protected $state;
 
     /**
      * The actions the user is authorised to perform
      *
-     * @var   \Joomla\Registry\Registry
-     * @since 3.7.0
+     * @var    \Joomla\Registry\Registry
+     * @since  3.7.0
      */
     protected $canDo;
 
     /**
      * A list of view levels containing the id and title of the view level
      *
-     * @var   \stdClass[]
-     * @since 4.0.0
+     * @var    \stdClass[]
+     * @since  4.0.0
      */
     protected $levels;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var string[]
+     * @var    string[]
      *
-     * @since 5.2.0
+     * @since  5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Display the view
      *
-     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
+     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     public function display($tpl = null)
     {
-        /**
- * @var ItemModel $model
-*/
+        /** @var ItemModel $model */
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -165,9 +163,9 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     protected function addToolbar()
     {
@@ -238,9 +236,7 @@ class HtmlView extends BaseHtmlView
         // Get the help information for the menu item.
         $lang = $this->getLanguage();
 
-        /**
- * @var ItemModel $model
-*/
+        /** @var ItemModel $model */
         $model = $this->getModel();
         $help  = $model->getHelp();
 
@@ -259,11 +255,11 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the modal toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 5.0.0
+     * @since   5.0.0
      *
-     * @throws \Exception
+     * @throws  \Exception
      */
     protected function addModalToolbar()
     {

@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package    Joomla.Administrator
- * @subpackage com_languages
+ * @package     Joomla.Administrator
+ * @subpackage  com_languages
  *
- * @copyright (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
- * @license   GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright   (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license     GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Languages\Administrator\View\Language;
@@ -26,7 +26,7 @@ use Joomla\Component\Languages\Administrator\Model\LanguageModel;
 /**
  * HTML View class for the Languages component.
  *
- * @since 1.5
+ * @since  1.5
  */
 class HtmlView extends BaseHtmlView
 {
@@ -35,45 +35,43 @@ class HtmlView extends BaseHtmlView
     /**
      * The active item
      *
-     * @var object
+     * @var  object
      */
     public $item;
 
     /**
      * The Form object
      *
-     * @var \Joomla\CMS\Form\Form
+     * @var  \Joomla\CMS\Form\Form
      */
     public $form;
 
     /**
      * The model state
      *
-     * @var \Joomla\Registry\Registry
+     * @var  \Joomla\Registry\Registry
      */
     public $state;
 
     /**
      * The actions the user is authorised to perform
      *
-     * @var \Joomla\Registry\Registry
+     * @var    \Joomla\Registry\Registry
      *
-     * @since 4.0.0
+     * @since  4.0.0
      */
     protected $canDo;
 
     /**
      * Display the view.
      *
-     * @param string $tpl The name of the template file to parse.
+     * @param   string  $tpl  The name of the template file to parse.
      *
-     * @return void
+     * @return  void
      */
     public function display($tpl = null)
     {
-        /**
- * @var LanguageModel $model
-*/
+        /** @var LanguageModel $model */
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -102,9 +100,9 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the page title and toolbar.
      *
-     * @return void
+     * @return  void
      *
-     * @since 1.6
+     * @since   1.6
      */
     protected function addToolbar()
     {
