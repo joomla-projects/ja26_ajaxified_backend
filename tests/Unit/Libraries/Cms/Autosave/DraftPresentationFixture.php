@@ -9,7 +9,7 @@
 namespace Joomla\Tests\Unit\Libraries\Cms\Autosave;
 
 use Joomla\CMS\Application\CMSApplication;
-use Joomla\CMS\Document\HTMLDocument;
+use Joomla\CMS\Document\HtmlDocument;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Language;
 use Joomla\CMS\Layout\LayoutHelper;
@@ -95,14 +95,14 @@ trait DraftPresentationFixture
         $registry->get('script', 'com_autosave.draft-form');
     }
 
-    private function document(): HTMLDocument
+    private function document(): HtmlDocument
     {
         $registry = new WebAssetRegistry();
         $registry->addRegistryFile('media/com_autosave/joomla.asset.json');
 
         self::registerSourceAssetManifests($registry, ['system', 'com_autosave']);
 
-        return new HTMLDocument(['webAssetManager' => new WebAssetManager($registry)]);
+        return new HtmlDocument(['webAssetManager' => new WebAssetManager($registry)]);
     }
 
     private function draftView(): \Joomla\CMS\Autosave\DraftView

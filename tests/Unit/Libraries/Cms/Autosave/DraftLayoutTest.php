@@ -9,7 +9,7 @@
 namespace Joomla\Tests\Unit\Libraries\Cms\Autosave;
 
 use Joomla\CMS\Application\CMSApplication;
-use Joomla\CMS\Document\HTMLDocument;
+use Joomla\CMS\Document\HtmlDocument;
 use Joomla\CMS\Factory;
 use Joomla\CMS\WebAsset\WebAssetManager;
 use Joomla\CMS\WebAsset\WebAssetRegistry;
@@ -214,7 +214,7 @@ class DraftLayoutTest extends UnitTestCase
         $assets->registerStyle('webcomponent.joomla-tab', '');
         $assets->registerScript('webcomponent.joomla-tab', '');
         $assets->registerScript('awesomplete', '');
-        $document          = new HTMLDocument(['webAssetManager' => $assets]);
+        $document          = new HtmlDocument(['webAssetManager' => $assets]);
         Factory::$document = $document;
         self::registerSourceAssetManifests(
             $document->getWebAssetManager()->getRegistry(),
@@ -249,13 +249,13 @@ class DraftLayoutTest extends UnitTestCase
             public int $workflowID         = 12;
             public \Joomla\Input\Input $input;
             public bool $useCoreUI         = false;
-            public function __construct(private HTMLDocument $document, public \Joomla\CMS\Form\Form $form, private \RuntimeException $stop)
+            public function __construct(private HtmlDocument $document, public \Joomla\CMS\Form\Form $form, private \RuntimeException $stop)
             {
                 $this->input = new \Joomla\Input\Input();
                 $this->item  = (object) ['lang_id' => 42, 'id' => 42, 'key' => 'COM_EXAMPLE', 'filter_id' => 42, 'client_id' => 0, 'workflow_id' => 12, 'tour_id' => 12, 'context' => 'com_content.article', 'extension' => 'com_content.article', 'type' => 'text', 'xml' => new \SimpleXMLElement('<extension/>')];
                 $this->state = new \Joomla\Registry\Registry(['category.extension' => 'com_content']);
             }
-            public function getDocument(): HTMLDocument
+            public function getDocument(): HtmlDocument
             {
                 return $this->document;
             }
