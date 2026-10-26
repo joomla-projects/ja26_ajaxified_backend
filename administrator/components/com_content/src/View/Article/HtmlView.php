@@ -1,16 +1,16 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_content
+ * @package    Joomla.Administrator
+ * @subpackage com_content
  *
- * @copyright   (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Content\Administrator\View\Article;
 
-use Joomla\CMS\Autosave\DraftView;
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -25,30 +25,16 @@ use Joomla\Component\Content\Site\Helper\RouteHelper;
 /**
  * View to edit an article.
  *
- * @since  1.6
+ * @since 1.6
  */
 class HtmlView extends FormView
 {
-    /**
-     * Whether draft controls are shown for this form.
-     *
-     * @var    boolean
-     * @since  __DEPLOY_VERSION__
-     */
-    public bool $autosaveEnabled = false;
-
-    /**
-     * Layout ID for the draft status.
-     *
-     * @var    string
-     * @since  __DEPLOY_VERSION__
-     */
-    public string $autosaveStatusId = 'article-autosave-status';
+    use DraftViewTrait;
 
     /**
      * Pagebreak TOC alias
      *
-     * @var  string
+     * @var string
      */
     protected $eName;
 
@@ -69,9 +55,9 @@ class HtmlView extends FormView
     /**
      * Constructor
      *
-     * @param   array  $config  An optional associative array of configuration settings.
+     * @param array $config An optional associative array of configuration settings.
      *
-     * @since   6.0.0
+     * @since 6.0.0
      */
     public function __construct(array $config)
     {
@@ -88,9 +74,9 @@ class HtmlView extends FormView
     /**
      * Prepare view data
      *
-     * @return  void
+     * @return void
      *
-     * @since   6.0.0
+     * @since 6.0.0
      */
     protected function initializeView()
     {
@@ -133,49 +119,24 @@ class HtmlView extends FormView
             ->addControlField('return', $input->getBase64('return', ''))
             ->addControlField('forcedLanguage', $forcedLanguage);
 
-        $this->prepareAutosave();
-    }
-
-    /**
-     * Prepare draft controls for the article form.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    private function prepareAutosave(): void
-    {
-        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
-            return;
-        }
-        try {
-            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(
-                Factory::getApplication(),
-                $this->getDocument(),
-                $this->getCurrentUser(),
-                $this->form,
-                $this->item,
-                [
-                    'context'   => 'com_content.article',
-                    'formId'    => 'item-form',
-                    'statusId'  => $this->autosaveStatusId,
-                    'saveTasks' => ['article.apply', 'article.save', 'article.save2new', 'article.save2copy', 'article.save2menu', 'article.editAssociations'],
-                ]
-            );
-        } catch (\Throwable) {
-            // Draft setup is optional; keep the form and its save actions available.
-            $this->autosaveEnabled = false;
-        }
+        $this->prepareAutosave(
+            [
+            'context'   => 'com_content.article',
+            'formId'    => 'item-form',
+            'statusId'  => 'article-autosave-status',
+            'saveTasks' => ['article.apply', 'article.save', 'article.save2new', 'article.save2copy', 'article.save2menu', 'article.editAssociations'],
+            ]
+        );
     }
 
     /**
      * Add the page title and toolbar.
      *
-     * @return  void
+     * @return void
      *
-     * @since   1.6
+     * @since 1.6
      *
-     * @throws  \Exception
+     * @throws \Exception
      */
     protected function addToolbar()
     {
@@ -201,25 +162,13 @@ class HtmlView extends FormView
     }
 
     /**
-     * Insert status after native actions, before the toolbar's utility divider.
-     *
-     * @since __DEPLOY_VERSION__
-     */
-    private function addAutosaveStatus(): void
-    {
-        if ($this->autosaveEnabled) {
-            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
-        }
-    }
-
-    /**
      * Add the modal toolbar.
      *
-     * @return  void
+     * @return void
      *
-     * @since   5.0.0
+     * @since 5.0.0
      *
-     * @throws  \Exception
+     * @throws \Exception
      */
     protected function addModalToolbar()
     {

@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package     Joomla.IntegrationTest
- * @subpackage  Task.autosave
+ * @package    Joomla.IntegrationTest
+ * @subpackage Task.autosave
  *
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Plugin\Task\Autosave\Extension;
@@ -14,6 +14,8 @@ use Joomla\CMS\Application\CMSApplicationInterface;
 use Joomla\CMS\Autosave\DraftStore;
 use Joomla\CMS\Date\Date;
 use Joomla\CMS\Language\Language;
+use Joomla\CMS\Log\Log;
+use Joomla\CMS\Log\LogEntry;
 use Joomla\Component\Scheduler\Administrator\Event\ExecuteTaskEvent;
 use Joomla\Component\Scheduler\Administrator\Task\Status;
 use Joomla\Component\Scheduler\Administrator\Task\Task;
@@ -30,6 +32,9 @@ class AutosavePluginTest extends IntegrationTestCase implements \Joomla\Tests\In
     use DraftDatabaseFixture;
 
     private DatabaseInterface $db;
+    private mixed $previousLog;
+    private array $entries = [];
+    private bool $loggerFails = false;
 
     protected function setUp(): void
     {
@@ -37,27 +42,53 @@ class AutosavePluginTest extends IntegrationTestCase implements \Joomla\Tests\In
         $this->db = $this->getDBDriver();
         $this->initializeStore();
         $this->now = new Date('now', 'UTC');
+        $this->previousLog = (new \ReflectionProperty(Log::class, 'instance'))->getValue();
+        $logger = $this->getMockBuilder(Log::class)->disableOriginalConstructor()->onlyMethods(['addLogEntry'])->getMock();
+        $logger->method('addLogEntry')->willReturnCallback(
+            function (LogEntry $entry): void {
+                $this->entries[] = $entry;
+                if ($this->loggerFails) {
+                    throw new \RuntimeException('Private logger detail');
+                }
+            }
+        );
+        Log::setInstance($logger);
+    }
+
+    protected function tearDown(): void
+    {
+        Log::setInstance($this->previousLog);
+        parent::tearDown();
     }
 
     private function open(int $owner = 7): array
     {
-        return $this->store->open($owner, [
+        return $this->store->open(
+            $owner,
+            [
             'context'  => 'com_content.article', 'target' => null, 'scope' => [], 'version' => 1,
             'revision' => null, 'fields' => ['title' => ['control' => 'text']],
-        ], $this->now);
+            ],
+            $this->now
+        );
     }
 
     private function expire(int $count): void
     {
         for ($index = 0; $index < $count; $index++) {
             $owner = 7 + intdiv($index, DraftStore::MAX_OWNER_ROWS);
-            if (!$this->db->setQuery('SELECT id FROM #__users WHERE id = ' . $owner)->loadResult()) {
+            if ($index % DraftStore::MAX_OWNER_ROWS === 0 && !$this->db->setQuery('SELECT id FROM #__users WHERE id = ' . $owner)->loadResult()) {
                 $user = (object) ['id' => $owner, 'username' => 'cleanup-test-' . $owner, 'registerDate' => '2026-10-11 00:00:00', 'params' => '{}'];
                 $this->db->insertObject('#__users', $user);
             }
-            $this->open($owner);
+            $row = (object) [
+                'draft_id' => bin2hex(random_bytes(16)), 'owner_id' => $owner, 'owner_slot' => $index % DraftStore::MAX_OWNER_ROWS,
+                'context' => 'com_content.article', 'target_id' => null, 'scope' => '[]', 'schema_version' => 1,
+                'baseline_revision' => null, 'fields' => '{"title":{"control":"text"}}',
+                'created_at' => $this->now->toSql(), 'updated_at' => $this->now->toSql(), 'expires_at' => '2000-01-01 00:00:00',
+            ];
+            $this->db->insertObject('#__autosave_drafts', $row);
         }
-        $this->db->setQuery("UPDATE #__autosave_drafts SET expires_at = '2000-01-01 00:00:00'")->execute();
     }
 
     private function runTask(?DraftStore $store = null): int
@@ -68,10 +99,13 @@ class AutosavePluginTest extends IntegrationTestCase implements \Joomla\Tests\In
         $plugin = new Autosave([], $store ?? $this->store);
         $plugin->setApplication($app);
         $task = $this->createStub(Task::class);
-        $task->method('get')->willReturnMap([
+        $task->logCategory = 'autosave-cleanup-test';
+        $task->method('get')->willReturnMap(
+            [
             ['id', null, 1],
             ['type', null, 'autosave.cleanup'],
-        ]);
+            ]
+        );
         $event = new ExecuteTaskEvent('test', ['subject' => $task, 'params' => (object) []]);
         $plugin->standardRoutineHandler($event);
 
@@ -117,10 +151,36 @@ class AutosavePluginTest extends IntegrationTestCase implements \Joomla\Tests\In
         $this->assertSame(Status::OK, $this->runTask());
     }
 
-    public function testReportsStorageFailureThroughNativeScheduler(): void
+    /**
+     * @dataProvider diagnosticLoggerFailures
+     */
+    public function testReportsStorageFailureThroughNativeScheduler(bool $loggerFails): void
     {
+        $this->loggerFails = $loggerFails;
         $db = $this->createMock(DatabaseInterface::class);
-        $db->method('createQuery')->willThrowException(new \RuntimeException('Test database unavailable'));
+        $db->method('createQuery')->willThrowException(new \RuntimeException('Private SQL and credentials'));
         $this->assertSame(Status::KNOCKOUT, $this->runTask(new DraftStore($db)));
+        $this->assertCount(1, $this->entries);
+        $this->assertSame(Log::ERROR, $this->entries[0]->priority);
+        $this->assertSame('autosave-cleanup-test', $this->entries[0]->category);
+        $this->assertStringContainsString('Autosave cleanup failed. RuntimeException', $this->entries[0]->message);
+        $this->assertStringNotContainsString('Private', $this->entries[0]->message);
+        $this->assertSame([], $this->entries[0]->context);
+    }
+
+    public function testLoggerFailureDoesNotTurnCompletedCleanupIntoFailure(): void
+    {
+        $this->expire(1);
+        $this->loggerFails = true;
+        $this->assertSame(Status::OK, $this->runTask());
+        $this->assertFalse($this->store->hasExpired($this->now));
+        $this->assertSame(0, (int) $this->db->setQuery('SELECT COUNT(*) FROM #__autosave_drafts')->loadResult());
+        $this->assertCount(1, $this->entries);
+        $this->assertSame(Log::INFO, $this->entries[0]->priority);
+    }
+
+    public static function diagnosticLoggerFailures(): array
+    {
+        return [[false], [true]];
     }
 }

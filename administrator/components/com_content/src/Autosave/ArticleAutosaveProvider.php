@@ -1,16 +1,17 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_content
+ * @package    Joomla.Administrator
+ * @subpackage com_content
  *
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Content\Administrator\Autosave;
 
 use Joomla\CMS\Autosave\AutosaveException;
+use Joomla\CMS\Autosave\DraftModel;
 use Joomla\CMS\Autosave\DraftProjection;
 use Joomla\CMS\Autosave\DraftProviderInterface;
 use Joomla\CMS\Form\Form;
@@ -24,7 +25,7 @@ use Joomla\CMS\User\User;
 /**
  * Article drafts use the native prepared form, ArticleModel read and component permissions.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 final class ArticleAutosaveProvider implements DraftProviderInterface
 {
@@ -33,7 +34,7 @@ final class ArticleAutosaveProvider implements DraftProviderInterface
     /**
      * Constructor.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
@@ -77,11 +78,7 @@ final class ArticleAutosaveProvider implements DraftProviderInterface
             throw new AutosaveException('scope_conflict', 'The Article draft binding is incompatible.');
         }
 
-        $target = $binding['target_id'];
-
-        if ($target !== null && (preg_match('/^[1-9][0-9]*$/D', $target) !== 1 || (int) $target > 4294967295)) {
-            throw new AutosaveException('invalid_target', 'The Article identity is invalid.');
-        }
+        $target = DraftModel::target($binding, $this->getContext());
 
         $model = $this->factory->createModel('Article', 'Administrator', ['ignore_request' => true]);
         $item  = $model->getItem($target === null ? 0 : (int) $target);
@@ -95,21 +92,8 @@ final class ArticleAutosaveProvider implements DraftProviderInterface
 
         // Seed this native model explicitly, without validation-error or list-filter user state.
         $model->setState('article.id', $target === null ? 0 : (int) $target);
-        $data = (array) $item;
-
-        if ($target === null) {
-            $data['catid'] = $category;
-        }
-
-        // Draft requests run through com_ajax; retain the native Article form and preparation.
-        Form::addFormPath(JPATH_ADMINISTRATOR . '/components/com_content/forms');
-        $form = $model->getForm($data, false);
-
-        if (!$form) {
-            throw new AutosaveException('unsupported_context', 'The native Article form is unavailable.');
-        }
-
-        $form->bind($data);
+        $data = $target === null ? ['catid' => $category] : [];
+        $form = DraftModel::form($model, 'com_content', $item, $data);
 
         return $this->describe($form, $item, $user);
     }
@@ -145,9 +129,7 @@ final class ArticleAutosaveProvider implements DraftProviderInterface
             throw new AutosaveException('forbidden', 'The Article cannot be edited by this user.');
         }
 
-        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checkout_conflict', 'The Article is checked out by another user.');
-        }
+        DraftModel::assertCheckout($item, $user, 'The Article is checked out by another user.');
     }
 
     private function values(object $item): array
@@ -164,9 +146,12 @@ final class ArticleAutosaveProvider implements DraftProviderInterface
 
     private function revision(object $item): string
     {
-        return hash('sha256', json_encode(
-            [$this->getContext(), (string) $item->id, [], (int) $item->version, $this->values($item)],
-            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-        ));
+        return hash(
+            'sha256',
+            json_encode(
+                [$this->getContext(), (string) $item->id, [], (int) $item->version, $this->values($item)],
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            )
+        );
     }
 }

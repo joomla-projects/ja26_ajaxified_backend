@@ -75,6 +75,33 @@ $confirm = static fn (string $key): string => htmlspecialchars(Text::_($key), EN
     <?php endforeach; ?>
     <p class="mb-0" data-draft-partial-recovery hidden><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_DRAFT_PARTIAL_RECOVERY'); ?></p>
 </div>
+<section class="alert alert-info mb-3" data-draft-quota role="region" aria-busy="false"
+    aria-label="<?php echo $confirm('PLG_SYSTEM_AUTOSAVE_QUOTA_HEADING'); ?>"
+    data-new-item="<?php echo $confirm('PLG_SYSTEM_AUTOSAVE_QUOTA_NEW_ITEM'); ?>" hidden>
+    <h3 class="alert-heading h5"><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_HEADING'); ?></h3>
+    <p><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_EXPLANATION'); ?></p>
+    <label class="form-label">
+        <?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_SELECT'); ?>
+        <select class="form-select" data-draft-quota-entries disabled></select>
+    </label>
+    <div class="small mb-3" data-draft-quota-details hidden>
+        <p class="mb-0"><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_CREATED'); ?> <time data-draft-quota-created></time></p>
+        <p class="mb-0"><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_UPDATED'); ?> <time data-draft-quota-updated></time></p>
+        <p class="mb-0"><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_EXPIRES'); ?> <time data-draft-quota-expires></time></p>
+        <p class="mb-0" data-draft-quota-values hidden><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_VALUES'); ?></p>
+        <p class="mb-0" data-draft-quota-no-values hidden><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_NO_VALUES'); ?></p>
+        <p class="mb-0" data-draft-quota-saved hidden><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_SAVED'); ?></p>
+    </div>
+    <button type="button" class="btn btn-danger" data-draft-quota-discard disabled
+        data-confirm-title="<?php echo $confirm('PLG_SYSTEM_AUTOSAVE_QUOTA_CONFIRM_TITLE'); ?>"
+        data-confirm-message="<?php echo $confirm('PLG_SYSTEM_AUTOSAVE_QUOTA_CONFIRM_MESSAGE'); ?>">
+        <span class="icon-trash" aria-hidden="true"></span>
+        <?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_DISCARD'); ?>
+    </button>
+    <p class="mt-2 mb-0" data-draft-quota-unavailable hidden><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_UNAVAILABLE'); ?></p>
+    <p class="mt-2 mb-0" data-draft-quota-success role="status" hidden><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_SUCCESS'); ?></p>
+    <p class="mt-2 mb-0" data-draft-quota-stale role="status" hidden><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_QUOTA_STALE'); ?></p>
+</section>
 <?php endif; ?>
 <?php if (\in_array($part, ['recovery', 'all'], true)) : ?>
 <section class="alert alert-info mb-3" data-draft-recovery role="region" tabindex="-1" aria-label="<?php echo $confirm('PLG_SYSTEM_AUTOSAVE_RECOVERY_HEADING'); ?>" hidden>
@@ -90,9 +117,6 @@ $confirm = static fn (string $key): string => htmlspecialchars(Text::_($key), EN
                 <?php echo Text::_('PLG_SYSTEM_AUTOSAVE_RECOVERY_SAVED_AT'); ?>
                 <select class="form-select" data-draft-candidates></select>
             </label>
-            <button type="button" class="btn btn-secondary" data-draft-action="more" hidden>
-                <?php echo Text::_('PLG_SYSTEM_AUTOSAVE_DRAFT_MORE'); ?>
-            </button>
         </div>
     </div>
     <p class="fw-bold" data-draft-conflict hidden><?php echo Text::_('PLG_SYSTEM_AUTOSAVE_RECOVERY_STALE'); ?></p>

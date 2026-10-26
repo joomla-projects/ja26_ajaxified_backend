@@ -1,16 +1,16 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_finder
+ * @package    Joomla.Administrator
+ * @subpackage com_finder
  *
- * @copyright   (C) 2011 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2011 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Finder\Administrator\View\Filter;
 
-use Joomla\CMS\Autosave\DraftView;
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -27,92 +27,80 @@ use Joomla\Component\Finder\Administrator\Model\FilterModel;
 /**
  * Filter view class for Finder.
  *
- * @since  2.5
+ * @since 2.5
  */
 class HtmlView extends BaseHtmlView
 {
-    /**
-     * Whether draft controls are shown for this form.
-     *
-     * @var    boolean
-     * @since  __DEPLOY_VERSION__
-     */
-    public bool $autosaveEnabled = false;
-
-    /**
-     * Layout ID for the draft status.
-     *
-     * @var    string
-     * @since  __DEPLOY_VERSION__
-     */
-    public string $autosaveStatusId = 'filter-autosave-status';
+    use DraftViewTrait;
 
     /**
      * The filter object
      *
-     * @var    \Joomla\Component\Finder\Administrator\Table\FilterTable
+     * @var \Joomla\Component\Finder\Administrator\Table\FilterTable
      *
-     * @since  3.6.2
+     * @since 3.6.2
      */
     protected $filter;
 
     /**
      * The Form object
      *
-     * @var    \Joomla\CMS\Form\Form
+     * @var \Joomla\CMS\Form\Form
      *
-     * @since  3.6.2
+     * @since 3.6.2
      */
     protected $form;
 
     /**
      * The active item
      *
-     * @var    \stdClass
+     * @var \stdClass
      *
-     * @since  3.6.2
+     * @since 3.6.2
      */
     protected $item;
 
     /**
      * The model state
      *
-     * @var    \Joomla\Registry\Registry
+     * @var \Joomla\Registry\Registry
      *
-     * @since  3.6.2
+     * @since 3.6.2
      */
     protected $state;
 
     /**
      * The total indexed items
      *
-     * @var    integer
+     * @var integer
      *
-     * @since  3.8.0
+     * @since 3.8.0
      */
     protected $total;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var    string[]
+     * @var string[]
      *
-     * @since  5.2.0
+     * @since 5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Method to display the view.
      *
-     * @param   string  $tpl  A template file to load. [optional]
+     * @param string $tpl A template file to load. [optional]
      *
-     * @return  void
+     * @return void
      *
-     * @since   2.5
+     * @since 2.5
      */
     public function display($tpl = null)
     {
-        /** @var FilterModel $model */
+        /**
+ * @var FilterModel $model
+*/
         $model = $this->getModel();
 
         // Load the view data.
@@ -134,45 +122,27 @@ class HtmlView extends BaseHtmlView
 
         // Configure the toolbar.
         $this->addToolbar();
-        $this->prepareAutosave();
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_finder.filter',
+                'formId'    => 'adminForm',
+                'statusId'  => 'filter-autosave-status',
+                'saveTasks' => ['filter.apply', 'filter.save', 'filter.save2new', 'filter.save2copy'],
+                ]
+            );
+            $this->addAutosaveStatus();
+        }
 
         parent::display($tpl);
     }
 
     /**
-     * Configure optional drafts only for supported native edit layouts.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    private function prepareAutosave(): void
-    {
-        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
-            return;
-        }
-        $item                  = clone $this->item;
-
-        try {
-            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
-                'context'   => 'com_finder.filter', 'formId' => 'adminForm', 'statusId' => $this->autosaveStatusId,
-                'saveTasks' => ['filter.apply', 'filter.save', 'filter.save2new', 'filter.save2copy'],
-            ]);
-        } catch (\Throwable) {
-            // Draft setup is optional; keep the form and its save actions available.
-            $this->autosaveEnabled = false;
-        }
-        if ($this->autosaveEnabled) {
-            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
-        }
-    }
-
-    /**
      * Method to configure the toolbar for this view.
      *
-     * @return  void
+     * @return void
      *
-     * @since   2.5
+     * @since 2.5
      */
     protected function addToolbar()
     {

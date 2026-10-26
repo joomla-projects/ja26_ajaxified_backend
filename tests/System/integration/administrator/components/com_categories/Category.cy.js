@@ -45,7 +45,7 @@ describe('Native Category draft protection', () => {
 
   beforeEach(() => {
     ids = [];
-    title = `Phase 3 draft category ${Date.now()}`;
+    title = `Autosave category ${Date.now()}`;
     cy.doAdministratorLogin();
     cy.intercept('POST', '**/administrator/index.php*', (request) => {
       const task = new URL(request.url).searchParams.get('task');
@@ -88,7 +88,7 @@ describe('Native Category draft protection', () => {
       .then((rows) => rows.forEach((row) => expect(row.payload).to.equal(null)));
   });
 
-  it('keeps canonical Category values and hierarchy unchanged until explicit recovery and native Save', () => {
+  it('keeps saved item Category values and hierarchy unchanged until explicit recovery and native Save', () => {
     cy.db_createCategory({ title }).then((id) => {
       let canonical;
       cy.task('queryDB', `SELECT title, parent_id, lft, rgt, path FROM #__categories WHERE id = ${id}`)

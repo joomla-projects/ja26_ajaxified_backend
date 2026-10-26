@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package     Joomla.IntegrationTest
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @package   Joomla.IntegrationTest
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Libraries\Cms\Autosave;
@@ -11,6 +11,7 @@ namespace Joomla\Tests\Integration\Libraries\Cms\Autosave;
 use Joomla\CMS\Application\CMSApplicationInterface;
 use Joomla\CMS\Autosave\AutosaveContextResolver;
 use Joomla\CMS\Autosave\AutosaveException;
+use Joomla\CMS\Autosave\DraftProviderInterface;
 use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Dispatcher\ComponentDispatcherFactoryInterface;
 use Joomla\CMS\Form\Form;
@@ -23,7 +24,7 @@ use Joomla\Database\DatabaseInterface;
 use Joomla\Tests\Integration\IntegrationTestCase;
 
 /**
- * Native prepared Article projection and actual draft SQL through the public service.
+ * Prepared Article fields and draft storage through the public service.
  */
 class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Integration\DBTestInterface
 {
@@ -92,12 +93,132 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
 
     private function write(array $draft, int $revision, string $title): array
     {
-        return $this->service->execute('preserve', [
+        return $this->service->execute(
+            'preserve',
+            [
             'draft_id' => $draft['draft_id'], 'client_revision' => $revision, 'schema_version' => 1, 'payload' => ['title' => $title],
-        ], $this->user, $this->now);
+            ],
+            $this->user,
+            $this->now
+        );
     }
 
-    /** @dataProvider incompatibleRecoveryControls */
+    public function testQuotaMetadataIsOwnerOnlyWithoutBootingDisabledOrRevokedComponents(): void
+    {
+        $draft      = $this->open();
+        $descriptor = $this->provider->describe($this->form(), $this->item, $this->user);
+        $this->store->open(8, $descriptor, $this->now);
+        $user        = $this->createMock(User::class);
+        $user->id    = 7;
+        $user->guest = false;
+        $user->method('authorise')->willReturnCallback(static fn (string $action): bool => $action === 'core.login.admin');
+        $app = $this->createMock(CMSApplicationInterface::class);
+        $app->expects($this->never())->method('bootComponent');
+        $service = new DraftService(new AutosaveContextResolver($app, static fn (): bool => false), $this->store);
+        $headers = $service->allocations($user);
+        $this->assertSame([$draft['draft_id']], array_column($headers, 'draft_id'));
+        $this->assertSame(
+            [
+            'draft_id', 'context', 'target_id', 'created_at', 'updated_at', 'expires_at', 'has_preserved_values', 'has_save_marker',
+            ],
+            array_keys($headers[0])
+        );
+        $this->assertSame('2026-10-11T00:00:00Z', $headers[0]['created_at']);
+        $this->assertSame('2026-10-11T00:00:00Z', $headers[0]['updated_at']);
+        $this->assertSame('2026-10-12T00:00:00Z', $headers[0]['expires_at']);
+        $this->assertFalse($headers[0]['has_preserved_values']);
+        $this->assertFalse($headers[0]['has_save_marker']);
+        // This deletion metadata gives no additional content access.
+        $this->allowed = false;
+        try {
+            $this->write($draft, 1, 'not authorised');
+            $this->fail('Revoked editing must remain forbidden.');
+        } catch (AutosaveException $exception) {
+            $this->assertSame('forbidden', $exception->getErrorCode());
+        }
+        $this->assertSame(['discarded' => true], $service->execute('discard', ['draft_id' => $draft['draft_id']], $user, $this->now));
+    }
+
+    /**
+     * @dataProvider unauthorisedMetadataUsers
+     */
+    public function testQuotaMetadataRequiresAnAuthenticatedAdministrator(int $id, bool $guest, bool $allowed): void
+    {
+        $user        = $this->createMock(User::class);
+        $user->id    = $id;
+        $user->guest = $guest;
+        $user->method('authorise')->willReturn($allowed);
+        $this->expectException(AutosaveException::class);
+        $this->expectExceptionMessage('Private draft allocation metadata requires an authenticated administrator.');
+        $this->service->allocations($user);
+    }
+
+    public static function unauthorisedMetadataUsers(): array
+    {
+        return [[7, true, true], [0, false, true], [7, false, false]];
+    }
+
+    /**
+     * @dataProvider providerIdentities
+     */
+    public function testProviderReadsReceiveOnlyIdentityAndSeparatePayload(?string $target, array $scope): void
+    {
+        $descriptor             = $this->provider->describe($this->form(), $this->item, $this->user);
+        $descriptor['target']   = $target;
+        $descriptor['scope']    = $scope;
+        $descriptor['revision'] = $target === null ? null : $descriptor['revision'];
+        $identity               = ['context' => $descriptor['context'], 'target_id' => $target, 'scope' => $scope];
+        $payloads               = [['title' => 'recoverable'], null, null, ['title' => 'recoverable']];
+        $reads                  = 0;
+        $provider               = $this->createMock(DraftProviderInterface::class);
+        $provider->method('getContext')->willReturn($descriptor['context']);
+        $provider->expects($this->exactly(4))->method('read')->willReturnCallback(
+            function (array $binding, User $user, ?array $payload) use ($identity, $descriptor, $payloads, &$reads): array {
+                $this->assertSame($identity, $binding);
+                $this->assertSame($this->user, $user);
+                $this->assertSame($payloads[$reads++], $payload);
+
+                return $descriptor;
+            }
+        );
+        $component = new ContentComponent($this->createMock(ComponentDispatcherFactoryInterface::class));
+        $component->setAutosaveProvider($descriptor['context'], $provider);
+        $app = $this->createMock(CMSApplicationInterface::class);
+        $app->method('bootComponent')->willReturn($component);
+        $this->service = new DraftService(new AutosaveContextResolver($app, static fn (): bool => true), $this->store);
+
+        $source = $this->service->open($this->user, $descriptor, $this->now);
+        $this->assertSame(1, $this->write($source, 1, 'recoverable')['client_revision']);
+        $fresh   = $this->service->open($this->user, $descriptor, $this->now);
+        $request = ['draft_id' => $fresh['draft_id']];
+        if ($target === null) {
+            $request['creation_id'] = $source['draft_id'];
+        }
+        $found = $this->service->execute('detect', $request, $this->user, $this->now);
+        $this->assertSame([$source['draft_id']], array_column($found['candidates'], 'draft_id'));
+        $read = $this->service->execute('read', ['draft_id' => $fresh['draft_id'], 'source_id' => $source['draft_id']], $this->user, $this->now);
+        $this->assertSame(['title' => 'recoverable'], $read['payload']);
+        $this->assertSame(['title' => 'saved'], $read['canonical']);
+        $stored = $this->store->read(7, $source['draft_id'], $this->now);
+        $this->assertSame(7, $stored['owner_id']);
+        $this->assertSame($descriptor['fields'], $stored['fields']);
+        $this->assertSame($descriptor['revision'], $stored['baseline_revision']);
+        $this->assertSame(['discarded' => true], $this->service->execute('discard', ['draft_id' => $source['draft_id']], $this->user, $this->now));
+    }
+
+    public static function providerIdentities(): array
+    {
+        return [
+            'saved item'    => ['42', []],
+            'new item'      => [null, []],
+            'scoped item'   => ['42', ['extension' => 'com_content']],
+            'text identity' => ['COM_EXAMPLE', ['client' => 'site', 'language' => 'en-GB']],
+        ];
+    }
+
+    /**
+     * @dataProvider incompatibleRecoveryControls
+     */
     public function testRecoveryOmitsCurrentIncompatibleControlsWithoutRetiringItsSource(array $mutation, bool $sourceOnly): void
     {
         $source = $this->open();
@@ -137,8 +258,18 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
         $this->assertSame(['title' => 'saved'], $read['canonical']);
         $this->assertSame(['title' => 'unfinished draft'], $read['payload']);
         $this->assertSame('native error values', $form->getValue('title'));
-        $this->service->reconcile($this->user, ['draft_id' => $fresh['draft_id'], 'revision' => '1',
-            'source_id'                                    => $source['draft_id'], 'source_revision' => '1'], 'com_content.article', '42', [], 'save', '42', null, $this->now);
+        $this->service->reconcile(
+            $this->user,
+            ['draft_id' => $fresh['draft_id'], 'revision' => '1',
+            'source_id'                                    => $source['draft_id'], 'source_revision' => '1'],
+            'com_content.article',
+            '42',
+            [],
+            'save',
+            '42',
+            null,
+            $this->now
+        );
         $next = $this->open();
         $this->assertSame([], $this->service->execute('detect', ['draft_id' => $next['draft_id']], $this->user, $this->now)['candidates']);
         $this->assertSame('saved', $this->item->title);
@@ -155,7 +286,7 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
         $fresh = $this->open();
         $first = $this->service->execute('detect', ['draft_id' => $fresh['draft_id']], $this->user, $this->now);
         $this->assertCount(63, $first['candidates']);
-        $this->assertNull($first['next']);
+        $this->assertSame(['candidates', 'conflict'], array_keys($first));
         $this->assertEqualsCanonicalizing($ids, array_column($first['candidates'], 'draft_id'));
     }
 
@@ -167,7 +298,7 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
         $fresh = $this->open();
         $found = $this->service->execute('detect', ['draft_id' => $fresh['draft_id']], $this->user, $this->now);
         $this->assertSame([], $found['candidates']);
-        $this->assertNull($found['next']);
+        $this->assertSame(['candidates', 'conflict'], array_keys($found));
         $this->assertSame(['title' => 'another creation'], $this->store->read(7, $source['draft_id'], $this->now)['payload']);
     }
 
@@ -179,8 +310,13 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
         $other = $this->open();
         $this->write($other, 1, 'another tab');
         $fresh = $this->open();
-        $found = $this->service->execute('detect', ['draft_id' => $fresh['draft_id'],
-            'creation_id'                                      => $source['draft_id'], 'acknowledged_id' => $source['draft_id']], $this->user, $this->now);
+        $found = $this->service->execute(
+            'detect',
+            ['draft_id' => $fresh['draft_id'],
+            'creation_id'                                      => $source['draft_id'], 'acknowledged_id' => $source['draft_id']],
+            $this->user,
+            $this->now
+        );
         $this->assertSame([$source['draft_id']], array_column($found['candidates'], 'draft_id'));
         $this->assertTrue($found['candidates'][0]['uncertain_creation']);
         $this->assertNull($this->store->read(7, $fresh['draft_id'], $this->now)['payload']);
@@ -193,8 +329,13 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
         $this->write($acknowledged, 1, 'last acknowledged');
         $pending = $this->open();
         $fresh   = $this->open();
-        $found   = $this->service->execute('detect', ['draft_id' => $fresh['draft_id'],
-            'creation_id'                                        => $pending['draft_id'], 'acknowledged_id' => $acknowledged['draft_id']], $this->user, $this->now);
+        $found   = $this->service->execute(
+            'detect',
+            ['draft_id' => $fresh['draft_id'],
+            'creation_id'                                        => $pending['draft_id'], 'acknowledged_id' => $acknowledged['draft_id']],
+            $this->user,
+            $this->now
+        );
         $this->assertSame([$acknowledged['draft_id']], array_column($found['candidates'], 'draft_id'));
     }
 
@@ -206,8 +347,13 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
         $pending = $this->open();
         $this->write($pending, 1, 'latest work with lost response');
         $fresh = $this->open();
-        $found = $this->service->execute('detect', ['draft_id' => $fresh['draft_id'],
-            'creation_id'                                      => $pending['draft_id'], 'acknowledged_id' => $acknowledged['draft_id']], $this->user, $this->now);
+        $found = $this->service->execute(
+            'detect',
+            ['draft_id' => $fresh['draft_id'],
+            'creation_id'                                      => $pending['draft_id'], 'acknowledged_id' => $acknowledged['draft_id']],
+            $this->user,
+            $this->now
+        );
         $this->assertSame([$pending['draft_id']], array_column($found['candidates'], 'draft_id'));
     }
 
@@ -239,8 +385,13 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
         $otherOwner     = $this->open();
         $this->write($otherOwner, 1, 'foreign private work');
         $this->user->id = 7;
-        $found          = $this->service->execute('detect', ['draft_id' => $fresh['draft_id'],
-            'creation_id'                                               => $otherOwner['draft_id']], $this->user, $this->now);
+        $found          = $this->service->execute(
+            'detect',
+            ['draft_id' => $fresh['draft_id'],
+            'creation_id'                                               => $otherOwner['draft_id']],
+            $this->user,
+            $this->now
+        );
         $this->assertSame([], $found['candidates']);
     }
 

@@ -1,16 +1,16 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_categories
+ * @package    Joomla.Administrator
+ * @subpackage com_categories
  *
- * @copyright   (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Categories\Administrator\View\Category;
 
-use Joomla\CMS\Autosave\DraftView;
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -31,88 +31,76 @@ use Joomla\Component\Categories\Administrator\Model\CategoryModel;
 /**
  * HTML View class for the Categories component
  *
- * @since  1.6
+ * @since 1.6
  */
 class HtmlView extends BaseHtmlView
 {
-    /**
-     * Whether draft controls are shown for this form.
-     *
-     * @var    boolean
-     * @since  __DEPLOY_VERSION__
-     */
-    public bool $autosaveEnabled = false;
-
-    /**
-     * Layout ID for the draft status.
-     *
-     * @var    string
-     * @since  __DEPLOY_VERSION__
-     */
-    public string $autosaveStatusId = 'category-autosave-status';
+    use DraftViewTrait;
 
     /**
      * The Form object
      *
-     * @var  \Joomla\CMS\Form\Form
+     * @var \Joomla\CMS\Form\Form
      */
     protected $form;
 
     /**
      * The active item
      *
-     * @var  object
+     * @var object
      */
     protected $item;
 
     /**
      * The model state
      *
-     * @var  \Joomla\Registry\Registry
+     * @var \Joomla\Registry\Registry
      */
     protected $state;
 
     /**
      * Flag if an association exists
      *
-     * @var  boolean
+     * @var boolean
      */
     protected $assoc;
 
     /**
      * The actions the user is authorised to perform
      *
-     * @var  \Joomla\Registry\Registry
+     * @var \Joomla\Registry\Registry
      */
     protected $canDo;
 
     /**
      * Is there a content type associated with this category alias
      *
-     * @var    boolean
-     * @since  4.0.0
+     * @var   boolean
+     * @since 4.0.0
      */
     protected $checkTags = false;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var    string[]
+     * @var string[]
      *
-     * @since  5.2.0
+     * @since 5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Display the view.
      *
-     * @param   string|null  $tpl  The name of the template file to parse; automatically searches through the template paths.
+     * @param string|null $tpl The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return  void
+     * @return void
      */
     public function display($tpl = null)
     {
-        /** @var CategoryModel $model */
+        /**
+ * @var CategoryModel $model
+*/
         $model = $this->getModel();
 
         $this->form  = $model->getForm();
@@ -162,57 +150,36 @@ class HtmlView extends BaseHtmlView
             ->addControlField('return', $input->getBase64('return', ''))
             ->addControlField('forcedLanguage', $forcedLanguage);
 
-        $this->prepareAutosave();
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $item                  = clone $this->item;
+            $item->draftExtension  = (string) $this->state->get('category.extension');
+
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_categories.category',
+                'formId'    => 'item-form',
+                'statusId'  => 'category-autosave-status',
+                'saveTasks' => ['category.apply', 'category.save', 'category.save2new', 'category.save2copy', 'category.save2menulist', 'category.save2menublog', 'category.editAssociations'],
+                'item'      => $item,
+                ]
+            );
+        }
         if ($this->getLayout() !== 'modal') {
             $this->addToolbar();
         } else {
             $this->addModalToolbar();
         }
 
-        if ($this->autosaveEnabled) {
-            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
-        }
+        $this->addAutosaveStatus();
         parent::display($tpl);
-    }
-
-    /**
-     * Prepare draft controls for this form.
-     *
-     * @since  __DEPLOY_VERSION__
-     */
-    private function prepareAutosave(): void
-    {
-        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
-            return;
-        }
-        $item                  = clone $this->item;
-        $item->draftExtension  = (string) $this->state->get('category.extension');
-        try {
-            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(
-                Factory::getApplication(),
-                $this->getDocument(),
-                $this->getCurrentUser(),
-                $this->form,
-                $item,
-                [
-                    'context'   => 'com_categories.category',
-                    'formId'    => 'item-form',
-                    'statusId'  => $this->autosaveStatusId,
-                    'saveTasks' => ['category.apply', 'category.save', 'category.save2new', 'category.save2copy', 'category.save2menulist', 'category.save2menublog', 'category.editAssociations'],
-                ]
-            );
-        } catch (\Throwable) {
-            // Draft setup is optional; keep the form and its save actions available.
-            $this->autosaveEnabled = false;
-        }
     }
 
     /**
      * Add the page title and toolbar.
      *
-     * @return  void
+     * @return void
      *
-     * @since   1.6
+     * @since 1.6
      */
     protected function addToolbar()
     {
@@ -249,15 +216,20 @@ class HtmlView extends BaseHtmlView
             $title = Text::_($component_title_key);
         } elseif ($lang->hasKey($component_section_key = $component . ($section ? "_$section" : ''))) {
             // Else if the component section string exists, let's use it.
-            $title = Text::sprintf('COM_CATEGORIES_CATEGORY_' . ($isNew ? 'ADD' : 'EDIT')
-                . '_TITLE', $this->escape(Text::_($component_section_key)));
+            $title = Text::sprintf(
+                'COM_CATEGORIES_CATEGORY_' . ($isNew ? 'ADD' : 'EDIT')
+                . '_TITLE',
+                $this->escape(Text::_($component_section_key))
+            );
         } else {
             // Else use the base title
             $title = Text::_('COM_CATEGORIES_CATEGORY_BASE_' . ($isNew ? 'ADD' : 'EDIT') . '_TITLE');
         }
 
         // Load specific css component
-        /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
+        /**
+ * @var \Joomla\CMS\WebAsset\WebAssetManager $wa
+*/
         $wa = $this->getDocument()->getWebAssetManager();
         $wa->getRegistry()->addExtensionRegistryFile($component);
 
@@ -334,9 +306,9 @@ class HtmlView extends BaseHtmlView
             }
 
             if (
-                Associations::isEnabled() &&
-                ComponentHelper::isEnabled('com_associations') &&
-                AssociationsHelper::hasSupport($component)
+                Associations::isEnabled()
+                && ComponentHelper::isEnabled('com_associations')
+                && AssociationsHelper::hasSupport($component)
             ) {
                 $toolbar->standardButton('contract', 'JTOOLBAR_ASSOCIATIONS', 'category.editAssociations')
                     ->icon('icon-contract')
@@ -390,11 +362,11 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the modal toolbar.
      *
-     * @return  void
+     * @return void
      *
-     * @since   5.1.0
+     * @since 5.1.0
      *
-     * @throws  \Exception
+     * @throws \Exception
      */
     protected function addModalToolbar()
     {
@@ -422,7 +394,9 @@ class HtmlView extends BaseHtmlView
         $canDo = $this->canDo;
 
         // Load specific css component
-        /** @var \Joomla\CMS\WebAsset\WebAssetManager $wa */
+        /**
+ * @var \Joomla\CMS\WebAsset\WebAssetManager $wa
+*/
         $wa = $this->getDocument()->getWebAssetManager();
         $wa->getRegistry()->addExtensionRegistryFile($component);
 

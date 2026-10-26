@@ -4,9 +4,9 @@
  */
 
 /**
- * Report a subscriber error without interrupting the remaining subscribers.
+ * Report an observer error without interrupting other callbacks.
  *
- * @param {Error} error Subscriber error.
+ * @param {Error} error Observer error.
  *
  * @returns {void}
  *
@@ -72,8 +72,7 @@ export default class JoomlaEditorDecorator {
   // id = '';
 
   /**
-   * The native textarea owned by this provider, or null when unsupported.
-   * Consumers must verify its form and projection, not merely its ID.
+   * Return the editor's textarea, or null when unsupported.
    *
    * @returns {HTMLTextAreaElement|null}
    */
@@ -142,10 +141,9 @@ export default class JoomlaEditorDecorator {
   /**
    * Subscribe to live editor content changes.
    *
-   * The callback is a dirty signal and receives no content or provider instance. Use getValue()
-   * separately when the current value is needed. The returned function removes only this
-   * subscription and can safely be called more than once. Providers may emit multiple dirty
-   * signals for a complex edit, so consumers may coalesce or debounce notifications.
+   * Callbacks receive no content; use getValue() to read it. Signals may repeat for one edit.
+   * The returned function removes this subscription and can be called more than once.
+   * Provider cleanup failures are reported without interrupting unsubscription.
    *
    * @param {JoomlaEditorChangeCallback} callback Change callback.
    *
@@ -306,7 +304,12 @@ export default class JoomlaEditorDecorator {
 
     const cleanup = this.changeObserverCleanup;
     this.changeObserverCleanup = null;
-    cleanup();
+
+    try {
+      cleanup();
+    } catch (error) {
+      reportSubscriberError(error);
+    }
   }
 
   /**

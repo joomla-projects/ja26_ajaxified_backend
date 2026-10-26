@@ -1,16 +1,17 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_categories
+ * @package    Joomla.Administrator
+ * @subpackage com_categories
  *
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Categories\Administrator\Autosave;
 
 use Joomla\CMS\Autosave\AutosaveException;
+use Joomla\CMS\Autosave\DraftModel;
 use Joomla\CMS\Autosave\DraftProjection;
 use Joomla\CMS\Autosave\DraftProviderInterface;
 use Joomla\CMS\Filter\InputFilter;
@@ -25,7 +26,7 @@ use Joomla\CMS\User\User;
 /**
  * Category drafts reuse native forms and permission rules, without nested-set writes.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 final class CategoryAutosaveProvider implements DraftProviderInterface
 {
@@ -34,19 +35,23 @@ final class CategoryAutosaveProvider implements DraftProviderInterface
     /**
      * Constructor.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function getContext(): string
     {
         return 'com_categories.category';
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function describe(Form $form, object $item, User $user): array
     {
         $extension = $this->extension((string) ($item->extension ?? ''));
@@ -64,26 +69,28 @@ final class CategoryAutosaveProvider implements DraftProviderInterface
             'scope'    => $scope,
             'version'  => 1,
             'fields'   => $fields,
-            'revision' => $target === null ? null : hash('sha256', json_encode(
-                [$target, $scope, $this->values($item), $item->modified_time ?? null, $item->modified_user_id ?? null],
-                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-            )),
+            'revision' => $target === null ? null : hash(
+                'sha256',
+                json_encode(
+                    [$target, $scope, $this->values($item), $item->modified_time ?? null, $item->modified_user_id ?? null],
+                    JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                )
+            ),
             'values'   => $this->values($item),
             'excluded' => array_values(array_diff(self::KEYS, array_keys($fields))),
         ];
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function read(array $binding, User $user, ?array $payload = null): array
     {
         if ($binding['context'] !== $this->getContext() || array_keys($binding['scope']) !== ['extension']) {
             throw new AutosaveException('scope_conflict', 'The Category binding is incompatible.');
         }
         $extension = $this->extension($binding['scope']['extension']);
-        $target    = $binding['target_id'];
-        if ($target !== null && (preg_match('/^[1-9][0-9]*$/D', $target) !== 1 || (int) $target > 4294967295)) {
-            throw new AutosaveException('invalid_target', 'The Category identity is invalid.');
-        }
+        $target    = DraftModel::target($binding, $this->getContext());
 
         $model = $this->factory->createModel('Category', 'Administrator', ['ignore_request' => true]);
         $parts = explode('.', $extension);
@@ -100,13 +107,7 @@ final class CategoryAutosaveProvider implements DraftProviderInterface
             throw new AutosaveException('scope_conflict', 'The Category owning extension changed.');
         }
         $this->authorize($user, $item, $extension);
-        Form::addFormPath(JPATH_ADMINISTRATOR . '/components/com_categories/forms');
-        $data = (array) $item;
-        $form = $model->getForm($data, false);
-        if (!$form) {
-            throw new AutosaveException('unsupported_context', 'The native Category form is unavailable.');
-        }
-        $form->bind($data);
+        $form = DraftModel::form($model, 'com_categories', $item);
 
         return $this->describe($form, $item, $user);
     }
@@ -145,9 +146,7 @@ final class CategoryAutosaveProvider implements DraftProviderInterface
         ) {
             throw new AutosaveException('forbidden', 'The Category cannot be edited by this user.');
         }
-        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checkout_conflict', 'The Category is checked out by another user.');
-        }
+        DraftModel::assertCheckout($item, $user, 'The Category is checked out by another user.');
     }
 
     private function values(object $item): array

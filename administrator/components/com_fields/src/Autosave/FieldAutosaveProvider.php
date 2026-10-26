@@ -1,10 +1,10 @@
 <?php
 
 /**
- * @package Joomla.Administrator
+ * @package    Joomla.Administrator
  * @subpackage com_fields
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Fields\Administrator\Autosave;
@@ -24,28 +24,32 @@ use Joomla\Component\Fields\Administrator\Helper\FieldsHelper;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Native Field scope, authority and selected values; no canonical persistence.
+ * Draft fields, scope and access checks for the Field form.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 final class FieldAutosaveProvider implements DraftProviderInterface
 {
     private const KEYS = ['title', 'name', 'label', 'description', 'default_value', 'note', 'required', 'only_use_in_subform'];
 
     /**
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function getContext(): string
     {
         return 'com_fields.field';
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function describe(Form $form, object $item, User $user): array
     {
         $scope = $this->scope($form, $item);
@@ -65,7 +69,9 @@ final class FieldAutosaveProvider implements DraftProviderInterface
         return $descriptor;
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function read(array $binding, User $user, ?array $payload = null): array
     {
         $target = DraftModel::target($binding, $this->getContext());
@@ -93,9 +99,7 @@ final class FieldAutosaveProvider implements DraftProviderInterface
         $this->authorize($user, $item, $binding['scope']);
         $form       = DraftModel::form($model, 'com_fields', $item);
         $descriptor = $this->describe($form, $item, $user);
-        if ($descriptor['scope'] !== $binding['scope']) {
-            throw new AutosaveException('scope_conflict', 'The native identity or owning relation changed.');
-        }
+        DraftModel::assertScope($descriptor['scope'], $binding['scope'], 'The native identity or owning relation changed.');
         return $descriptor;
     }
 
@@ -129,8 +133,6 @@ final class FieldAutosaveProvider implements DraftProviderInterface
         ) {
             throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
         }
-        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checkout_conflict', 'The record is checked out by another user.');
-        }
+        DraftModel::assertCheckout($item, $user, 'The record is checked out by another user.');
     }
 }

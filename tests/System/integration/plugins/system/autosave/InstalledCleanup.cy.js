@@ -55,11 +55,11 @@ describe('Installed autosave cleanup through Scheduled Tasks', () => {
   });
 
   it('continues a bounded backlog and leaves live empty and payload rows intact', () => {
+    let expiredBefore;
+    const cutoff = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const username = `autosave-cleanup-runner-${suffix}`;
     cy.db_createUser({ username, email: `${username}@example.com`, group_id: 8, params: '{"allowTourAutoStart":0}' });
     cy.doAdministratorLogin(username, 'test', false);
-    cy.task('queryDB', 'SELECT COUNT(*) AS n FROM #__autosave_drafts WHERE expires_at <= CURRENT_TIMESTAMP')
-      .then((rows) => expect(Number(rows[0].n), 'clean disposable cleanup baseline').to.equal(0));
     for (let bucket = 0; bucket < 18; bucket += 1) {
       const ownerName = `autosave-cleanup-${suffix}-${bucket}`;
       cy.db_createUser({ username: ownerName, email: `${ownerName}@example.com` }).then((id) => {
@@ -82,6 +82,11 @@ describe('Installed autosave cleanup through Scheduled Tasks', () => {
       const owner = owners[17];
       return cy.task('queryDB', `INSERT INTO #__autosave_drafts (draft_id, owner_id, owner_slot, context, scope, schema_version, fields, payload, created_at, updated_at, expires_at) VALUES ('fffffffffffffffffffffffffffffff1', ${owner}, 62, 'com_content.article', '[]', 1, '{}', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '2099-01-01 00:00:00'), ('fffffffffffffffffffffffffffffff2', ${owner}, 63, 'com_content.article', '[]', 1, '{}', '{"title":"live"}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '2099-01-01 00:00:00')`);
     });
+    cy.task('queryDB', `SELECT COUNT(*) AS n FROM #__autosave_drafts WHERE expires_at <= '${cutoff}'`)
+      .then((rows) => {
+        expiredBefore = Number(rows[0].n);
+        expect(expiredBefore, 'expired backlog includes all fixture rows').to.be.at.least(1101);
+      });
     cy.intercept('GET', '**/administrator/index.php*plugin=RunSchedulerTest*').as('runCleanup');
     cy.visit('/administrator/index.php?option=com_scheduler&view=tasks&filter=');
     cy.location('search').should('include', 'option=com_scheduler');
@@ -89,10 +94,10 @@ describe('Installed autosave cleanup through Scheduled Tasks', () => {
     cy.searchForItem('Autosave Retention Cleanup');
     cy.then(() => cy.get(`button[data-scheduler-run][data-id="${taskId}"]`).should('be.enabled').click());
     cy.wait('@runCleanup', { timeout: 30000 }).then(taskStatus).should('equal', 123);
-    cy.then(() => cy.task('queryDB', `SELECT COUNT(*) AS n FROM #__autosave_drafts WHERE owner_id IN (${owners.join(',')}) AND expires_at <= CURRENT_TIMESTAMP`))
+    cy.task('queryDB', `SELECT COUNT(*) AS n FROM #__autosave_drafts WHERE expires_at <= '${cutoff}'`)
       .then((rows) => {
-        // A slow database can hit the soft time budget before the row cap.
-        expect(Number(rows[0].n)).to.be.within(101, 1100);
+        // Include existing expired rows when measuring the global task budget.
+        expect(expiredBefore - Number(rows[0].n)).to.be.within(1, 1000);
       });
     const finish = (attempt = 0) => {
       expect(attempt, 'bounded native continuation attempts').to.be.lessThan(12);
@@ -109,6 +114,8 @@ describe('Installed autosave cleanup through Scheduled Tasks', () => {
       });
     };
     finish();
+    cy.task('queryDB', `SELECT COUNT(*) AS n FROM #__autosave_drafts WHERE expires_at <= '${cutoff}'`)
+      .then((rows) => expect(Number(rows[0].n), 'expired backlog cleared').to.equal(0));
     cy.then(() => cy.task('queryDB', `SELECT draft_id, payload FROM #__autosave_drafts WHERE owner_id IN (${owners.join(',')}) ORDER BY draft_id`))
       .then((rows) => {
         expect(rows).to.have.length(2);

@@ -3,8 +3,8 @@
 /**
  * Joomla! Content Management System
  *
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\CMS\Autosave;
@@ -22,23 +22,23 @@ use Joomla\Input\Input;
 /**
  * Draft-only operations and optional reconciliation after a native successful save.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 final class DraftService
 {
     /**
      * Constructor.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function __construct(private readonly AutosaveContextResolver $resolver, private readonly DraftStore $store)
     {
     }
 
     /**
-     * Admit one authorized native render with at least one protected control.
+     * Open a draft for a prepared form with supported fields.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function open(User $user, array $descriptor, Date $now): array
     {
@@ -50,9 +50,31 @@ final class DraftService
     }
 
     /**
-     * The dispatcher supplies authentication, CSRF, request size and JSON validation.
+     * List private allocation headers for a quota-blocked native administrator form.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
+     */
+    public function allocations(User $user): array
+    {
+        if ($user->guest || (int) $user->id <= 0 || !$user->authorise('core.login.admin')) {
+            throw new AutosaveException('forbidden', 'Private draft allocation metadata requires an authenticated administrator.');
+        }
+
+        $headers = $this->store->allocations((int) $user->id);
+        foreach ($headers as &$header) {
+            foreach (['created_at', 'updated_at', 'expires_at'] as $key) {
+                $header[$key] = (new Date($header[$key], 'UTC'))->format('Y-m-d\TH:i:s\Z');
+            }
+        }
+        unset($header);
+
+        return $headers;
+    }
+
+    /**
+     * Execute a request validated by the Autosave plugin.
+     *
+     * @since __DEPLOY_VERSION__
      */
     public function execute(string $operation, array $request, User $user, Date $now): array
     {
@@ -63,7 +85,7 @@ final class DraftService
             default             => throw new \InvalidArgumentException('Unsupported draft operation.'),
         };
 
-        $optional = $operation === 'detect' ? ['cursor', 'creation_id', 'acknowledged_id'] : [];
+        $optional = $operation === 'detect' ? ['creation_id', 'acknowledged_id'] : [];
 
         if (
             array_diff_key($request, array_flip(array_merge($keys, $optional))) || array_diff_key(array_flip($keys), $request)
@@ -76,7 +98,7 @@ final class DraftService
         $id    = $request['draft_id'];
 
         if ($operation === 'discard') {
-            $this->store->discard($owner, $id, $now);
+            $this->store->discard($owner, $id);
 
             return ['discarded' => true];
         }
@@ -101,7 +123,7 @@ final class DraftService
                     }
 
                     $payload = DraftProjection::normalize($payload, $binding['fields']);
-                    $current = $provider->read($binding, $user, $payload);
+                    $current = $provider->read($this->providerIdentity($binding), $user, $payload);
 
                     foreach (array_intersect_key($binding['fields'], $payload) as $key => $field) {
                         if (!isset($current['fields'][$key]) || $current['fields'][$key]['control'] !== $field['control']) {
@@ -129,15 +151,9 @@ final class DraftService
         }
 
         $binding = $this->store->read($owner, $id, $now);
-        $current = $this->provider($binding['context'])->read($binding, $user, $binding['payload']);
+        $current = $this->provider($binding['context'])->read($this->providerIdentity($binding), $user, $binding['payload']);
 
         if ($operation === 'detect') {
-            $cursor = $request['cursor'] ?? null;
-
-            if ($cursor !== null && !\is_string($cursor)) {
-                throw new \InvalidArgumentException('Invalid draft discovery cursor.');
-            }
-
             $sources = null;
 
             if ($binding['target_id'] === null) {
@@ -156,8 +172,7 @@ final class DraftService
                 throw new \InvalidArgumentException('Creation recovery references cannot change record discovery.');
             }
 
-            $page       = $this->store->find($owner, $binding, $now, $cursor, $sources);
-            $candidates = $page['candidates'];
+            $candidates = $this->store->find($owner, $binding, $now, $sources)['candidates'];
 
             if ($sources !== null) {
                 $headers    = array_column($candidates, null, 'draft_id');
@@ -174,10 +189,10 @@ final class DraftService
                 $candidate['updated_at']         = (new Date($candidate['updated_at'], 'UTC'))->format('Y-m-d\TH:i:s\Z');
                 $candidate['conflict']           = $candidate['baseline_revision'] !== $current['revision'];
                 $candidate['uncertain_creation'] = $binding['target_id'] === null;
-                unset($candidate['baseline_revision'], $candidate['schema_version']);
+                unset($candidate['baseline_revision']);
             }
 
-            return ['candidates' => $candidates, 'next' => $page['next'], 'conflict' => $current['revision'] !== $binding['baseline_revision']];
+            return ['candidates' => $candidates, 'conflict' => $current['revision'] !== $binding['baseline_revision']];
         }
 
         if (!\is_string($request['source_id'])) {
@@ -198,7 +213,7 @@ final class DraftService
         }
 
         // Current access applies to the source too, including its proposed creation category.
-        $sourceCurrent = $this->provider($source['context'])->read($source, $user, $source['payload']);
+        $sourceCurrent = $this->provider($source['context'])->read($this->providerIdentity($source), $user, $source['payload']);
         $eligible      = array_intersect_key($binding['fields'], $current['fields'], $sourceCurrent['fields'], $source['payload']);
         $payload       = [];
         $omitted       = [];
@@ -231,7 +246,7 @@ final class DraftService
     /**
      * Called only by the native controller's successful path, never by a browser draft endpoint.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function reconcile(
         User $user,
@@ -289,7 +304,7 @@ final class DraftService
     /**
      * Absence or failure of draft storage cannot alter native controller success or navigation.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public static function reconcileNativeSave(
         CMSApplicationInterface $application,
@@ -325,9 +340,7 @@ final class DraftService
                     foreach ($scope as $name => $value) {
                         if (
                             $binding['scope'][$name] !== $value
-                            && ($source === null
-                                ? (!\in_array($name, $completedScopeKeys, true) || !\in_array($binding['scope'][$name], ['', '0', null], true))
-                                : !\in_array($name, $changedScopeKeys, true))
+                            && ($source === null                            ? (!\in_array($name, $completedScopeKeys, true) || !\in_array($binding['scope'][$name], ['', '0', null], true))                            : !\in_array($name, $changedScopeKeys, true))
                         ) {
                             $compatible = false;
                         }
@@ -351,22 +364,23 @@ final class DraftService
                 $identityMayChange,
                 $resultScope
             );
+        } catch (AutosaveException | \InvalidArgumentException) {
+            // Ignore missing or incompatible draft metadata after a successful save.
         } catch (\Throwable $exception) {
             try {
                 // No payload, request, stack trace or exception text belongs in normal logs.
                 $application->getLogger()->warning('Optional draft reconciliation failed.', ['exception_class' => $exception::class]);
             } catch (\Throwable) {
-                // Logging is also optional after native success.
+                // Keep the successful save if logging fails.
             }
         }
     }
 
 
     /**
-     * Reuse the successful native model's prepared form for scope and revision.
-     * All optional work is isolated from canonical messages, redirects and return values.
+     * Prepare the saved item's scope and reconcile its submitted draft.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public static function reconcileNativeModelSave(
         CMSApplicationInterface $application,
@@ -411,9 +425,31 @@ final class DraftService
                 $completedScopeKeys,
                 $changedScopeKeys
             );
-        } catch (\Throwable) {
-            // Draft failure never changes a successful native save.
+        } catch (AutosaveException) {
+            // Keep the successful save if draft preparation fails.
+        } catch (\Throwable $exception) {
+            try {
+                $application->getLogger()->warning('Optional draft save preparation failed.', ['exception_class' => $exception::class]);
+            } catch (\Throwable) {
+                // Keep the successful save if logging fails.
+            }
         }
+    }
+
+    /**
+     * Return only the native identity needed by a component provider.
+     *
+     * @return array{context: string, target_id: ?string, scope: array}
+     *
+     * @since __DEPLOY_VERSION__
+     */
+    private function providerIdentity(array $binding): array
+    {
+        return [
+            'context'   => $binding['context'],
+            'target_id' => $binding['target_id'],
+            'scope'     => $binding['scope'],
+        ];
     }
 
     private function provider(string $context): DraftProviderInterface

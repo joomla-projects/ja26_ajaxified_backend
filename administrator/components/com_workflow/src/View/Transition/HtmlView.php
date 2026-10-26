@@ -1,16 +1,16 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_workflow
+ * @package    Joomla.Administrator
+ * @subpackage com_workflow
  *
- * @copyright   (C) 2018 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2018 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Workflow\Administrator\View\Transition;
 
-use Joomla\CMS\Autosave\DraftView;
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -26,114 +26,103 @@ use Joomla\Component\Workflow\Administrator\Model\TransitionModel;
 /**
  * View class to add or edit a transition of a workflow
  *
- * @since  4.0.0
+ * @since 4.0.0
  */
 class HtmlView extends BaseHtmlView
 {
-    /**
-     * Whether draft controls are shown for this form.
-     *
-     * @var    boolean
-     * @since  __DEPLOY_VERSION__
-     */
-    public bool $autosaveEnabled = false;
+    use DraftViewTrait;
 
-    /**
-     * Layout ID for the draft status.
-     *
-     * @var    string
-     * @since  __DEPLOY_VERSION__
-     */
-    public string $autosaveStatusId = 'transition-autosave-status';
     /**
      * The model state
      *
-     * @var     object
-     * @since   4.0.0
+     * @var   object
+     * @since 4.0.0
      */
     protected $state;
 
     /**
      * Form object to generate fields
      *
-     * @var    \Joomla\CMS\Form\Form
+     * @var \Joomla\CMS\Form\Form
      *
-     * @since  4.0.0
+     * @since 4.0.0
      */
     protected $form;
 
     /**
      * Items array
      *
-     * @var    object
-     * @since  4.0.0
+     * @var   object
+     * @since 4.0.0
      */
     protected $item;
 
     /**
      * That is object of Application
      *
-     * @var    \Joomla\CMS\Application\CMSApplication
-     * @since  4.0.0
+     * @var   \Joomla\CMS\Application\CMSApplication
+     * @since 4.0.0
      */
     protected $app;
 
     /**
      * The application input object.
      *
-     * @var    \Joomla\Input\Input
-     * @since  4.0.0
+     * @var   \Joomla\Input\Input
+     * @since 4.0.0
      */
     protected $input;
 
     /**
      * The ID of current workflow
      *
-     * @var    integer
-     * @since  4.0.0
+     * @var   integer
+     * @since 4.0.0
      */
     protected $workflowID;
 
     /**
      * The name of current extension
      *
-     * @var    string
-     * @since  4.0.0
+     * @var   string
+     * @since 4.0.0
      */
     protected $extension;
 
     /**
      * The section of the current extension
      *
-     * @var    string
-     * @since  4.0.0
+     * @var   string
+     * @since 4.0.0
      */
     protected $section;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var    string[]
+     * @var string[]
      *
-     * @since  5.2.0
+     * @since 5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Display item view
      *
-     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
+     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return  void
+     * @return void
      *
-     * @since  4.0.0
+     * @since 4.0.0
      */
     public function display($tpl = null)
     {
         $this->app   = Factory::getApplication();
         $this->input = $this->app->getInput();
 
-        /** @var TransitionModel $model */
+        /**
+ * @var TransitionModel $model
+*/
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -160,51 +149,37 @@ class HtmlView extends BaseHtmlView
 
         // Set the toolbar
         $this->addToolbar();
-        $this->prepareAutosave();
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $item                  = clone $this->item;
+            $item->draftExtension  = (string) $this->state->get('filter.extension');
+            if (empty($item->id)) {
+                $item->workflow_id = Factory::getApplication()->getInput()->getInt('workflow_id');
+            }
+            $this->form->addControlField('workflow_id', (string) $item->workflow_id);
+            $this->form->addControlField('extension', $item->draftExtension);
+
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_workflow.transition',
+                'formId'    => 'workflow-form',
+                'statusId'  => 'transition-autosave-status',
+                'saveTasks' => ['transition.apply', 'transition.save', 'transition.save2new', 'transition.save2copy'],
+                'item'      => $item,
+                ]
+            );
+            $this->addAutosaveStatus();
+        }
 
         // Display the template
         parent::display($tpl);
     }
 
     /**
-     * Configure optional drafts only for supported native edit layouts.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    private function prepareAutosave(): void
-    {
-        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
-            return;
-        }
-        $item                  = clone $this->item;
-        $item->draftExtension  = (string) $this->state->get('filter.extension');
-        if (empty($item->id)) {
-            $item->workflow_id = Factory::getApplication()->getInput()->getInt('workflow_id');
-        }
-        $this->form->addControlField('workflow_id', (string) $item->workflow_id);
-        $this->form->addControlField('extension', $item->draftExtension);
-        try {
-            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
-                'context'   => 'com_workflow.transition', 'formId' => 'workflow-form', 'statusId' => $this->autosaveStatusId,
-                'saveTasks' => ['transition.apply', 'transition.save', 'transition.save2new', 'transition.save2copy'],
-            ]);
-        } catch (\Throwable) {
-            // Draft setup is optional; keep the form and its save actions available.
-            $this->autosaveEnabled = false;
-        }
-        if ($this->autosaveEnabled) {
-            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
-        }
-    }
-
-    /**
      * Add the page title and toolbar.
      *
-     * @return  void
+     * @return void
      *
-     * @since  4.0.0
+     * @since 4.0.0
      */
     protected function addToolbar()
     {

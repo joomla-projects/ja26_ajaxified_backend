@@ -1,16 +1,16 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_templates
+ * @package    Joomla.Administrator
+ * @subpackage com_templates
  *
- * @copyright   (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2009 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Templates\Administrator\View\Style;
 
-use Joomla\CMS\Autosave\DraftView;
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -26,77 +26,65 @@ use Joomla\Component\Templates\Administrator\Model\StyleModel;
 /**
  * View to edit a template style.
  *
- * @since  1.6
+ * @since 1.6
  */
 class HtmlView extends BaseHtmlView
 {
-    /**
-     * Whether draft controls are shown for this form.
-     *
-     * @var    boolean
-     * @since  __DEPLOY_VERSION__
-     */
-    public bool $autosaveEnabled = false;
-
-    /**
-     * Layout ID for the draft status.
-     *
-     * @var    string
-     * @since  __DEPLOY_VERSION__
-     */
-    public string $autosaveStatusId = 'style-autosave-status';
+    use DraftViewTrait;
 
     /**
      * The item
      *
-     * @var   \stdClass
+     * @var \stdClass
      */
     protected $item;
 
     /**
      * The form object
      *
-     * @var  \Joomla\CMS\Form\Form
+     * @var \Joomla\CMS\Form\Form
      */
     protected $form;
 
     /**
      * The model state
      *
-     * @var  \Joomla\Registry\Registry
+     * @var \Joomla\Registry\Registry
      */
     protected $state;
 
     /**
      * The actions the user is authorised to perform
      *
-     * @var    \Joomla\Registry\Registry
+     * @var \Joomla\Registry\Registry
      *
-     * @since  4.0.0
+     * @since 4.0.0
      */
     protected $canDo;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var    string[]
+     * @var string[]
      *
-     * @since  5.2.0
+     * @since 5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Execute and display a template script.
      *
-     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
+     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return  void
+     * @return void
      *
-     * @since   1.6
+     * @since 1.6
      */
     public function display($tpl = null)
     {
-        /** @var StyleModel $model */
+        /**
+ * @var StyleModel $model
+*/
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -110,45 +98,27 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task');
 
         $this->addToolbar();
-        $this->prepareAutosave();
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_templates.style',
+                'formId'    => 'style-form',
+                'statusId'  => 'style-autosave-status',
+                'saveTasks' => ['style.apply', 'style.save', 'style.save2new', 'style.save2copy'],
+                ]
+            );
+            $this->addAutosaveStatus();
+        }
 
         parent::display($tpl);
     }
 
     /**
-     * Configure optional drafts only for supported native edit layouts.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    private function prepareAutosave(): void
-    {
-        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
-            return;
-        }
-        $item                  = clone $this->item;
-
-        try {
-            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $item, [
-                'context'   => 'com_templates.style', 'formId' => 'style-form', 'statusId' => $this->autosaveStatusId,
-                'saveTasks' => ['style.apply', 'style.save', 'style.save2new', 'style.save2copy'],
-            ]);
-        } catch (\Throwable) {
-            // Draft setup is optional; keep the form and its save actions available.
-            $this->autosaveEnabled = false;
-        }
-        if ($this->autosaveEnabled) {
-            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
-        }
-    }
-
-    /**
      * Add the page title and toolbar.
      *
-     * @return  void
+     * @return void
      *
-     * @since   1.6
+     * @since 1.6
      */
     protected function addToolbar()
     {
@@ -196,7 +166,9 @@ class HtmlView extends BaseHtmlView
         // Get the help information for the template item.
         $lang = $this->getLanguage();
 
-        /** @var StyleModel $model */
+        /**
+ * @var StyleModel $model
+*/
         $model = $this->getModel();
         $help  = $model->getHelp();
 

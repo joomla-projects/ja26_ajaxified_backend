@@ -1,10 +1,10 @@
 <?php
 
 /**
- * @package Joomla.Administrator
+ * @package    Joomla.Administrator
  * @subpackage com_workflow
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Workflow\Administrator\Autosave;
@@ -22,49 +22,51 @@ use Joomla\CMS\User\User;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Native Stage scope, authority and selected values; no canonical persistence.
+ * Draft fields, scope and access checks for the Stage form.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 final class StageAutosaveProvider implements DraftProviderInterface
 {
     private const KEYS = ['title', 'description'];
 
     /**
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function getContext(): string
     {
         return 'com_workflow.stage';
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function describe(Form $form, object $item, User $user): array
     {
-        $scope = $this->scope($form, $item);
+        $scope = $this->scope($item);
         $this->authorize($user, $item, $scope);
-        $keys = self::KEYS;
 
-        $descriptor = DraftProjection::descriptor(
+        return DraftProjection::descriptor(
             $form,
             $item,
             $this->getContext(),
             empty($item->id) ? null : (string) $item->id,
             $scope,
-            $keys,
+            self::KEYS,
             []
         );
-
-
-        return $descriptor;
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function read(array $binding, User $user, ?array $payload = null): array
     {
         $target = DraftModel::target($binding, $this->getContext());
@@ -85,13 +87,11 @@ final class StageAutosaveProvider implements DraftProviderInterface
         $this->authorize($user, $item, $binding['scope']);
         $form       = DraftModel::form($model, 'com_workflow', $item);
         $descriptor = $this->describe($form, $item, $user);
-        if ($descriptor['scope'] !== $binding['scope']) {
-            throw new AutosaveException('scope_conflict', 'The native identity or owning relation changed.');
-        }
+        DraftModel::assertScope($descriptor['scope'], $binding['scope'], 'The native identity or owning relation changed.');
         return $descriptor;
     }
 
-    private function scope(Form $form, object $item): array
+    private function scope(object $item): array
     {
         $workflowId = (int) ($item->workflow_id ?? 0);
         $workflow   = $this->factory->createModel('Workflow', 'Administrator', ['ignore_request' => true])->getItem($workflowId);
@@ -116,8 +116,6 @@ final class StageAutosaveProvider implements DraftProviderInterface
         ) {
             throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
         }
-        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checkout_conflict', 'The record is checked out by another user.');
-        }
+        DraftModel::assertCheckout($item, $user, 'The record is checked out by another user.');
     }
 }

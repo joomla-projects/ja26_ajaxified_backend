@@ -1,101 +1,57 @@
 <?php
 
 /**
- * @package     Joomla.IntegrationTest
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @package   Joomla.IntegrationTest
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Component\Content\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
 use Joomla\CMS\Autosave\AutosaveContextResolver;
+use Joomla\CMS\Autosave\AutosaveException;
 use Joomla\CMS\Autosave\DraftService;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
-use Joomla\CMS\Language\Language;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
-use Joomla\CMS\Router\Router;
-use Joomla\CMS\Session\Session;
 use Joomla\CMS\Table\Table;
-use Joomla\CMS\User\User;
 use Joomla\Component\Content\Administrator\Controller\ArticleController;
-use Joomla\Database\DatabaseInterface;
 use Joomla\Event\Dispatcher;
 use Joomla\Input\Input;
-use Joomla\Session\SessionInterface;
 use Joomla\Tests\Integration\IntegrationTestCase;
-use Joomla\Tests\Integration\Libraries\Cms\Autosave\DraftDatabaseFixture;
-use Psr\Log\NullLogger;
+use Psr\Log\LoggerInterface;
 
 /**
  * Public native controller tasks and real optional reconciliation; no private trait reflection.
  */
 class ArticleControllerAutosaveTest extends IntegrationTestCase implements \Joomla\Tests\Integration\DBTestInterface
 {
-    use \Joomla\Tests\Unit\Libraries\Cms\Autosave\NativeReadFixture;
+    use \Joomla\Tests\Integration\Component\Autosave\Administrator\NativeControllerFixture;
 
-    use DraftDatabaseFixture;
-
-    private DatabaseInterface $db;
-    private mixed $previousApplication;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->installNativeReadFixture();
-        $this->previousApplication = Factory::$application;
-        $this->db                  = $this->getDBDriver();
-        $this->initializeStore();
-        // Native success uses the real clock; these bindings must not age out in future CI runs.
-        $this->now = new \Joomla\CMS\Date\Date('now', 'UTC');
-    }
-
-    protected function tearDown(): void
-    {
-        Factory::$application = $this->previousApplication;
-        $this->restoreNativeReadFixture();
-        parent::tearDown();
-    }
-
-    /** @dataProvider nativeOutcomes */
+    /**
+     * @dataProvider nativeOutcomes
+     */
     public function testNativeTaskKeepsItsResultAndOnlySuccessfulBoundMetadataRetires(
         string $task,
         string $outcome,
         ?array $metadata,
         int $source,
-        int $result
+        int $result,
+        bool $loggerFails = false
     ): void {
         $input = new Input(['option' => 'com_content', 'id' => $source]);
         $input->post->set('jform', ['title' => 'Native title', 'alias' => '', 'catid' => '2', 'articletext' => 'Native body']);
-        $user        = $this->createMock(User::class);
-        $user->id    = 7;
-        $user->guest = false;
-        $user->method('authorise')->willReturn(true);
-        $session = $this->createMock(SessionInterface::class);
-        $session->method('get')->willReturnCallback(static fn ($key, $default = null) => $key === 'user' ? $user : $default);
-        $session->method('getToken')->willReturn('draft-test-token');
-        $session->method('isNew')->willReturn(false);
-        $app = $this->createMock(CMSApplication::class);
-        $app->method('getIdentity')->willReturn($user);
-        $app->method('getInput')->willReturn($input);
-        $app->method('getSession')->willReturn($session);
-        $app->method('get')->willReturnCallback(static fn ($key, $default = null) => $key === 'secret' ? 'test-secret' : $default);
-        $app->method('getName')->willReturn('drafttest');
-        $app->method('getLanguage')->willReturn(new Language('en-GB', false));
-        $app->method('getLogger')->willReturn(new NullLogger());
-        Factory::$application = $app;
-        Factory::getContainer()->set('DrafttestRouter', new Router());
-        $input->server->set('HTTP_X_CSRF_TOKEN', Session::getFormToken());
         $states = [];
-        $app->method('getUserState')->willReturnCallback(static function ($key, $default = null) use (&$states) {
-            return $states[$key] ?? $default;
-        });
-        $app->method('setUserState')->willReturnCallback(static function ($key, $value) use (&$states) {
-            $states[$key] = $value;
-            return null;
-        });
-
+        [$app, $user] = $this->controllerApplication($input, true, $states);
+        $logger = $this->createMock(LoggerInterface::class);
+        $warning = $logger->expects($outcome === 'unavailable' ? $this->once() : $this->never())->method('warning')->with(
+            'Optional draft reconciliation failed.',
+            ['exception_class' => \RuntimeException::class]
+        );
+        if ($loggerFails) {
+            $warning->willThrowException(new \RuntimeException('Private logger detail'));
+        }
+        $app->method('getLogger')->willReturn($logger);
         $descriptor = [
             'context' => 'com_content.article', 'target' => $source === 0 ? null : (string) $source,
             'scope'   => [], 'version' => 1, 'revision' => $source === 0 ? null : 'rendered',
@@ -163,6 +119,46 @@ class ArticleControllerAutosaveTest extends IntegrationTestCase implements \Joom
         }
     }
 
+    /**
+     * @dataProvider preparationFailures
+     */
+    public function testFailedOptionalModelPreparationCannotChangeNativeStateOrExposeValues(string $failure, bool $loggerFails): void
+    {
+        $input = new Input(['id' => 42]);
+        $input->post->set('autosave', ['draft_id' => str_repeat('a', 32), 'revision' => '1']);
+        $input->post->set('jform', ['title' => 'Private local form value']);
+        $logger = $this->createMock(LoggerInterface::class);
+        $warning = $logger->expects($failure === 'domain' ? $this->never() : $this->once())->method('warning')->with(
+            'Optional draft save preparation failed.',
+            ['exception_class' => \RuntimeException::class]
+        );
+        if ($loggerFails) {
+            $warning->willThrowException(new \RuntimeException('Private logger detail'));
+        }
+        $app = $this->createMock(CMSApplication::class);
+        $app->method('getLogger')->willReturn($logger);
+        $app->expects($this->never())->method('enqueueMessage');
+        $app->expects($this->never())->method('redirect');
+        $app->expects($this->never())->method('bootComponent');
+        $model = $this->createMock(\Joomla\Component\Content\Administrator\Model\ArticleModel::class);
+        $model->method('getName')->willReturn('article');
+        $model->method('getState')->with('article.id')->willReturn(42);
+        $model->method('getItem')->willThrowException(
+            $failure === 'domain'
+            ? new AutosaveException('unsupported_context', 'Private domain detail')
+            : new \RuntimeException('Private SQL, request and credentials')
+        );
+        $model->expects($this->never())->method('save');
+        DraftService::reconcileNativeModelSave($app, $input, $model, 'com_content.article', 'save');
+        $this->assertSame(42, $model->getState('article.id'));
+        $this->assertSame(['title' => 'Private local form value'], $input->post->get('jform', [], 'array'));
+    }
+
+    public static function preparationFailures(): array
+    {
+        return [['unexpected', false], ['unexpected', true], ['domain', false]];
+    }
+
     public static function nativeOutcomes(): array
     {
         $own = ['draft_id' => 'own', 'revision' => '1'];
@@ -172,6 +168,7 @@ class ArticleControllerAutosaveTest extends IntegrationTestCase implements \Joom
             ['save', 'success', ['draft_id' => 'own', 'revision' => 'invalid'], 42, 42],
             ['save', 'success', ['draft_id' => 'foreign', 'revision' => '1'], 42, 42],
             ['save', 'unavailable', $own, 42, 42],
+            ['apply', 'unavailable', $own, 42, 42, true],
             ['apply', 'validation', $own, 42, 42],
             ['apply', 'model', $own, 42, 42],
             ['save', 'checkin', $own, 42, 42],

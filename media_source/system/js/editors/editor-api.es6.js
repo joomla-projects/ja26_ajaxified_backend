@@ -127,7 +127,7 @@ const JoomlaEditor = {
   },
 
   /**
-   * Unregister editor instance.
+   * Unregister an editor by ID or remove only the matching decorator instance.
    *
    * @param {JoomlaEditorDecorator|string} editor The editor instance or ID.
    *
@@ -171,12 +171,8 @@ const JoomlaEditor = {
   /**
    * Subscribe to editor registration and unregistration.
    *
-   * The callback receives immutable metadata with `type`, `id`, and `editorType`. Registration is
-   * reported after get(id) returns the editor; unregistration is reported after get(id) returns
-   * false. No editor content or provider instance is exposed. The returned function removes only
-   * this subscription and can safely be called more than once. Passing a decorator to unregister()
-   * removes it only while that exact instance is registered, preventing stale teardown from
-   * removing a newer editor with the same ID.
+   * Callbacks receive frozen type/id/editorType metadata after the registry changes.
+   * The returned function removes this subscription and can be called more than once.
    *
    * @param {JoomlaEditorLifecycleCallback} callback Lifecycle callback.
    *

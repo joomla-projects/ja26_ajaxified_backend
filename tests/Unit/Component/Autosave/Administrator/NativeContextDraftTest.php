@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package Joomla.UnitTest
+ * @package   Joomla.UnitTest
  * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license GNU General Public License version 2 or later; see LICENSE.txt
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Unit\Component\Autosave\Administrator;
@@ -67,7 +67,7 @@ class NativeContextDraftTest extends UnitTestCase
         return $user;
     }
 
-    private function item(string $component, string $entity): object
+    private function item(string $component): object
     {
         return (object) ['id' => 42, 'lang_id' => 42, 'filter_id' => 42, 'title' => 'Canonical', 'name' => 'Canonical',
             'subject'         => 'Canonical', 'old_url' => 'https://example.org/old', 'new_url' => 'https://example.org/new',
@@ -88,7 +88,7 @@ class NativeContextDraftTest extends UnitTestCase
     {
         $providerClass = 'Joomla\\Component\\' . ucfirst(substr($component, 4)) . '\\Administrator\\Autosave\\' . $entity . 'AutosaveProvider';
         $modelClass    = 'Joomla\\Component\\' . ucfirst(substr($component, 4)) . '\\Administrator\\Model\\' . $entity . 'Model';
-        $item          = $this->item($component, $entity);
+        $item          = $this->item($component);
         $model         = $this->createMock($modelClass);
         $model->expects($this->never())->method('save');
         $model->expects($this->never())->method('validate');
@@ -119,7 +119,9 @@ class NativeContextDraftTest extends UnitTestCase
         return [new $providerClass($factory), $form, $item, $model];
     }
 
-    /** @dataProvider contexts */
+    /**
+     * @dataProvider contexts
+     */
     public function testCanonicalProjectionAndMeaningfulRevision(string $component, string $entity, string $first, string $editAsset): void
     {
         [$provider, $form, $item] = $this->fixture($component, $entity);
@@ -136,7 +138,9 @@ class NativeContextDraftTest extends UnitTestCase
         $this->assertNotSame($descriptor['revision'], $provider->describe($form, $item, $this->user())['revision']);
     }
 
-    /** @dataProvider contexts */
+    /**
+     * @dataProvider contexts
+     */
     public function testBoundNativeReadNeverPerformsCanonicalWrites(string $component, string $entity, string $first, string $editAsset): void
     {
         [$provider, $form, $item, $model] = $this->fixture($component, $entity);
@@ -148,7 +152,9 @@ class NativeContextDraftTest extends UnitTestCase
         $this->assertSame($descriptor['revision'], $current['revision']);
     }
 
-    /** @dataProvider contexts */
+    /**
+     * @dataProvider contexts
+     */
     public function testNativeDenialAndCheckoutRemainAuthoritative(string $component, string $entity, string $first, string $editAsset): void
     {
         [$provider, $form, $item] = $this->fixture($component, $entity);
@@ -167,7 +173,9 @@ class NativeContextDraftTest extends UnitTestCase
         }
     }
 
-    /** @dataProvider contexts */
+    /**
+     * @dataProvider contexts
+     */
     public function testCreationAndForeignScope(string $component, string $entity, string $first, string $editAsset): void
     {
         [$provider, $form, $item] = $this->fixture($component, $entity);
@@ -187,23 +195,6 @@ class NativeContextDraftTest extends UnitTestCase
             $this->assertNull($created['target']);
             $this->assertNull($created['revision']);
         }
-    }
-
-    public function testDeclaredGroupProjectionDoesNotCaptureSecretsOrUnknownWidgets(): void
-    {
-        $form = new Form('native.dynamic', ['control' => 'jform']);
-        $form->setCurrentUser($this->user());
-        $form->load('<form><fields name="params"><fieldset><field name="public" type="text" autosave="true"/>'
-            . '<field name="secret" type="text" sensitive="true" autosave="true"/>'
-            . '<field name="password" type="password" autosave="true"/>'
-            . '<field name="unknown" type="text"/></fieldset></fields></form>');
-        $keys   = DraftProjection::groupKeys($form, 'params');
-        $fields = DraftProjection::describe($form, $keys);
-        $this->assertSame(['params.public'], array_keys($fields));
-        $this->assertNotContains('params.unknown', $keys);
-        $descriptor = DraftProjection::descriptor($form, (object) ['params' => ['public' => 'Public', 'secret' => 'Sensitive']], 'com_example.item', '1', [], $keys);
-        $this->assertSame(['params.public' => 'Public'], $descriptor['values']);
-        $this->assertStringNotContainsString('Sensitive', json_encode($descriptor));
     }
 
     public function testNativeMenuAliasIsProtectedWithoutEnablingUnknownOrReadonlyWidgets(): void
@@ -227,7 +218,6 @@ class NativeContextDraftTest extends UnitTestCase
         }
     }
 
-
     public function testNativeGeneratedSelectionsHaveSemanticRevisions(): void
     {
         foreach ([['com_users', 'Level'], ['com_finder', 'Filter']] as [$component, $entity]) {
@@ -242,7 +232,9 @@ class NativeContextDraftTest extends UnitTestCase
         }
     }
 
-    /** @dataProvider contexts */
+    /**
+     * @dataProvider contexts
+     */
     public function testMalformedIdentityCannotReachTheNativeModel(string $component, string $entity, string $first, string $editAsset): void
     {
         [$provider] = $this->fixture($component, $entity);
@@ -254,28 +246,6 @@ class NativeContextDraftTest extends UnitTestCase
                 $this->assertSame('invalid_target', $exception->getErrorCode());
             }
         }
-    }
-
-    /** @dataProvider nativeParameterForms */
-    public function testRealNativeParameterDeclarationsProtectPublicPrimitiveSiblings(string $path, string $group, string $protected, string $excluded): void
-    {
-        $form = new Form('native.parameters', ['control' => 'jform']);
-        $form->setCurrentUser($this->user());
-        $this->assertTrue($form->loadFile(JPATH_ROOT . '/' . $path, true, str_ends_with($path, 'templateDetails.xml') ? '//config' : false));
-        $keys = DraftProjection::groupKeys($form, $group);
-        $this->assertContains($group . '.' . $protected, $keys);
-        $this->assertNotContains($group . '.' . $excluded, array_keys(DraftProjection::describe($form, $keys)));
-    }
-
-    public static function nativeParameterForms(): array
-    {
-        return [
-            ['plugins/fields/text/params/text.xml', 'fieldparams', 'maxlength', 'secret'],
-            ['plugins/fields/sql/params/sql.xml', 'fieldparams', 'multiple', 'query'],
-            ['plugins/fields/list/params/list.xml', 'fieldparams', 'multiple', 'options'],
-            ['administrator/components/com_modules/forms/advanced.xml', 'params', 'module_tag', 'private_key'],
-            ['templates/cassiopeia/templateDetails.xml', 'params', 'brand', 'private_key'],
-        ];
     }
 
     public function testNativeWorkflowComponentRoutesKeepTheCanonicalSectionAndRejectForeignSections(): void

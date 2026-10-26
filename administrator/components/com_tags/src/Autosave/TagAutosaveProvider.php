@@ -1,10 +1,10 @@
 <?php
 
 /**
- * @package Joomla.Administrator
+ * @package    Joomla.Administrator
  * @subpackage com_tags
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Tags\Administrator\Autosave;
@@ -21,29 +21,35 @@ use Joomla\CMS\User\User;
 \defined('_JEXEC') or die;
 // phpcs:enable PSR1.Files.SideEffects
 
-/** Selected values from the native Tag form; canonical saving stays native. */
+/**
+ * Draft fields and access checks for the Tag form.
+ */
 final class TagAutosaveProvider implements DraftProviderInterface
 {
     private const KEYS = ['title', 'note', 'description', 'version_note', 'metadesc', 'metakey', 'parent_id'];
 
     /**
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function getContext(): string
     {
         return 'com_tags.tag';
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function describe(Form $form, object $item, User $user): array
     {
         $target = empty($item->id) ? null : (string) $item->id;
-        $this->authorize($user, $item, 0);
+        $this->authorize($user, $item);
         return DraftProjection::descriptor(
             $form,
             $item,
@@ -55,7 +61,9 @@ final class TagAutosaveProvider implements DraftProviderInterface
         );
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function read(array $binding, User $user, ?array $payload = null): array
     {
         $target = DraftModel::target($binding, $this->getContext());
@@ -73,9 +81,7 @@ final class TagAutosaveProvider implements DraftProviderInterface
         $this->authorize($user, $item);
         $form       = DraftModel::form($model, 'com_tags', $item);
         $descriptor = $this->describe($form, $item, $user);
-        if ($descriptor['scope'] !== $binding['scope']) {
-            throw new AutosaveException('scope_conflict', 'The native form scope changed.');
-        }
+        DraftModel::assertScope($descriptor['scope'], $binding['scope']);
         return $descriptor;
     }
 
@@ -88,8 +94,6 @@ final class TagAutosaveProvider implements DraftProviderInterface
         if (!$allowed) {
             throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
         }
-        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checkout_conflict', 'The native record is checked out by another user.');
-        }
+        DraftModel::assertCheckout($item, $user);
     }
 }

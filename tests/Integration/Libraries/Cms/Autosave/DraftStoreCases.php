@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package     Joomla.IntegrationTest
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @package   Joomla.IntegrationTest
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Libraries\Cms\Autosave;
@@ -69,21 +69,24 @@ trait DraftStoreCases
         $descriptor = array_replace($this->descriptor(null), ['context' => 'com_menus.menu', 'scope' => ['client_id' => '0', 'menutype' => 'original']]);
         $draft      = $this->store->open(7, $descriptor, $this->now);
         $this->preserve($draft, 1, 'recoverable');
-        $this->failure('scope_conflict', fn () => $this->store->reconcile(
-            7,
-            $draft['draft_id'],
-            1,
-            'com_menus.menu',
-            null,
-            ['client_id' => '0', 'menutype' => 'different'],
-            'apply',
-            '84',
-            null,
-            $this->now,
-            null,
-            false,
-            ['client_id' => '0', 'menutype' => 'completed']
-        ));
+        $this->failure(
+            'scope_conflict',
+            fn () => $this->store->reconcile(
+                7,
+                $draft['draft_id'],
+                1,
+                'com_menus.menu',
+                null,
+                ['client_id' => '0', 'menutype' => 'different'],
+                'apply',
+                '84',
+                null,
+                $this->now,
+                null,
+                false,
+                ['client_id' => '0', 'menutype' => 'completed']
+            )
+        );
         $row = $this->store->read(7, $draft['draft_id'], $this->now);
         $this->assertSame($descriptor['scope'], $row['scope']);
         $this->assertNull($row['target_id']);
@@ -142,7 +145,9 @@ trait DraftStoreCases
         $this->assertSame(['title' => 'latest'], $this->store->read(7, $draft['draft_id'], $this->now)['payload']);
     }
 
-    /** @dataProvider successOrderings */
+    /**
+     * @dataProvider successOrderings
+     */
     public function testSuccessRetiresOnlySubmittedSequence(bool $successFirst, bool $creating): void
     {
         $source = $creating ? null : '42';
@@ -206,30 +211,35 @@ trait DraftStoreCases
     {
         $draft = $this->store->open(7, $this->descriptor(), $this->now);
         $this->preserve($draft, 1, 'recoverable');
-        $this->failure('scope_conflict', fn () => $this->store->reconcile(
-            7,
-            $draft['draft_id'],
-            1,
-            'com_content.article',
-            '99',
-            [],
-            'save',
-            '42',
-            null,
-            $this->now
-        ));
+        $this->failure(
+            'scope_conflict',
+            fn () => $this->store->reconcile(
+                7,
+                $draft['draft_id'],
+                1,
+                'com_content.article',
+                '99',
+                [],
+                'save',
+                '42',
+                null,
+                $this->now
+            )
+        );
         $this->assertSame(['title' => 'recoverable'], $this->store->read(7, $draft['draft_id'], $this->now)['payload']);
     }
 
-    /** @dataProvider discardOrderings */
+    /**
+     * @dataProvider discardOrderings
+     */
     public function testDiscardAndDelayedWritesCannotResurrect(bool $discardFirst): void
     {
         $draft = $this->store->open(7, $this->descriptor(), $this->now);
         if (!$discardFirst) {
             $this->preserve($draft, 2, 'before discard');
         }
-        $this->store->discard(7, $draft['draft_id'], $this->now);
-        $this->failure('draft_not_found', fn () => $this->store->discard(7, $draft['draft_id'], $this->now));
+        $this->store->discard(7, $draft['draft_id']);
+        $this->failure('draft_not_found', fn () => $this->store->discard(7, $draft['draft_id']));
         $this->failure('draft_not_found', fn () => $this->preserve($draft, 3, 'after discard'));
         $this->failure('draft_not_found', fn () => $this->store->read(7, $draft['draft_id'], $this->now));
     }
@@ -309,6 +319,50 @@ trait DraftStoreCases
         }
     }
 
+    /**
+     * @dataProvider allocationStates
+     */
+    public function testQuotaHeadersIncludeEveryAllocationStateAndOnlyTheirOwner(string $state): void
+    {
+        $expected = [];
+        for ($index = 0; $index < DraftStore::MAX_OWNER_ROWS; $index++) {
+            $descriptor            = $this->descriptor();
+            $descriptor['context'] = $index % 2 ? 'com_banners.banner' : 'com_content.article';
+            $draft                 = $this->store->open(7, $descriptor, $this->now);
+            $kind                  = $state === 'mixed' ? ['untouched', 'values', 'saved'][$index % 3] : $state;
+            if ($kind === 'values') {
+                // An explicit clearing is still stored work, not an empty allocation.
+                $this->preserve($draft, 1, '');
+            } elseif ($kind === 'saved') {
+                $this->store->reconcile(7, $draft['draft_id'], 1, $descriptor['context'], '42', [], 'apply', '42', null, $this->now);
+            }
+            $expected[$draft['draft_id']] = [$kind === 'values', $kind === 'saved'];
+        }
+        $foreign = $this->store->open(8, $this->descriptor(), $this->now);
+        $this->failure('draft_limit_reached', fn () => $this->store->open(7, $this->descriptor(), $this->now));
+        $headers = $this->store->allocations(7);
+        $this->assertCount(DraftStore::MAX_OWNER_ROWS, $headers);
+        $ids = array_keys($expected);
+        sort($ids);
+        $this->assertSame($ids, array_column($headers, 'draft_id'));
+        foreach ($headers as $header) {
+            $this->assertSame(
+                [
+                'draft_id', 'context', 'target_id', 'created_at', 'updated_at', 'expires_at', 'has_preserved_values', 'has_save_marker',
+                ],
+                array_keys($header)
+            );
+            $this->assertSame($expected[$header['draft_id']], [$header['has_preserved_values'], $header['has_save_marker']]);
+            $this->assertContains($header['context'], ['com_content.article', 'com_banners.banner']);
+        }
+        $this->assertSame([$foreign['draft_id']], array_column($this->store->allocations(8), 'draft_id'));
+    }
+
+    public static function allocationStates(): array
+    {
+        return [['untouched'], ['saved'], ['values'], ['mixed']];
+    }
+
     public function testAllocatedRowsAreBoundedAndDiscardReleasesCapacity(): void
     {
         for ($index = 0; $index < DraftStore::MAX_OWNER_ROWS; $index++) {
@@ -317,7 +371,7 @@ trait DraftStoreCases
         $this->failure('draft_limit_reached', fn () => $this->store->open(7, $this->descriptor(null), $this->now));
         $otherOwner = $this->store->open(8, $this->descriptor(null), $this->now);
         $this->assertSame(0, $otherOwner['owner_slot']);
-        $this->store->discard(7, $draft['draft_id'], $this->now);
+        $this->store->discard(7, $draft['draft_id']);
         $replacement = $this->store->open(7, $this->descriptor(null), $this->now);
         $this->assertSame($draft['owner_slot'], $replacement['owner_slot']);
         $this->assertNotSame($draft['draft_id'], $replacement['draft_id']);
@@ -334,7 +388,7 @@ trait DraftStoreCases
         $current = $this->store->open(7, $this->descriptor(null), $this->now);
         $page    = $this->store->find(7, $current, $this->now);
         $this->assertCount(DraftStore::MAX_OWNER_ROWS - 1, $page['candidates']);
-        $this->assertNull($page['next']);
+        $this->assertSame(['candidates'], array_keys($page));
         $this->assertEqualsCanonicalizing($ids, array_column($page['candidates'], 'draft_id'));
         foreach ($page['candidates'] as $header) {
             $this->assertArrayNotHasKey('payload', $header);
@@ -342,18 +396,21 @@ trait DraftStoreCases
         $this->assertSame(0, $this->store->purge($this->now));
     }
 
-    public function testDiscoveryCursorCannotCrossOwnersTargetsOrScopes(): void
+    public function testDiscoveryReferencesCannotCrossOwnersTargetsOrScopes(): void
     {
         $source = $this->store->open(7, $this->descriptor(), $this->now);
         $this->preserve($source, 1, 'private');
         $current = $this->store->open(7, $this->descriptor(), $this->now);
-        $this->failure('invalid_request', fn () => $this->store->find(8, $current, $this->now, $source['draft_id']));
+        $sources = [$source['draft_id']];
+        $found   = $this->store->find(7, $current, $this->now, $sources);
+        $this->assertSame($sources, array_column($found['candidates'], 'draft_id'));
+        $this->assertSame([], $this->store->find(8, $current, $this->now, $sources)['candidates']);
         $other = $this->store->open(7, $this->descriptor('84'), $this->now);
-        $this->failure('invalid_request', fn () => $this->store->find(7, $other, $this->now, $source['draft_id']));
+        $this->assertSame([], $this->store->find(7, $other, $this->now, $sources)['candidates']);
         $scope          = $this->descriptor();
         $scope['scope'] = ['extension' => 'another'];
         $other          = $this->store->open(7, $scope, $this->now);
-        $this->failure('invalid_request', fn () => $this->store->find(7, $other, $this->now, $source['draft_id']));
+        $this->assertSame([], $this->store->find(7, $other, $this->now, $sources)['candidates']);
     }
 
     public function testEmptyBindingsExpireWithoutEverAppearingInRecovery(): void
@@ -373,17 +430,22 @@ trait DraftStoreCases
         $draft                       = $this->store->open(7, $this->descriptor(), $this->now);
         $this->preserve($draft, 1, 'last valid');
         $this->failure('payload_too_large', fn () => $this->preserve($draft, 2, str_repeat('x', 100)));
-        $this->failure('invalid_payload', fn () => $this->store->preserve(
-            7,
-            $draft['draft_id'],
-            2,
-            ['password' => 'secret'],
-            $this->now,
-            static fn (array $binding, mixed $payload): array => DraftProjection::normalize($payload, $binding['fields'])
-        ));
+        $this->failure(
+            'invalid_payload',
+            fn () => $this->store->preserve(
+                7,
+                $draft['draft_id'],
+                2,
+                ['password' => 'secret'],
+                $this->now,
+                static fn (array $binding, mixed $payload): array => DraftProjection::normalize($payload, $binding['fields'])
+            )
+        );
         $this->assertSame(['title' => 'last valid'], $this->store->read(7, $draft['draft_id'], $this->now)['payload']);
     }
-    /** @dataProvider recoveredTargets */
+    /**
+     * @dataProvider recoveredTargets
+     */
     public function testSaveRetiresOnlyItsSubmittedAndRecoveredSnapshots(?string $target): void
     {
         $source = $this->store->open(7, $this->descriptor($target), $this->now);
@@ -450,19 +512,22 @@ trait DraftStoreCases
         $this->preserve($source, 1, 'different record');
         $current = $this->store->open(7, $this->descriptor(), $this->now);
         $this->preserve($current, 1, 'submitted');
-        $this->failure('scope_conflict', fn () => $this->store->reconcile(
-            7,
-            $current['draft_id'],
-            1,
-            'com_content.article',
-            '42',
-            [],
-            'save',
-            '42',
-            null,
-            $this->now,
-            ['draft_id' => $source['draft_id'], 'revision' => 1]
-        ));
+        $this->failure(
+            'scope_conflict',
+            fn () => $this->store->reconcile(
+                7,
+                $current['draft_id'],
+                1,
+                'com_content.article',
+                '42',
+                [],
+                'save',
+                '42',
+                null,
+                $this->now,
+                ['draft_id' => $source['draft_id'], 'revision' => 1]
+            )
+        );
         $this->assertSame(['title' => 'submitted'], $this->store->read(7, $current['draft_id'], $this->now)['payload']);
         $this->assertSame(['title' => 'different record'], $this->store->read(7, $source['draft_id'], $this->now)['payload']);
     }
@@ -473,19 +538,22 @@ trait DraftStoreCases
         $this->preserve($source, 1, 'source');
         $current = $this->store->open(7, $this->descriptor(), $this->now);
         $this->preserve($current, 1, 'submitted');
-        $this->failure('invalid_request', fn () => $this->store->reconcile(
-            7,
-            $current['draft_id'],
-            1,
-            'com_content.article',
-            '42',
-            [],
-            'save',
-            '42',
-            null,
-            $this->now,
-            ['draft_id' => $source['draft_id'], 'revision' => 2]
-        ));
+        $this->failure(
+            'invalid_request',
+            fn () => $this->store->reconcile(
+                7,
+                $current['draft_id'],
+                1,
+                'com_content.article',
+                '42',
+                [],
+                'save',
+                '42',
+                null,
+                $this->now,
+                ['draft_id' => $source['draft_id'], 'revision' => 2]
+            )
+        );
         $this->assertSame(['title' => 'submitted'], $this->store->read(7, $current['draft_id'], $this->now)['payload']);
     }
 
@@ -521,14 +589,17 @@ trait DraftStoreCases
         $this->assertSame(['override' => 'later work'], $current['payload']);
         $this->assertSame(1, $current['retired_revision']);
         $this->assertSame(['override' => 'submitted'], $this->store->read(7, $other['draft_id'], $this->now)['payload']);
-        $this->failure('draft_retired', fn () => $this->store->preserve(
-            7,
-            $draft['draft_id'],
-            1,
-            ['override' => 'late submitted'],
-            $this->now,
-            static fn ($binding, $values) => $values
-        ));
+        $this->failure(
+            'draft_retired',
+            fn () => $this->store->preserve(
+                7,
+                $draft['draft_id'],
+                1,
+                ['override' => 'late submitted'],
+                $this->now,
+                static fn ($binding, $values) => $values
+            )
+        );
         $this->store->reconcile(
             7,
             $draft['draft_id'],
@@ -559,20 +630,23 @@ trait DraftStoreCases
             ['COM_OLD', $descriptor['scope'], false],
             ] as [$source, $scope, $rename]
         ) {
-            $this->failure('scope_conflict', fn () => $this->store->reconcile(
-                7,
-                $draft['draft_id'],
-                1,
-                $descriptor['context'],
-                $source,
-                $scope,
-                'apply',
-                'COM_RENAMED',
-                null,
-                $this->now,
-                null,
-                $rename
-            ));
+            $this->failure(
+                'scope_conflict',
+                fn () => $this->store->reconcile(
+                    7,
+                    $draft['draft_id'],
+                    1,
+                    $descriptor['context'],
+                    $source,
+                    $scope,
+                    'apply',
+                    'COM_RENAMED',
+                    null,
+                    $this->now,
+                    null,
+                    $rename
+                )
+            );
         }
     }
 }

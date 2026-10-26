@@ -72,7 +72,7 @@ const setup = (options = {}) => {
   runtimes.push(runtime);
   return runtime;
 };
-it('render binding starts with no initialization or canonical prepare request', () => {
+it('render binding starts with no initialization or saved item prepare request', () => {
   let requests = 0;
   let captures = 0;
   setup({
@@ -328,7 +328,7 @@ it('disposed native forms ignore late responses and unsubscribe request ownershi
   assert.strictEqual(runtime.lastPreserved, null);
   assert.strictEqual(runtime.requests.size, 0);
 }));
-it('confirmed preservation with an uncertain canonical baseline discloses conflict', () => cy.then(async () => {
+it('confirmed preservation with an uncertain saved item baseline discloses conflict', () => cy.then(async () => {
   const runtime = setup({
     fetcher: async () => acknowledgement(1, true),
   });
@@ -349,7 +349,7 @@ it('unsupported controls leave native submission metadata optional', () => {
   assert.strictEqual(runtime.state, 'unavailable');
   assert.strictEqual(runtime.lastPreserved, null);
 });
-it('native submission captures its protected values once and freezes that projection', () => cy.then(async () => {
+it('native submission captures its protected values once and freezes those values', () => cy.then(async () => {
   let captures = 0;
   let sent;
   const runtime = setup({
@@ -406,21 +406,23 @@ it('failed detection remains unavailable for protection and can retry without na
   assert.strictEqual(runtime.state, 'clean');
   assert.strictEqual(runtime.revision, 0);
 }));
-it('malformed detection data never claims readiness', () => cy.then(async () => {
-  const runtime = setup({
-    fetcher: async () => response({
-      candidates: [{
-        draft_id: 'unknown',
-        updated_at: 'invalid',
-      }],
-      conflict: false,
-    }),
-  });
-  await runtime.candidates().then(() => assert.fail('Expected request rejection'), (error) => {
-    assert.propertyVal(error, 'code', 'service_unavailable');
-  });
-  assert.strictEqual(runtime.state, 'offline');
-}));
+[
+  ['identity', { draft_id: 'not-a-draft-id', updated_at: '2026-10-23T00:00:00Z' }],
+  ['timestamp', { draft_id: 'a'.repeat(32), updated_at: 'invalid' }],
+].forEach(([field, candidate]) => {
+  it(`rejects malformed recovery candidate ${field}`, () => cy.then(async () => {
+    const runtime = setup({
+      fetcher: async () => response({
+        candidates: [candidate],
+        conflict: false,
+      }),
+    });
+    await runtime.candidates().then(() => assert.fail('Expected request rejection'), (error) => {
+      assert.propertyVal(error, 'code', 'service_unavailable');
+    });
+    assert.strictEqual(runtime.state, 'offline');
+  }));
+});
 it('late detection failure cannot replace an acknowledged preserve status', () => cy.then(async () => {
   const pending = deferred();
   const runtime = setup({
@@ -517,8 +519,7 @@ it('default browser transport keeps the Window receiver for detection and preser
   assert.strictEqual(runtime.state, 'preserved');
   assert.deepEqual(sent, ['draft.detect', 'draft.preserve']);
 }));
-it('explicit discovery paging forwards an opaque cursor without writing a draft', () => cy.then(async () => {
-  const cursor = 'b'.repeat(32);
+it('discovery sends only the draft identity without writing or advancing its revision', () => cy.then(async () => {
   let sent;
   const runtime = setup({
     fetcher: async (url, request) => {
@@ -526,43 +527,30 @@ it('explicit discovery paging forwards an opaque cursor without writing a draft'
       sent = JSON.parse(request.body);
       return response({
         candidates: [],
-        next: null,
         conflict: false,
       });
     },
   });
-  const result = await runtime.candidates(cursor);
+  const result = await runtime.candidates();
   assert.deepEqual(sent, {
     draft_id: 'a'.repeat(32),
-    cursor,
   });
-  assert.strictEqual(result.next, null);
+  assert.deepEqual(result, { candidates: [], conflict: false });
   assert.strictEqual(runtime.revision, 0);
   assert.strictEqual(runtime.pending, false);
 }));
-it('invalid next-page metadata never claims recovery readiness', () => cy.then(async () => {
-  const runtime = setup({
-    fetcher: async () => response({
-      candidates: [],
-      next: 'not-a-draft-id',
-      conflict: false,
-    }),
-  });
-  await runtime.candidates().then(() => assert.fail('Expected request rejection'), (error) => {
-    assert.propertyVal(error, 'code', 'service_unavailable');
-  });
-  assert.strictEqual(runtime.state, 'offline');
-}));
-it('an unchanged initial creation capture never becomes a recovery payload', () => cy.then(async () => {
+it('unchanged scalar and array values match the callback baseline without preserving', () => cy.then(async () => {
   let requests = 0;
   const runtime = setup({
     capture: () => ({
       title: '',
       articletext: '',
+      rules: ['1', '3'],
     }),
     baseline: () => ({
       title: '',
       articletext: '',
+      rules: ['1', '3'],
     }),
     fetcher: async () => {
       requests += 1;
@@ -858,23 +846,7 @@ it('genuine edits while submission waits behind an earlier write retain a higher
   assert.strictEqual(bodies[1].payload.title, 'real later edit');
   assert.strictEqual(runtime.state, 'preserved');
 }));
-it('unchanged native array selections do not manufacture a draft for fresh creation', () => cy.then(async () => {
-  const runtime = setup({
-    baseline: () => ({
-      rules: ['1', '3'],
-    }),
-    capture: () => ({
-      rules: ['1', '3'],
-    }),
-    fetcher: async () => {
-      throw new Error('Untouched creation must not write');
-    },
-  });
-  runtime.changed();
-  assert.strictEqual(await runtime.flush(), false);
-  assert.strictEqual(runtime.state, 'clean');
-}));
-it('unchanged array notifications during native Save keep the submitted retirement floor', () => cy.then(async () => {
+it('unchanged array notifications during native Save keep the submitted submitted revision', () => cy.then(async () => {
   const bodies = [];
   let selected = ['1', '3'];
   const runtime = setup({
@@ -968,30 +940,22 @@ it('an already absent recovery choice can be dismissed', () => cy.then(async () 
   await runtime.discard('b'.repeat(32));
   assert.notStrictEqual(runtime.state, 'discarded');
 }));
-for (const creating of [true, false]) {
-  it('the shared writer refuses untouched new and existing native projections: creating=' + creating, () => cy.then(async () => {
-    const runtime = setup({
-      binding: {
-        draftId: 'a'.repeat(32),
-        version: 1,
-        creating,
-        endpoint: 'http://localhost/administrator/index.php?option=com_ajax&plugin=autosave&group=system&format=json',
-      },
-      capture: () => ({
-        title: '',
-        rules: ['1', '3'],
-      }),
-      fetcher: async () => {
-        throw new Error('Untouched native form must not preserve');
-      },
-    });
-    runtime.initialProjection = {
+it('the shared writer refuses an unchanged initial projection with scalar and array values', () => cy.then(async () => {
+  const runtime = setup({
+    capture: () => ({
       title: '',
       rules: ['1', '3'],
-    };
-    runtime.changed();
-    assert.strictEqual(await runtime.flush(), false);
-    assert.strictEqual(runtime.state, 'clean');
-    assert.strictEqual(runtime.lastPreserved, null);
-  }));
-}
+    }),
+    fetcher: async () => {
+      throw new Error('Untouched native form must not preserve');
+    },
+  });
+  runtime.initialProjection = {
+    title: '',
+    rules: ['1', '3'],
+  };
+  runtime.changed();
+  assert.strictEqual(await runtime.flush(), false);
+  assert.strictEqual(runtime.state, 'clean');
+  assert.strictEqual(runtime.lastPreserved, null);
+}));

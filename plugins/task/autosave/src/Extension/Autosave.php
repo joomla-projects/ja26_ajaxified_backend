@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package     Joomla.Plugin
- * @subpackage  Task.autosave
+ * @package    Joomla.Plugin
+ * @subpackage Task.autosave
  *
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Plugin\Task\Autosave\Extension;
@@ -26,7 +26,7 @@ use Joomla\Event\SubscriberInterface;
 /**
  * Scheduled cleanup for retained Autosave data.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 final class Autosave extends CMSPlugin implements SubscriberInterface
 {
@@ -39,7 +39,7 @@ final class Autosave extends CMSPlugin implements SubscriberInterface
     /**
      * Supported task routines.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     private const TASKS_MAP = [
         'autosave.cleanup' => [
@@ -53,14 +53,14 @@ final class Autosave extends CMSPlugin implements SubscriberInterface
      *
      * @var boolean
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     protected $autoloadLanguage = true;
 
     /**
      * Constructor.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function __construct(
         array $config,
@@ -83,7 +83,7 @@ final class Autosave extends CMSPlugin implements SubscriberInterface
     /**
      * Purge one instance at a time within a soft run budget, using native Scheduler continuation.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     private function cleanup(ExecuteTaskEvent $event): int
     {
@@ -98,13 +98,24 @@ final class Autosave extends CMSPlugin implements SubscriberInterface
             } while ($count > 0 && $deleted < self::MAX_PURGE_ROWS && hrtime(true) < $deadline);
 
             $remaining = $this->drafts->hasExpired($now);
+        } catch (\Throwable $exception) {
+            try {
+                $this->logTask('Autosave cleanup failed. ' . $exception::class, 'error');
+            } catch (\Throwable) {
+                // A failed logger cannot replace the cleanup failure status.
+            }
+
+            return Status::KNOCKOUT;
+        }
+
+        try {
             $this->logTask(Text::sprintf('PLG_TASK_AUTOSAVE_DRAFT_CLEANUP_RESULT', $deleted));
 
             if ($remaining) {
                 $this->logTask(Text::_('PLG_TASK_AUTOSAVE_DRAFT_CLEANUP_REMAINING'));
             }
         } catch (\Throwable) {
-            return Status::KNOCKOUT;
+            // Reporting must not change the completed cleanup result or continuation decision.
         }
 
         return $remaining ? Status::WILL_RESUME : Status::OK;

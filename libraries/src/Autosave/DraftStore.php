@@ -3,8 +3,8 @@
 /**
  * Joomla! Content Management System
  *
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\CMS\Autosave;
@@ -19,27 +19,32 @@ use Joomla\Database\ParameterType;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * One owner-private editing instance per row; canonical records are never written here.
+ * Store private drafts for individual edit forms.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 final class DraftStore
 {
-    /** @since  __DEPLOY_VERSION__ */
+    /**
+     * @since __DEPLOY_VERSION__
+     */
     public const MAX_REVISION = 9007199254740991;
 
-    /** @since  __DEPLOY_VERSION__ */
-    public const DISCOVERY_PAGE_SIZE = 100;
-
-    /** @since  __DEPLOY_VERSION__ */
+    /**
+     * @since __DEPLOY_VERSION__
+     */
     public const PURGE_BATCH_SIZE = 100;
 
-    /** @since  __DEPLOY_VERSION__ */
+    /**
+     * @since __DEPLOY_VERSION__
+     */
     public const MAX_OWNER_ROWS = 64;
 
     private const MAX_WRITE_ATTEMPTS = 4;
 
-    /** @since  __DEPLOY_VERSION__ */
+    /**
+     * @since __DEPLOY_VERSION__
+     */
     public const POLICY = [
         'max_payload_bytes' => 4194304,
         'empty_ttl'         => 86400,
@@ -51,7 +56,7 @@ final class DraftStore
     /**
      * Constructor.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function __construct(private readonly DatabaseInterface $db, private readonly array $policy = self::POLICY)
     {
@@ -63,9 +68,9 @@ final class DraftStore
     }
 
     /**
-     * Allocate only during authorized native rendering; preserve never performs an upsert.
+     * Allocate a draft for a prepared edit form.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function open(int $owner, array $descriptor, Date $now): array
     {
@@ -119,7 +124,16 @@ final class DraftStore
                 $this->db->insertObject('#__autosave_drafts', $row);
                 return $this->loadRow($owner, $row->draft_id);
             } catch (ExecutionFailureException $exception) {
-                if (!\in_array((string) $exception->getCode(), ['1062', '23505'], true)) {
+                $code = (string) $exception->getCode();
+                // PDO joins SQLSTATE, vendor code and message into the exception text.
+                $duplicateKey = \in_array($code, ['1062', '23505'], true)
+                    || (
+                        $code === '23000'
+                        && $this->db->getServerType() === 'mysql'
+                        && str_starts_with($exception->getMessage(), '23000, 1062,')
+                    );
+
+                if (!$duplicateKey) {
                     throw $exception;
                 }
                 // Retry only a competing slot claim, never an unrelated unique key or SQL error.
@@ -140,7 +154,7 @@ final class DraftStore
     /**
      * Read an unexpired owner-bound instance.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function read(int $owner, string $id, Date $now): array
     {
@@ -155,7 +169,7 @@ final class DraftStore
     /**
      * Missing and foreign IDs are intentionally indistinguishable.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     private function loadRow(int $owner, string $id): array
     {
@@ -179,14 +193,43 @@ final class DraftStore
     }
 
     /**
-     * Return one page of headers; payloads are read after an explicit recovery choice.
+     * List the owner's bounded allocations without loading stored field values.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
-    public function find(int $owner, array $binding, Date $now, ?string $cursor = null, ?array $sources = null): array
+    public function allocations(int $owner): array
+    {
+        if ($owner <= 0) {
+            throw new AutosaveException('forbidden', 'Draft storage requires an existing owner.');
+        }
+
+        $query = $this->db->createQuery()
+            ->select($this->db->quoteName(['draft_id', 'context', 'target_id', 'created_at', 'updated_at', 'expires_at']))
+            ->select('CASE WHEN ' . $this->db->quoteName('payload') . ' IS NULL THEN 0 ELSE 1 END AS ' . $this->db->quoteName('has_preserved_values'))
+            ->select('CASE WHEN ' . $this->db->quoteName('retired_revision') . ' > 0 THEN 1 ELSE 0 END AS ' . $this->db->quoteName('has_save_marker'))
+            ->from($this->db->quoteName('#__autosave_drafts'))
+            ->where($this->db->quoteName('owner_id') . ' = :owner')
+            ->order($this->db->quoteName('updated_at') . ', ' . $this->db->quoteName('draft_id'))
+            ->bind(':owner', $owner, ParameterType::INTEGER);
+        $headers = $this->db->setQuery($query, 0, self::MAX_OWNER_ROWS)->loadAssocList();
+        foreach ($headers as &$header) {
+            $header['has_preserved_values'] = (bool) $header['has_preserved_values'];
+            $header['has_save_marker']      = (bool) $header['has_save_marker'];
+        }
+        unset($header);
+
+        return $headers;
+    }
+
+    /**
+     * List an owner's matching draft headers without reading field values.
+     *
+     * @since __DEPLOY_VERSION__
+     */
+    public function find(int $owner, array $binding, Date $now, ?array $sources = null): array
     {
         if ($sources === []) {
-            return ['candidates' => [], 'next' => null];
+            return ['candidates' => []];
         }
 
         $context = $binding['context'];
@@ -195,14 +238,16 @@ final class DraftStore
         $id      = $binding['draft_id'];
         $instant = $now->toSql();
         $query   = $this->db->createQuery()
-            ->select($this->db->quoteName(['draft_id', 'baseline_revision', 'updated_at', 'schema_version']))
+            ->select($this->db->quoteName(['draft_id', 'baseline_revision', 'updated_at']))
             ->from($this->db->quoteName('#__autosave_drafts'))
             ->where($this->db->quoteName('owner_id') . ' = :owner')
             ->where($this->db->quoteName('context') . ' = :context')
             ->where($this->db->quoteName('scope') . ' = :scope')
             ->where($this->db->quoteName('expires_at') . ' > :now')
-            ->where($target === null ? $this->db->quoteName('target_id') . ' IS NULL'
-                : $this->db->quoteName('target_id') . ' = :target')
+            ->where(
+                $target === null ? $this->db->quoteName('target_id') . ' IS NULL'
+                : $this->db->quoteName('target_id') . ' = :target'
+            )
             ->where($this->db->quoteName('draft_id') . ' <> :draft')
             ->where($this->db->quoteName('payload') . ' IS NOT NULL')
             ->order($this->db->quoteName('updated_at') . ' DESC, ' . $this->db->quoteName('draft_id'))
@@ -217,42 +262,13 @@ final class DraftStore
             $query->whereIn($this->db->quoteName('draft_id'), $sources, ParameterType::STRING);
         }
 
-        if ($cursor !== null) {
-            if (preg_match('/^[a-f0-9]{32}$/D', $cursor) !== 1) {
-                throw new AutosaveException('invalid_request', 'Invalid draft discovery cursor.');
-            }
-
-            // Use only an eligible owner's header as the cursor; never load a payload for paging.
-            $cursorQuery = clone $query;
-            $cursorQuery->where($this->db->quoteName('draft_id') . ' = :cursor')->bind(':cursor', $cursor);
-            $header = $this->db->setQuery($cursorQuery, 0, 1)->loadAssoc();
-
-            if (!$header) {
-                throw new AutosaveException('invalid_request', 'Invalid draft discovery cursor.');
-            }
-
-            $before = $header['updated_at'];
-            $query->where('(' . $this->db->quoteName('updated_at') . ' < :before OR ('
-                . $this->db->quoteName('updated_at') . ' = :before AND '
-                . $this->db->quoteName('draft_id') . ' > :cursor))')
-                ->bind(':before', $before)->bind(':cursor', $cursor);
-        }
-
-        $headers = $this->db->setQuery($query, 0, self::DISCOVERY_PAGE_SIZE + 1)->loadAssocList();
-        $next    = null;
-
-        if (\count($headers) > self::DISCOVERY_PAGE_SIZE) {
-            array_pop($headers);
-            $next = $headers[array_key_last($headers)]['draft_id'];
-        }
-
-        return ['candidates' => $headers, 'next' => $next];
+        return ['candidates' => $this->db->setQuery($query, 0, self::MAX_OWNER_ROWS)->loadAssocList()];
     }
 
     /**
      * Validate outside the write and acknowledge only a matching conditional update or retry.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function preserve(int $owner, string $id, int $revision, mixed $payload, Date $now, callable $validate): array
     {
@@ -307,9 +323,9 @@ final class DraftStore
     }
 
     /**
-     * A successful native task retires a sequence, never an entire tab's future edits.
+     * Clear submitted revisions after a successful save.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function reconcile(
         int $owner,
@@ -363,11 +379,9 @@ final class DraftStore
             }
             if (
                 $alreadyRetired
-                && (
-                    $row['context'] !== $context || $row['result_id'] !== $result
-                    || $row['target_id'] !== ($task === 'save2copy' ? $source : $result)
-                    || $row['scope'] !== ($task === 'save2copy' ? $scope : ($resultScope ?? $scope))
-                )
+                && (                $row['context'] !== $context || $row['result_id'] !== $result
+                || $row['target_id'] !== ($task === 'save2copy' ? $source : $result)
+                || $row['scope'] !== ($task === 'save2copy' ? $scope : ($resultScope ?? $scope)))
             ) {
                 throw new AutosaveException('scope_conflict', 'The native result does not match the retired draft.');
             }
@@ -401,11 +415,11 @@ final class DraftStore
     }
 
     /**
-     * Owner-only physical discard cannot be undone by a delayed preserve UPDATE.
+     * Delete an owner's selected draft.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
-    public function discard(int $owner, string $id, Date $now): void
+    public function discard(int $owner, string $id): void
     {
         $this->assertAutocommit();
         for ($attempt = 0; $attempt < self::MAX_WRITE_ATTEMPTS; $attempt++) {
@@ -422,13 +436,13 @@ final class DraftStore
     /**
      * One physical cleanup batch; the native scheduler supplies the run budget.
      *
-     * @param   Date          $now       The expiry cutoff.
-     * @param   integer       $limit     The maximum discovery batch size.
-     * @param   float|null    $deadline  Optional monotonic nanosecond deadline from hrtime(true).
+     * @param Date       $now      The expiry cutoff.
+     * @param integer    $limit    The maximum discovery batch size.
+     * @param float|null $deadline Optional monotonic nanosecond deadline from hrtime(true).
      *
-     * @return  integer  The number of rows physically deleted.
+     * @return integer  The number of rows physically deleted.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function purge(Date $now, int $limit = self::PURGE_BATCH_SIZE, ?float $deadline = null): int
     {
@@ -460,7 +474,7 @@ final class DraftStore
     /**
      * Let the native Scheduler request continuation without reading expired payloads.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function hasExpired(Date $now): bool
     {
@@ -607,8 +621,12 @@ final class DraftStore
 
         foreach ($values as $column => &$value) {
             $query->set($this->db->quoteName($column) . ' = :set_' . $column)
-                ->bind(':set_' . $column, $value, $value === null ? ParameterType::NULL
-                    : (\is_int($value) ? ParameterType::INTEGER : ParameterType::STRING));
+                ->bind(
+                    ':set_' . $column,
+                    $value,
+                    $value === null ? ParameterType::NULL
+                    : (\is_int($value) ? ParameterType::INTEGER : ParameterType::STRING)
+                );
         }
 
         unset($value);

@@ -1,16 +1,16 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_languages
+ * @package    Joomla.Administrator
+ * @subpackage com_languages
  *
- * @copyright   (C) 2011 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2011 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Languages\Administrator\View\Override;
 
-use Joomla\CMS\Autosave\DraftView;
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -26,62 +26,50 @@ use Joomla\Component\Languages\Administrator\Model\OverrideModel;
 /**
  * View to edit a language override
  *
- * @since  2.5
+ * @since 2.5
  */
 class HtmlView extends BaseHtmlView
 {
-    /**
-     * Whether draft controls are shown for this form.
-     *
-     * @var    boolean
-     * @since  __DEPLOY_VERSION__
-     */
-    public bool $autosaveEnabled = false;
-
-    /**
-     * Layout ID for the draft status.
-     *
-     * @var    string
-     * @since  __DEPLOY_VERSION__
-     */
-    public string $autosaveStatusId = 'override-autosave-status';
+    use DraftViewTrait;
 
     /**
      * The form to use for the view.
      *
-     * @var     object
-     * @since   2.5
+     * @var   object
+     * @since 2.5
      */
     protected $form;
 
     /**
      * The item to edit.
      *
-     * @var     object
-     * @since   2.5
+     * @var   object
+     * @since 2.5
      */
     protected $item;
 
     /**
      * The model state.
      *
-     * @var     object
-     * @since   2.5
+     * @var   object
+     * @since 2.5
      */
     protected $state;
 
     /**
      * Displays the view.
      *
-     * @param   string  $tpl  The name of the template file to parse
+     * @param string $tpl The name of the template file to parse
      *
-     * @return  void
+     * @return void
      *
-     * @since   2.5
+     * @since 2.5
      */
     public function display($tpl = null)
     {
-        /** @var OverrideModel $model */
+        /**
+ * @var OverrideModel $model
+*/
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -120,55 +108,33 @@ class HtmlView extends BaseHtmlView
             ->addControlField('filter_client', $this->state->get('filter.client') === 'administrator' ? 1 : 0)
             ->addControlField('filter_language', $this->state->get('filter.language'));
 
-        $this->prepareAutosave();
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $item                  = clone $this->item;
+            $item->client          = (string) $this->state->get('filter.client');
+            $item->language        = (string) $this->state->get('filter.language');
 
-        $this->addToolbar();
-        if ($this->autosaveEnabled) {
-            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
-        }
-        parent::display($tpl);
-    }
-
-    /**
-     * Prepare draft controls for this form.
-     *
-     * @since  __DEPLOY_VERSION__
-     */
-    private function prepareAutosave(): void
-    {
-        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
-            return;
-        }
-        $item                  = clone $this->item;
-        $item->client          = (string) $this->state->get('filter.client');
-        $item->language        = (string) $this->state->get('filter.language');
-        try {
-            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(
-                Factory::getApplication(),
-                $this->getDocument(),
-                $this->getCurrentUser(),
-                $this->form,
-                $item,
+            $this->prepareAutosave(
                 [
-                    'context'   => 'com_languages.override',
-                    'formId'    => 'override-form',
-                    'statusId'  => $this->autosaveStatusId,
-                    'saveTasks' => ['override.apply', 'override.save', 'override.save2new'],
+                'context'   => 'com_languages.override',
+                'formId'    => 'override-form',
+                'statusId'  => 'override-autosave-status',
+                'saveTasks' => ['override.apply', 'override.save', 'override.save2new'],
+                'item'      => $item,
                 ]
             );
-        } catch (\Throwable) {
-            // Draft setup is optional; keep the form and its save actions available.
-            $this->autosaveEnabled = false;
         }
-    }
 
+        $this->addToolbar();
+        $this->addAutosaveStatus();
+        parent::display($tpl);
+    }
 
     /**
      * Adds the page title and toolbar.
      *
      * @return void
      *
-     * @since   2.5
+     * @since 2.5
      */
     protected function addToolbar()
     {

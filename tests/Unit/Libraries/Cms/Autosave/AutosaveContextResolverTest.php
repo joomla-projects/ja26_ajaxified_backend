@@ -1,11 +1,11 @@
 <?php
 
 /**
- * @package     Joomla.UnitTest
- * @subpackage  Autosave
+ * @package    Joomla.UnitTest
+ * @subpackage Autosave
  *
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Unit\Libraries\Cms\Autosave;
@@ -22,20 +22,14 @@ use Joomla\Tests\Unit\UnitTestCase;
 /**
  * Tests exact-context component capability discovery.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 class AutosaveContextResolverTest extends UnitTestCase
 {
+    use ContextTestCases;
+
     /**
-     * @testdox  rejects malformed and component-only contexts before booting a component
-     *
-     * @param   string  $context  The malformed context.
-     *
-     * @return  void
-     *
      * @dataProvider malformedContextProvider
-     *
-     * @since   __DEPLOY_VERSION__
      */
     public function testMalformedContextsFailBeforeBoot(string $context): void
     {
@@ -51,44 +45,6 @@ class AutosaveContextResolverTest extends UnitTestCase
         }
     }
 
-    /**
-     * Malformed context cases.
-     *
-     * @return  array
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    public function malformedContextProvider(): array
-    {
-        return [
-            'empty'                => [''],
-            'component only'       => ['com_example'],
-            'uppercase component'  => ['com_Example.record'],
-            'uppercase entity'     => ['com_example.Record'],
-            'leading whitespace'   => [' com_example.record'],
-            'trailing whitespace'  => ['com_example.record '],
-            'internal whitespace'  => ['com_example.re cord'],
-            'empty component'      => ['com_.record'],
-            'empty entity'         => ['com_example.'],
-            'extra segment'        => ['com_example.record.extra'],
-            'path syntax'          => ['com_example../record'],
-            'class syntax'         => ['Vendor\\Provider'],
-            'wildcard'             => ['com_*.record'],
-            'leading prefix'       => ['xcom_example.record'],
-            'trailing suffix'      => ['com_example.record*'],
-            'leading hyphen'       => ['com_-example.record'],
-            'trailing hyphen'      => ['com_example-.record'],
-            'empty hyphen segment' => ['com_example--addon.record'],
-        ];
-    }
-
-    /**
-     * @testdox  resolves a fake third-party provider only through explicit interface capability and exact context
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
     public function testExactContextResolvesFakeProvider(): void
     {
         $provider  = new ResolverTestProvider('com_example.record');
@@ -113,13 +69,6 @@ class AutosaveContextResolverTest extends UnitTestCase
         $this->assertSame(['com_example'], $enabledComponents);
     }
 
-    /**
-     * @testdox  resolves a valid provider owned by a hyphenated Joomla component
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
     public function testHyphenatedComponentContextResolves(): void
     {
         $context   = 'com_example-addon.record';
@@ -139,13 +88,6 @@ class AutosaveContextResolverTest extends UnitTestCase
         $this->assertSame($provider, $resolver->resolve($context));
     }
 
-    /**
-     * @testdox  accepts the storage-compatible context boundary and rejects the next byte
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
     public function testContextLengthBoundary(): void
     {
         $acceptedContext = 'com_example.' . str_repeat('a', 243);
@@ -176,13 +118,6 @@ class AutosaveContextResolverTest extends UnitTestCase
         }
     }
 
-    /**
-     * @testdox  rejects a trait-only component because the interface is the discoverable capability
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
     public function testTraitAloneDoesNotAdvertiseCapability(): void
     {
         $component = new ResolverTestTraitOnlyComponent();
@@ -194,13 +129,6 @@ class AutosaveContextResolverTest extends UnitTestCase
         $this->assertUnsupported($this->applicationReturning($component), 'com_example.record');
     }
 
-    /**
-     * @testdox  rejects undeclared exact contexts on otherwise capable components
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
     public function testUndeclaredContextFailsClosed(): void
     {
         $component = new ResolverTestCapableComponent(['com_example.record' => 'Record']);
@@ -212,13 +140,6 @@ class AutosaveContextResolverTest extends UnitTestCase
         $this->assertUnsupported($this->applicationReturning($component), 'com_example.other');
     }
 
-    /**
-     * @testdox  requires supported contexts to be associative keys rather than list values
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
     public function testContextDeclarationIsKeyBased(): void
     {
         $component = new ResolverTestCapableComponent(['com_example.record']);
@@ -230,13 +151,6 @@ class AutosaveContextResolverTest extends UnitTestCase
         $this->assertUnsupported($this->applicationReturning($component), 'com_example.record');
     }
 
-    /**
-     * @testdox  resolves the same exact provider deterministically on repeated requests
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
     public function testRepeatedResolutionIsDeterministic(): void
     {
         $provider   = new ResolverTestProvider('com_example.record');
@@ -264,13 +178,6 @@ class AutosaveContextResolverTest extends UnitTestCase
         $this->assertSame(2, $enabledCount);
     }
 
-    /**
-     * @testdox  normalizes disabled, incapable, mismatched and failing component resolution
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
     public function testResolutionFailuresAreNormalized(): void
     {
         $application = $this->createMock(CMSApplicationInterface::class);
@@ -297,13 +204,6 @@ class AutosaveContextResolverTest extends UnitTestCase
         $this->assertUnsupported($this->applicationReturning($failing), 'com_example.record');
     }
 
-    /**
-     * @testdox  exposes stable transport-neutral domain failure identifiers
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
     public function testExceptionContractIsTransportNeutral(): void
     {
         $exception = new AutosaveException('example_failure', 'A safe public failure.');
@@ -313,13 +213,6 @@ class AutosaveContextResolverTest extends UnitTestCase
         $this->assertFalse(method_exists($exception, 'getHttpStatus'));
     }
 
-    /**
-     * @testdox  rejects malformed public domain failure identifiers
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
     public function testExceptionRejectsMalformedErrorIdentifier(): void
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -327,13 +220,6 @@ class AutosaveContextResolverTest extends UnitTestCase
         new AutosaveException('Invalid Failure', 'A safe public failure.');
     }
 
-    /**
-     * Build an application mock returning a component.
-     *
-     * @return  CMSApplicationInterface
-     *
-     * @since   __DEPLOY_VERSION__
-     */
     private function applicationReturning(ComponentInterface $component): CMSApplicationInterface
     {
         $application = $this->createMock(CMSApplicationInterface::class);
@@ -342,13 +228,6 @@ class AutosaveContextResolverTest extends UnitTestCase
         return $application;
     }
 
-    /**
-     * Assert normalized unsupported-context behavior.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
     private function assertUnsupported(
         CMSApplicationInterface $application,
         string $context,

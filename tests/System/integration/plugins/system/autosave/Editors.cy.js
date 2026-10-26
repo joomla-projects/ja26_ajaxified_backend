@@ -31,6 +31,20 @@
       });
     };
 
+    const openEditor = (articleData = null) => {
+      if (articleData) {
+        cy.db_createArticle(articleData).then((article) => {
+          cy.visit('/administrator/index.php?option=com_content&view=articles');
+          cy.searchForItem(`id:${article.id}`);
+          cy.get(`a[href*="task=article.edit"][href*="id=${article.id}"]`).should('have.length', 1).click();
+        });
+      } else {
+        cy.visit('/administrator/index.php?option=com_content&task=article.add');
+      }
+      editorReady();
+      cy.wait('@detect').its('response.body.success').should('equal', true);
+    };
+
     beforeEach(() => {
       userId = null;
       api = null;
@@ -44,6 +58,15 @@
         username, email: `${username}@example.com`,
         group_id: 8, params: JSON.stringify({ editor: provider, allowTourAutoStart: 0 }),
       }).then((id) => { userId = Number(id); });
+      // Keep delayed dashboard session writes out of the editor's native edit-ID setup.
+      cy.intercept({
+        method: 'GET', pathname: '**/administrator/index.php',
+        query: { option: 'com_joomlaupdate', task: 'update.healthstatus' },
+      }, { body: { active: false, healthy: true } });
+      cy.intercept({
+        method: 'GET', pathname: '**/administrator/index.php',
+        query: { option: 'com_joomlaupdate', task: 'update.ajax' },
+      }, { body: [] });
       cy.doAdministratorLogin(username, 'test', false);
       cy.intercept('POST', '**/administrator/index.php*', (request) => {
         const task = new URL(request.url).searchParams.get('task');
@@ -53,20 +76,11 @@
           writes.push(request.body);
         }
       });
-      cy.visit('/administrator/index.php?option=com_content&task=article.add');
-      cy.wait('@detect').its('response.body.success').should('equal', true);
-      editorReady();
     });
 
     [false, true].forEach((creating) => {
       it(`keeps unchanged native serialization clean and protects clearing (${creating ? 'new' : 'existing'})`, () => {
-        if (!creating) {
-          cy.db_createArticle({ title: articleTitle, introtext: '<p></p>' }).then((article) => {
-            cy.visit(`/administrator/index.php?option=com_content&task=article.edit&id=${article.id}`);
-          });
-          cy.wait('@detect');
-          editorReady();
-        }
+        openEditor(creating ? null : { title: articleTitle, introtext: '<p></p>' });
         cy.get('[data-draft-state="clean"]').should('be.visible');
         cy.clock(Date.now(), ['setTimeout', 'clearTimeout', 'Date']);
         cy.window().then((win) => {
@@ -98,6 +112,7 @@
     });
 
     it('keeps independent subscriptions, programmatic changes and idempotent cleanup', () => {
+      openEditor();
       cy.then(() => {
         let first = 0;
         let second = 0;
@@ -131,6 +146,7 @@
     });
 
     it('reports replacement after registry mutation and rejects stale unregister and subscriptions', () => {
+      openEditor();
       cy.then(() => {
         const events = [];
         let staleCalls = 0;
@@ -174,13 +190,7 @@
 
     [false, true].forEach((creating) => {
       it(`retires only submitted changes through native Apply and Save & Close (${creating ? 'new' : 'existing'})`, () => {
-        if (!creating) {
-          cy.db_createArticle({ title: articleTitle }).then((article) => {
-            cy.visit(`/administrator/index.php?option=com_content&task=article.edit&id=${article.id}`);
-          });
-          cy.wait('@detect');
-          editorReady();
-        }
+        openEditor(creating ? null : { title: articleTitle });
         cy.get('#jform_title').clear();
         cy.get('#jform_title').type(articleTitle);
         cy.window().then((win) => {
@@ -217,6 +227,7 @@
     });
 
     it('observes real typing and undo, without treating selection alone as an edit', () => {
+      openEditor();
       const changes = [];
       cy.then(() => {
         disposers.push(editor.subscribeChange((...args) => changes.push(args)));

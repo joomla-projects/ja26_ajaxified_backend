@@ -1,16 +1,16 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_tags
+ * @package    Joomla.Administrator
+ * @subpackage com_tags
  *
- * @copyright   (C) 2013 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2013 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Tags\Administrator\View\Tag;
 
-use Joomla\CMS\Autosave\DraftView;
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -27,81 +27,70 @@ use Joomla\Component\Tags\Administrator\Model\TagModel;
 /**
  * HTML View class for the Tags component
  *
- * @since  3.1
+ * @since 3.1
  */
 class HtmlView extends BaseHtmlView
 {
-    /**
-     * Whether draft controls are shown for this form.
-     *
-     * @var    boolean
-     * @since  __DEPLOY_VERSION__
-     */
-    public bool $autosaveEnabled = false;
+    use DraftViewTrait;
 
-    /**
-     * Layout ID for the draft status.
-     *
-     * @var    string
-     * @since  __DEPLOY_VERSION__
-     */
-    public string $autosaveStatusId = 'tag-autosave-status';
     /**
      * The Form object
      *
-     * @var  \Joomla\CMS\Form\Form
+     * @var \Joomla\CMS\Form\Form
      */
     protected $form;
 
     /**
      * The active item
      *
-     * @var  object
+     * @var object
      */
     protected $item;
 
     /**
      * The model state
      *
-     * @var  \Joomla\Registry\Registry
+     * @var \Joomla\Registry\Registry
      */
     protected $state;
 
     /**
      * Flag if an association exists
      *
-     * @var  boolean
+     * @var boolean
      */
     protected $assoc;
 
     /**
      * The actions the user is authorised to perform
      *
-     * @var    \Joomla\Registry\Registry
+     * @var \Joomla\Registry\Registry
      *
-     * @since  4.0.0
+     * @since 4.0.0
      */
     protected $canDo;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var    string[]
+     * @var string[]
      *
-     * @since  5.2.0
+     * @since 5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Display the view
      *
-     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
+     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return  void
+     * @return void
      */
     public function display($tpl = null)
     {
-        /** @var TagModel $model */
+        /**
+ * @var TagModel $model
+*/
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -113,41 +102,23 @@ class HtmlView extends BaseHtmlView
         $this->form
             ->addControlField('task');
         $this->addToolbar();
-        $this->prepareAutosave();
+        $this->prepareAutosave(
+            [
+            'context'   => 'com_tags.tag',
+            'formId'    => 'item-form',
+            'statusId'  => 'tag-autosave-status',
+            'saveTasks' => ['tag.apply', 'tag.save', 'tag.save2new', 'tag.save2copy'],
+            ]
+        );
+        $this->addAutosaveStatus();
 
         parent::display($tpl);
     }
 
     /**
-     * Configure optional drafts only for supported native edit layouts.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    private function prepareAutosave(): void
-    {
-        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
-            return;
-        }
-        try {
-            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
-                'context'   => 'com_tags.tag', 'formId' => 'item-form', 'statusId' => $this->autosaveStatusId,
-                'saveTasks' => ['tag.apply', 'tag.save', 'tag.save2new', 'tag.save2copy'],
-            ]);
-        } catch (\Throwable) {
-            // Draft setup is optional; keep the form and its save actions available.
-            $this->autosaveEnabled = false;
-        }
-        if ($this->autosaveEnabled) {
-            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
-        }
-    }
-
-    /**
      * Add the page title and toolbar.
      *
-     * @since  3.1
+     * @since 3.1
      *
      * @return void
      */

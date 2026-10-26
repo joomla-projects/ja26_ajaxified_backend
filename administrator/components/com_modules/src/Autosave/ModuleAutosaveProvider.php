@@ -1,10 +1,10 @@
 <?php
 
 /**
- * @package Joomla.Administrator
+ * @package    Joomla.Administrator
  * @subpackage com_modules
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Modules\Administrator\Autosave;
@@ -26,30 +26,34 @@ use Joomla\CMS\User\User;
 /**
  * Native Module identity, prepared form and selected private values.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 final class ModuleAutosaveProvider implements DraftProviderInterface
 {
     private const KEYS = ['title', 'note', 'version_note', 'showtitle', 'position', 'content'];
 
     /**
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function getContext(): string
     {
         return 'com_modules.module';
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function describe(Form $form, object $item, User $user): array
     {
         $scope = $this->scope($item);
-        $this->authorize($user, $item, $scope);
+        $this->authorize($user, $item);
 
         $keys       = array_merge(self::KEYS, DraftProjection::groupKeys($form, 'params'));
         $descriptor = DraftProjection::descriptor(
@@ -66,7 +70,9 @@ final class ModuleAutosaveProvider implements DraftProviderInterface
         return $descriptor;
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function read(array $binding, User $user, ?array $payload = null): array
     {
         $target = DraftModel::target($binding, $this->getContext());
@@ -82,12 +88,10 @@ final class ModuleAutosaveProvider implements DraftProviderInterface
             throw new AutosaveException('target_not_found', 'The native record was not found.');
         }
 
-        $this->authorize($user, $item, $binding['scope']);
+        $this->authorize($user, $item);
         $form       = DraftModel::form($model, 'com_modules', $item);
         $descriptor = $this->describe($form, $item, $user);
-        if ($descriptor['scope'] !== $binding['scope']) {
-            throw new AutosaveException('scope_conflict', 'The native extension, route or client changed.');
-        }
+        DraftModel::assertScope($descriptor['scope'], $binding['scope'], 'The native extension, route or client changed.');
         return $descriptor;
     }
 
@@ -105,7 +109,7 @@ final class ModuleAutosaveProvider implements DraftProviderInterface
         return ['client_id' => (string) $client, 'module' => $element, 'extension_id' => (string) $extension->extension_id];
     }
 
-    private function authorize(User $user, object $item, array $scope): void
+    private function authorize(User $user, object $item): void
     {
         if ((int) $user->id <= 0 || $user->guest || !$user->authorise('core.manage', 'com_modules')) {
             throw new AutosaveException('forbidden', 'Native component access is denied.');
@@ -113,8 +117,6 @@ final class ModuleAutosaveProvider implements DraftProviderInterface
         if (!(empty($item->id) ? ($user->authorise('core.create', 'com_modules') || \count($user->getAuthorisedCategories('com_modules', 'core.create')) > 0) : $user->authorise('core.edit', 'com_modules.module.' . (int) $item->id))) {
             throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
         }
-        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checkout_conflict', 'The native record is checked out by another user.');
-        }
+        DraftModel::assertCheckout($item, $user);
     }
 }

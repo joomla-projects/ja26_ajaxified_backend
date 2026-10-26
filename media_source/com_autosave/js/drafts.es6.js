@@ -60,8 +60,53 @@ const sameProjection = (left, right) => Object.keys(left).length === Object.keys
       ? value.length === right[key].length && value.every((selected, index) => selected === right[key][index])
       : right[key] === value));
 
+/** Shared private-store transport, also usable before a writer can be allocated. */
+export async function requestDraft(operation, data, transport) {
+  if (transport.destroyed) throw new DOMException('Disposed form', 'AbortError');
+  const controller = new AbortController();
+  transport.requests.add(controller);
+  let timer;
+  const deadline = new Promise((resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(Object.assign(new Error('Draft response timeout'), { code: 'transport_failure' }));
+    }, transport.timeout);
+  });
+  try {
+    const response = await Promise.race([
+      (async () => {
+        const url = new URL(transport.binding.endpoint, globalThis.location?.href);
+        url.searchParams.set('task', 'draft.' + operation);
+        const result = await transport.fetcher(url.toString(), {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': transport.csrfToken() },
+          body: JSON.stringify(data),
+          signal: controller.signal,
+        });
+        const body = await result.json();
+        if (!result.ok || body.success !== true) {
+          throw Object.assign(new Error('Draft request failed'), {
+            code: body.data?.code || (result.status === 401 ? 'authentication_required' : 'service_unavailable'),
+          });
+        }
+        return body.data;
+      })(),
+      deadline,
+    ]);
+    if (transport.destroyed) throw new DOMException('Disposed form', 'AbortError');
+    return response;
+  } catch (error) {
+    if (!error.code && error.name !== 'AbortError') error.code = 'transport_failure';
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    transport.requests.delete(controller);
+  }
+}
+
 /**
- * One native form instance, one outstanding preserve request, no canonical-save transport.
+ * Serialize draft requests for one edit form.
  */
 export default class DraftRuntime {
   constructor({
@@ -100,7 +145,6 @@ export default class DraftRuntime {
 
   status(state, code = null) {
     if (this.destroyed) return;
-    this.protectionState = state;
     this.code = code;
     this.state = state;
     this.onState({ state, code, lastPreserved: this.lastPreserved });
@@ -131,17 +175,6 @@ export default class DraftRuntime {
     this.timer = setTimeout(due, this.debounce);
     if (this.deadlineTimer === null) {
       this.deadlineTimer = setTimeout(due, Math.max(0, this.interval - (Date.now() - this.dirtySince)));
-    }
-  }
-
-  reconcileControls() {
-    try {
-      const current = this.capture();
-      const previous = this.acknowledged ?? this.baseline?.() ?? this.initialProjection;
-      if (!previous || !sameProjection(current, previous)) this.changed();
-    } catch (error) {
-      this.blocked = true;
-      this.status('unavailable', 'unsupported_controls');
     }
   }
 
@@ -176,48 +209,8 @@ export default class DraftRuntime {
     this.schedule();
   }
 
-  async request(operation, data) {
-    if (this.destroyed) throw new DOMException('Disposed form', 'AbortError');
-    const controller = new AbortController();
-    this.requests.add(controller);
-    let timer;
-    const deadline = new Promise((resolve, reject) => {
-      timer = setTimeout(() => {
-        controller.abort();
-        reject(Object.assign(new Error('Draft response timeout'), { code: 'transport_failure' }));
-      }, this.timeout);
-    });
-    try {
-      const response = await Promise.race([
-        (async () => {
-          const url = new URL(this.binding.endpoint, globalThis.location?.href);
-          url.searchParams.set('task', 'draft.' + operation);
-          const result = await this.fetcher(url.toString(), {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': this.csrfToken() },
-            body: JSON.stringify(data),
-            signal: controller.signal,
-          });
-          const body = await result.json();
-          if (!result.ok || body.success !== true) {
-            throw Object.assign(new Error('Draft request failed'), {
-              code: body.data?.code || (result.status === 401 ? 'authentication_required' : 'service_unavailable'),
-            });
-          }
-          return body.data;
-        })(),
-        deadline,
-      ]);
-      if (this.destroyed) throw new DOMException('Disposed form', 'AbortError');
-      return response;
-    } catch (error) {
-      if (!error.code && error.name !== 'AbortError') error.code = 'transport_failure';
-      throw error;
-    } finally {
-      clearTimeout(timer);
-      this.requests.delete(controller);
-    }
+  request(operation, data) {
+    return requestDraft(operation, data, this);
   }
 
   flush(retry = false, captured) {
@@ -313,7 +306,7 @@ export default class DraftRuntime {
     return this.inFlight;
   }
 
-  async candidates(cursor = null) {
+  async candidates() {
     const epoch = this.epoch;
     const revision = this.revision;
     if (!this.pending && !this.inFlight && !this.failed && !this.blocked && !this.lastPreserved) {
@@ -321,11 +314,9 @@ export default class DraftRuntime {
     }
     try {
       const result = await this.request('detect', { draft_id: this.binding.draftId,
-        ...(this.binding.creating ? this.binding.creationSources : {}),
-        ...(cursor === null ? {} : { cursor }) });
+        ...(this.binding.creating ? this.binding.creationSources : {}) });
       if (this.destroyed || epoch !== this.epoch) throw new DOMException('Disposed detection', 'AbortError');
       if (!result || !Array.isArray(result.candidates) || typeof result.conflict !== 'boolean'
-        || (result.next != null && (typeof result.next !== 'string' || !/^[a-f0-9]{32}$/.test(result.next)))
         || result.candidates.some((candidate) => !candidate || typeof candidate.draft_id !== 'string' || !/^[a-f0-9]{32}$/.test(candidate.draft_id)
           || typeof candidate.updated_at !== 'string' || !Number.isFinite(Date.parse(candidate.updated_at)))) {
         throw Object.assign(new Error('Invalid draft detection response'), { code: 'service_unavailable' });
@@ -375,7 +366,7 @@ export default class DraftRuntime {
   }
 
   resumeControls() {
-    if (this.protectionState === 'unavailable' && this.code === 'unsupported_controls' && this.failed === null) {
+    if (this.state === 'unavailable' && this.code === 'unsupported_controls' && this.failed === null) {
       this.blocked = false;
       this.status('clean');
     }

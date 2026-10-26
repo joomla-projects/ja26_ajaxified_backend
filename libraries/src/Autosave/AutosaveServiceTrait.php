@@ -3,8 +3,8 @@
 /**
  * Joomla! Content Management System
  *
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\CMS\Autosave;
@@ -14,32 +14,32 @@ namespace Joomla\CMS\Autosave;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Optional component assistance for owning exact-context providers.
+ * Register component draft providers.
  *
  * Using this trait does not advertise support. Components must separately implement
  * {@see AutosaveServiceInterface}.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 trait AutosaveServiceTrait
 {
     /**
      * Providers keyed by exact qualified context.
      *
-     * @var    array<string, DraftProviderInterface>
-     * @since  __DEPLOY_VERSION__
+     * @var   array<string, DraftProviderInterface>
+     * @since __DEPLOY_VERSION__
      */
     private array $autosaveProviders = [];
 
     /**
      * Register a component-owned provider for one exact context.
      *
-     * @param   string                     $context   The exact qualified context.
-     * @param   DraftProviderInterface  $provider  The provider.
+     * @param string                 $context  The exact qualified context.
+     * @param DraftProviderInterface $provider The provider.
      *
-     * @return  void
+     * @return void
      *
-     * @since   __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function setAutosaveProvider(string $context, DraftProviderInterface $provider): void
     {
@@ -61,11 +61,11 @@ trait AutosaveServiceTrait
     /**
      * Return the provider registered for an exact context.
      *
-     * @param   string  $context  The exact qualified context.
+     * @param string $context The exact qualified context.
      *
-     * @return  DraftProviderInterface
+     * @return DraftProviderInterface
      *
-     * @since   __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function getAutosaveProvider(string $context): DraftProviderInterface
     {

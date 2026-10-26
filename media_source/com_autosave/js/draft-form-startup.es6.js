@@ -19,7 +19,7 @@ const start = () => {
     try {
       mountDraftForm(form, configuration);
     } catch (error) {
-      // Optional draft controls must not prevent another form or native saving from working.
+      // Continue mounting the remaining forms.
     }
   });
 };

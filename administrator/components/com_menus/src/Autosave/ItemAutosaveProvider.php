@@ -1,10 +1,10 @@
 <?php
 
 /**
- * @package Joomla.Administrator
+ * @package    Joomla.Administrator
  * @subpackage com_menus
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Menus\Administrator\Autosave;
@@ -24,26 +24,30 @@ use Joomla\CMS\User\User;
 /**
  * Native Item identity, prepared form and selected private values.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 final class ItemAutosaveProvider implements DraftProviderInterface
 {
     private const KEYS = ['title', 'alias', 'note', 'browserNav'];
 
     /**
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function getContext(): string
     {
         return 'com_menus.item';
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function describe(Form $form, object $item, User $user): array
     {
         $scope = $this->scope($item);
@@ -64,7 +68,9 @@ final class ItemAutosaveProvider implements DraftProviderInterface
         return $descriptor;
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function read(array $binding, User $user, ?array $payload = null): array
     {
         $target = DraftModel::target($binding, $this->getContext());
@@ -89,9 +95,7 @@ final class ItemAutosaveProvider implements DraftProviderInterface
         $this->authorize($user, $item, $binding['scope']);
         $form       = DraftModel::form($model, 'com_menus', $item);
         $descriptor = $this->describe($form, $item, $user);
-        if ($descriptor['scope'] !== $binding['scope']) {
-            throw new AutosaveException('scope_conflict', 'The native extension, route or client changed.');
-        }
+        DraftModel::assertScope($descriptor['scope'], $binding['scope'], 'The native extension, route or client changed.');
         return $descriptor;
     }
 
@@ -123,8 +127,6 @@ final class ItemAutosaveProvider implements DraftProviderInterface
         if (!(empty($item->id) ? $user->authorise('core.create', 'com_menus.menu.' . $scope['menu_id']) : $user->authorise('core.edit', 'com_menus.menu.' . $scope['menu_id']))) {
             throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
         }
-        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checkout_conflict', 'The native record is checked out by another user.');
-        }
+        DraftModel::assertCheckout($item, $user);
     }
 }

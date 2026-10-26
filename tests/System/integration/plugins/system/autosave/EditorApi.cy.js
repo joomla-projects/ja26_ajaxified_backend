@@ -10,6 +10,19 @@ describe('Public editor contracts using the installed None provider', () => {
   let userId;
   let disposers;
 
+  const failCleanup = (provider, failure) => {
+    const observe = provider.observeChanges;
+    const cleanup = cy.stub().throws(failure);
+    cy.stub(provider, 'observeChanges').callsFake((callback) => {
+      const release = observe.call(provider, callback);
+      return () => {
+        release();
+        cleanup();
+      };
+    });
+    return cleanup;
+  };
+
   beforeEach(() => {
     userId = null;
     application = null;
@@ -92,6 +105,107 @@ describe('Public editor contracts using the installed None provider', () => {
       expect(editor.getValue()).to.equal('Selected content');
       expect(changed).to.have.been.calledTwice;
       expect(() => editor.subscribeChange(null)).to.throw('callback must be a function');
+    });
+  });
+
+  ['reportError', 'queued error'].forEach((reporter) => {
+    it(`reports a failing cleanup once through ${reporter} and allows observation to restart`, () => {
+      cy.then(() => {
+        const failure = new Error('Provider cleanup failed');
+        let reported;
+        if (reporter === 'reportError') {
+          reported = cy.stub(application, 'reportError');
+        } else {
+          const original = application.reportError;
+          application.reportError = undefined;
+          disposers.push(() => {
+            application.reportError = original;
+          });
+          reported = cy.stub(application, 'queueMicrotask');
+        }
+        const cleanup = failCleanup(editor, failure);
+        const removed = cy.spy();
+        const off = editor.subscribeChange(removed);
+        disposers.push(off);
+        expect(() => off()).to.not.throw();
+        off();
+        expect(cleanup).to.have.been.calledOnce;
+        expect(reported).to.have.been.calledOnce;
+        if (reporter === 'reportError') expect(reported.firstCall.args[0]).to.equal(failure);
+        else expect(() => reported.firstCall.args[0]()).to.throw().and.equal(failure);
+
+        editor.observeChanges.restore();
+        const later = cy.spy();
+        disposers.push(editor.subscribeChange(later));
+        editor.getElement().dispatchEvent(new application.Event('input'));
+        expect(removed).to.not.have.been.called;
+        expect(later).to.have.been.calledOnce;
+        expect(cleanup).to.have.been.calledOnce;
+        expect(reported).to.have.been.calledOnce;
+      });
+    });
+  });
+
+  it('finishes unregistration and lifecycle notification after provider cleanup fails', () => {
+    cy.then(() => {
+      const failure = new Error('Provider cleanup failed');
+      const reported = cy.stub(application, 'reportError');
+      const cleanup = failCleanup(editor, failure);
+      const changed = cy.spy();
+      const lifecycle = cy.spy();
+      disposers.push(editor.subscribeChange(changed), api.subscribeLifecycle(lifecycle));
+      api.setActive(editor);
+      expect(api.unregister(editor)).to.equal(api);
+      api.unregister(editor);
+      expect(api.get(editor.getId())).to.equal(false);
+      expect(application.Joomla.editors.instances[editor.getId()]).to.equal(undefined);
+      expect(api.getActive()).to.equal(null);
+      expect(lifecycle).to.have.been.calledOnce;
+      expect(lifecycle.firstCall.args[0]).to.deep.equal({
+        type: 'unregistered', id: editor.getId(), editorType: 'none',
+      });
+      editor.getElement().dispatchEvent(new application.Event('input'));
+      expect(changed).to.not.have.been.called;
+      expect(cleanup).to.have.been.calledOnce;
+      expect(reported).to.have.been.calledOnce;
+      expect(reported.firstCall.args[0]).to.equal(failure);
+    });
+  });
+
+  it('registers a replacement after failed cleanup and ignores stale teardown', () => {
+    cy.then(() => {
+      const failure = new Error('Provider cleanup failed');
+      const reported = cy.stub(application, 'reportError');
+      const cleanup = failCleanup(editor, failure);
+      const removed = cy.spy();
+      const transitions = [];
+      disposers.push(editor.subscribeChange(removed), api.subscribeLifecycle((detail) => {
+        transitions.push({
+          type: detail.type, current: api.get(detail.id), legacy: application.Joomla.editors.instances[detail.id],
+        });
+      }));
+      const replacement = new editor.constructor(editor.getRawInstance(), editor.getType(), editor.getId());
+      disposers.push(() => {
+        api.unregister(replacement);
+        api.register(editor);
+      });
+      api.setActive(editor);
+      expect(api.register(replacement)).to.equal(api);
+      api.unregister(editor);
+      expect(api.get(editor.getId())).to.equal(replacement);
+      expect(api.getActive()).to.equal(null);
+      expect(transitions).to.deep.equal([
+        { type: 'unregistered', current: false, legacy: undefined },
+        { type: 'registered', current: replacement, legacy: replacement },
+      ]);
+      const changed = cy.spy();
+      disposers.push(replacement.subscribeChange(changed));
+      replacement.setValue('Later editor work');
+      expect(changed).to.have.been.calledOnce;
+      expect(removed).to.not.have.been.called;
+      expect(cleanup).to.have.been.calledOnce;
+      expect(reported).to.have.been.calledOnce;
+      expect(reported.firstCall.args[0]).to.equal(failure);
     });
   });
 

@@ -1,9 +1,9 @@
 <?php
 
 /**
- * @package     Joomla.IntegrationTest
- * @copyright   (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @package   Joomla.IntegrationTest
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Libraries\Cms\Autosave;
@@ -17,7 +17,9 @@ use Joomla\Database\QueryMonitorInterface;
 use Joomla\Tests\Integration\DBTestInterface;
 use Joomla\Tests\Integration\IntegrationTestCase;
 
-/** Native-engine storage, contention and lifecycle integrity. */
+/**
+ * Native-engine storage, contention and lifecycle integrity.
+ */
 class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
 {
     use DraftStoreCases;
@@ -39,37 +41,44 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
 
     private function peer(): DatabaseInterface
     {
-        return (new DatabaseFactory())->getDriver(getenv('JTEST_DB_ENGINE') ?: JTEST_DB_ENGINE, [
+        return (new DatabaseFactory())->getDriver(
+            getenv('JTEST_DB_ENGINE') ?: JTEST_DB_ENGINE,
+            [
             'database' => getenv('JTEST_DB_NAME') ?: JTEST_DB_NAME,
             'host'     => getenv('JTEST_DB_HOST') ?: JTEST_DB_HOST,
             'user'     => getenv('JTEST_DB_USER') ?: JTEST_DB_USER,
             'password' => getenv('JTEST_DB_PASSWORD') ?: JTEST_DB_PASSWORD,
             'prefix'   => $this->db->getPrefix(),
-        ]);
+            ]
+        );
     }
 
-    /** Run a peer write immediately before a selected real SQL statement, without timing sleeps. */
+    /**
+     * Run a peer write immediately before a selected real SQL statement, without timing sleeps.
+     */
     private function beforeStatement(string $prefix, callable $operation): void
     {
-        $this->db->setMonitor(new class ($prefix, $operation) implements QueryMonitorInterface {
-            private bool $called = false;
+        $this->db->setMonitor(
+            new class ($prefix, $operation) implements QueryMonitorInterface {
+                private bool $called = false;
 
-            public function __construct(private string $prefix, private $operation)
-            {
-            }
+                public function __construct(private string $prefix, private $operation)
+                {
+                }
 
-            public function startQuery(string $sql, ?array $boundParams = null): void
-            {
-                if (!$this->called && str_starts_with($sql, $this->prefix)) {
-                    $this->called = true;
-                    ($this->operation)();
+                public function startQuery(string $sql, ?array $boundParams = null): void
+                {
+                    if (!$this->called && str_starts_with($sql, $this->prefix)) {
+                        $this->called = true;
+                        ($this->operation)();
+                    }
+                }
+
+                public function stopQuery(): void
+                {
                 }
             }
-
-            public function stopQuery(): void
-            {
-            }
-        });
+        );
     }
 
     public function testProviderWorkDoesNotHoldAnOwnerLockAndNewerContentWins(): void
@@ -77,20 +86,23 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
         $draft  = $this->store->open(7, $this->descriptor(), $this->now);
         $peer   = new DraftStore($this->peer());
         $called = false;
-        $this->failure('revision_conflict', fn () => $this->store->preserve(
-            7,
-            $draft['draft_id'],
-            1,
-            ['title' => 'stale'],
-            $this->now,
-            function ($row, $payload) use ($peer, $draft, &$called) {
-                if (!$called) {
-                    $called = true;
-                    $peer->preserve(7, $draft['draft_id'], 2, ['title' => 'newer'], $this->now, static fn ($binding, $values) => $values);
+        $this->failure(
+            'revision_conflict',
+            fn () => $this->store->preserve(
+                7,
+                $draft['draft_id'],
+                1,
+                ['title' => 'stale'],
+                $this->now,
+                function ($row, $payload) use ($peer, $draft, &$called) {
+                    if (!$called) {
+                        $called = true;
+                        $peer->preserve(7, $draft['draft_id'], 2, ['title' => 'newer'], $this->now, static fn ($binding, $values) => $values);
+                    }
+                    return $payload;
                 }
-                return $payload;
-            }
-        ));
+            )
+        );
         $this->assertSame(['title' => 'newer'], $this->store->read(7, $draft['draft_id'], $this->now)['payload']);
     }
 
@@ -98,18 +110,71 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
     {
         $draft = $this->store->open(7, $this->descriptor(), $this->now);
         $peer  = new DraftStore($this->peer());
-        $this->failure('draft_not_found', fn () => $this->store->preserve(
-            7,
-            $draft['draft_id'],
-            1,
-            ['title' => 'late'],
-            $this->now,
-            function ($row, $payload) use ($peer, $draft) {
-                $peer->discard(7, $draft['draft_id'], $this->now);
-                return $payload;
-            }
-        ));
+        $this->failure(
+            'draft_not_found',
+            fn () => $this->store->preserve(
+                7,
+                $draft['draft_id'],
+                1,
+                ['title' => 'late'],
+                $this->now,
+                function ($row, $payload) use ($peer, $draft) {
+                    $peer->discard(7, $draft['draft_id']);
+                    return $payload;
+                }
+            )
+        );
         $this->assertSame(0, (int) $this->db->setQuery('SELECT COUNT(*) FROM #__autosave_drafts')->loadResult());
+    }
+
+    public function testQuotaDiscardRemovesNewerValuesButCannotDeleteAReplacementIdentity(): void
+    {
+        $draft = $this->store->open(7, $this->descriptor(), $this->now);
+        $this->preserve($draft, 1, 'listed work');
+        $id   = $this->store->allocations(7)[0]['draft_id'];
+        $peer = new DraftStore($this->peer());
+        $peer->preserve(7, $id, 2, ['title' => 'new work since selection'], $this->now, static fn ($binding, $values) => $values);
+        $this->store->discard(7, $id);
+        $replacement = $peer->open(7, $this->descriptor(), $this->now);
+        $this->assertNotSame($id, $replacement['draft_id']);
+        $this->failure('draft_not_found', fn () => $this->store->discard(7, $id));
+        $this->failure('draft_not_found', fn () => $this->preserve($draft, 3, 'late work'));
+        $this->preserve($replacement, 1, 'replacement work');
+        $this->assertSame(['title' => 'replacement work'], $peer->read(7, $replacement['draft_id'], $this->now)['payload']);
+    }
+
+    public function testQuotaDiscardRetriesAConcurrentPreserveWithoutRecreatingTheEntry(): void
+    {
+        $draft = $this->store->open(7, $this->descriptor(), $this->now);
+        $this->preserve($draft, 1, 'selected work');
+        $peer = new DraftStore($this->peer());
+        $this->beforeStatement(
+            'DELETE',
+            function () use ($peer, $draft): void {
+                $peer->preserve(7, $draft['draft_id'], 2, ['title' => 'concurrent work'], $this->now, static fn ($binding, $values) => $values);
+            }
+        );
+        $this->store->discard(7, $draft['draft_id']);
+        $this->failure('draft_not_found', fn () => $this->store->read(7, $draft['draft_id'], $this->now));
+    }
+
+    public function testCompetingAllocationCannotClaimCapacityUntilQuotaDiscardCompletes(): void
+    {
+        for ($index = 0; $index < DraftStore::MAX_OWNER_ROWS; $index++) {
+            $draft = $this->store->open(7, $this->descriptor(), $this->now);
+        }
+        $peer = new DraftStore($this->peer());
+        $this->beforeStatement(
+            'DELETE',
+            function () use ($peer): void {
+                $this->failure('draft_limit_reached', fn () => $peer->open(7, $this->descriptor(), $this->now));
+            }
+        );
+        $this->store->discard(7, $draft['draft_id']);
+        $winner = $peer->open(7, $this->descriptor(), $this->now);
+        $this->assertNotSame($draft['draft_id'], $winner['draft_id']);
+        $this->failure('draft_limit_reached', fn () => $this->store->open(7, $this->descriptor(), $this->now));
+        $this->assertCount(DraftStore::MAX_OWNER_ROWS, $this->store->allocations(7));
     }
 
     public function testBindingChangeWithEqualClientAndFloorCannotBeAcknowledged(): void
@@ -118,21 +183,26 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
         $this->preserve($draft, 1, 'same payload');
         $peer   = $this->peer();
         $called = false;
-        $this->failure('revision_conflict', fn () => $this->store->preserve(
-            7,
-            $draft['draft_id'],
-            1,
-            ['title' => 'same payload'],
-            $this->now,
-            function ($row, $payload) use ($peer, $draft, &$called) {
-                if (!$called) {
-                    $called = true;
-                    $peer->setQuery('UPDATE #__autosave_drafts SET baseline_revision = ' . $peer->quote('changed')
-                        . ', row_version = row_version + 1 WHERE draft_id = ' . $peer->quote($draft['draft_id']))->execute();
+        $this->failure(
+            'revision_conflict',
+            fn () => $this->store->preserve(
+                7,
+                $draft['draft_id'],
+                1,
+                ['title' => 'same payload'],
+                $this->now,
+                function ($row, $payload) use ($peer, $draft, &$called) {
+                    if (!$called) {
+                        $called = true;
+                        $peer->setQuery(
+                            'UPDATE #__autosave_drafts SET baseline_revision = ' . $peer->quote('changed')
+                            . ', row_version = row_version + 1 WHERE draft_id = ' . $peer->quote($draft['draft_id'])
+                        )->execute();
+                    }
+                    return $payload;
                 }
-                return $payload;
-            }
-        ));
+            )
+        );
         $row = $this->store->read(7, $draft['draft_id'], $this->now);
         $this->assertSame('changed', $row['baseline_revision']);
         $this->assertSame(1, $row['client_revision']);
@@ -143,17 +213,20 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
     {
         $draft = $this->store->open(7, $this->descriptor(), $this->now);
         $peer  = new DraftStore($this->peer());
-        $this->failure('draft_retired', fn () => $this->store->preserve(
-            7,
-            $draft['draft_id'],
-            1,
-            ['title' => 'submitted'],
-            $this->now,
-            function ($row, $payload) use ($peer, $draft) {
-                $peer->reconcile(7, $draft['draft_id'], 1, 'com_content.article', '42', [], 'save', '42', null, $this->now);
-                return $payload;
-            }
-        ));
+        $this->failure(
+            'draft_retired',
+            fn () => $this->store->preserve(
+                7,
+                $draft['draft_id'],
+                1,
+                ['title' => 'submitted'],
+                $this->now,
+                function ($row, $payload) use ($peer, $draft) {
+                    $peer->reconcile(7, $draft['draft_id'], 1, 'com_content.article', '42', [], 'save', '42', null, $this->now);
+                    return $payload;
+                }
+            )
+        );
         $row = $this->store->read(7, $draft['draft_id'], $this->now);
         $this->assertSame(1, $row['retired_revision']);
         $this->assertNull($row['payload']);
@@ -178,7 +251,9 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
         $this->assertSame(['title' => 'keep live work'], $this->store->read(7, $live['draft_id'], $later)['payload']);
     }
 
-    /** @dataProvider absentRecoverySources */
+    /**
+     * @dataProvider absentRecoverySources
+     */
     public function testMissingOrExpiredSourceCannotBlockCurrentRetirement(bool $purged): void
     {
         $source = $this->store->open(7, $this->descriptor(), $this->now);
@@ -217,9 +292,12 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
         $later       = new Date('2026-10-12 00:00:00', 'UTC');
         $peer        = new DraftStore($this->peer());
         $replacement = null;
-        $this->beforeStatement('DELETE', function () use ($peer, $later, &$replacement) {
-            $replacement = $peer->open(7, $this->descriptor(), $later);
-        });
+        $this->beforeStatement(
+            'DELETE',
+            function () use ($peer, $later, &$replacement) {
+                $replacement = $peer->open(7, $this->descriptor(), $later);
+            }
+        );
         $this->assertSame(0, $this->store->purge($later));
         $this->assertNotNull($replacement);
         $this->assertNotSame($old['draft_id'], $replacement['draft_id']);
@@ -233,9 +311,12 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
         }
         $peer   = new DraftStore($this->peer());
         $winner = null;
-        $this->beforeStatement('INSERT', function () use ($peer, &$winner) {
-            $winner = $peer->open(7, $this->descriptor(), $this->now);
-        });
+        $this->beforeStatement(
+            'INSERT',
+            function () use ($peer, &$winner) {
+                $winner = $peer->open(7, $this->descriptor(), $this->now);
+            }
+        );
         $this->failure('draft_limit_reached', fn () => $this->store->open(7, $this->descriptor(), $this->now));
         $this->assertNotNull($winner);
         $this->assertSame(DraftStore::MAX_OWNER_ROWS, (int) $this->db->setQuery('SELECT COUNT(*) FROM #__autosave_drafts WHERE owner_id = 7')->loadResult());
@@ -257,14 +338,58 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
     {
         $peer   = new DraftStore($this->peer());
         $winner = null;
-        $this->beforeStatement('INSERT', function () use ($peer, &$winner) {
-            $winner = $peer->open(7, $this->descriptor(), $this->now);
-        });
+        $this->beforeStatement(
+            'INSERT',
+            function () use ($peer, &$winner) {
+                $winner = $peer->open(7, $this->descriptor(), $this->now);
+            }
+        );
         $own = $this->store->open(7, $this->descriptor(), $this->now);
         $this->assertNotNull($winner);
         $this->assertNotSame($winner['draft_id'], $own['draft_id']);
         $this->assertNotSame($winner['owner_slot'], $own['owner_slot']);
         $this->assertSame($own['draft_id'], $this->store->read(7, $own['draft_id'], $this->now)['draft_id']);
+    }
+
+    public function testNonDuplicateIntegrityFailurePropagatesDespiteACompetingSlotClaim(): void
+    {
+        $peer    = new DraftStore($this->peer());
+        $failure = new ExecutionFailureException('INSERT', '23000, 1048, Required value is missing', 23000);
+        $winner  = null;
+        $this->beforeStatement(
+            'INSERT',
+            function () use ($peer, $failure, &$winner) {
+                $winner = $peer->open(7, $this->descriptor(), $this->now);
+                throw $failure;
+            }
+        );
+        try {
+            $this->store->open(7, $this->descriptor(), $this->now);
+            $this->fail('An unrelated integrity failure must not be retried as slot contention.');
+        } catch (ExecutionFailureException $exception) {
+            $this->assertSame($failure, $exception);
+        }
+        $this->assertNotNull($winner);
+        $this->assertSame(1, (int) $this->db->setQuery('SELECT COUNT(*) FROM #__autosave_drafts')->loadResult());
+        $this->assertSame($winner['draft_id'], $this->store->read(7, $winner['draft_id'], $this->now)['draft_id']);
+    }
+
+    public function testDuplicateFailureWithoutACompetingSlotClaimPropagates(): void
+    {
+        $failure = new ExecutionFailureException('INSERT', '23000, 1062, Duplicate entry', 23000);
+        $this->beforeStatement(
+            'INSERT',
+            static function () use ($failure) {
+                throw $failure;
+            }
+        );
+        try {
+            $this->store->open(7, $this->descriptor(), $this->now);
+            $this->fail('A duplicate without an owner-slot winner must not be retried.');
+        } catch (ExecutionFailureException $exception) {
+            $this->assertSame($failure, $exception);
+        }
+        $this->assertSame(0, (int) $this->db->setQuery('SELECT COUNT(*) FROM #__autosave_drafts')->loadResult());
     }
 
     public function testSourceWriteFailureDoesNotUndoCurrentRetirement(): void
@@ -320,10 +445,13 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
     {
         $draft = $this->store->open(7, $this->descriptor(), $this->now);
         $peer  = new DraftStore($this->peer());
-        $this->beforeStatement('DELETE', function () use ($peer, $draft) {
-            // A preserve started before expiry finishes after cleanup selected its old version.
-            $peer->preserve(7, $draft['draft_id'], 1, ['title' => 'renewed before expiry'], new Date('2026-10-11 23:59:00', 'UTC'), static fn ($row, $values) => $values);
-        });
+        $this->beforeStatement(
+            'DELETE',
+            function () use ($peer, $draft) {
+                // A preserve started before expiry finishes after cleanup selected its old version.
+                $peer->preserve(7, $draft['draft_id'], 1, ['title' => 'renewed before expiry'], new Date('2026-10-11 23:59:00', 'UTC'), static fn ($row, $values) => $values);
+            }
+        );
         $later = new Date('2026-10-12 00:01:00', 'UTC');
         $this->assertSame(0, $this->store->purge($later));
         $row = $this->store->read(7, $draft['draft_id'], $later);
@@ -355,17 +483,20 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
         }
         $draft = $this->store->open(7, $this->descriptor(), $this->now);
         try {
-            $this->failure('service_unavailable', fn () => $this->store->preserve(
-                7,
-                $draft['draft_id'],
-                1,
-                ['title' => 'local'],
-                $this->now,
-                function ($row, $values) {
-                    $this->db->transactionStart();
-                    return $values;
-                }
-            ));
+            $this->failure(
+                'service_unavailable',
+                fn () => $this->store->preserve(
+                    7,
+                    $draft['draft_id'],
+                    1,
+                    ['title' => 'local'],
+                    $this->now,
+                    function ($row, $values) {
+                        $this->db->transactionStart();
+                        return $values;
+                    }
+                )
+            );
             $this->assertTrue($connection->inTransaction());
             $this->assertNull($this->store->read(7, $draft['draft_id'], $this->now)['payload']);
         } finally {
@@ -380,16 +511,21 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
         $draft = $this->store->open(7, $this->descriptor(), $this->now);
         $this->preserve($draft, 1, 'submitted');
         $peer = new DraftStore($this->peer());
-        $this->beforeStatement('UPDATE', function () use ($peer, $draft) {
-            $peer->preserve(7, $draft['draft_id'], 2, ['title' => 'later'], $this->now, static fn ($row, $values) => $values);
-        });
+        $this->beforeStatement(
+            'UPDATE',
+            function () use ($peer, $draft) {
+                $peer->preserve(7, $draft['draft_id'], 2, ['title' => 'later'], $this->now, static fn ($row, $values) => $values);
+            }
+        );
         $this->store->reconcile(7, $draft['draft_id'], 1, 'com_content.article', '42', [], 'apply', '42', null, $this->now);
         $row = $this->store->read(7, $draft['draft_id'], $this->now);
         $this->assertSame(['title' => 'later'], $row['payload']);
         $this->assertSame(1, $row['retired_revision']);
     }
 
-    /** @dataProvider changedRecoverySources */
+    /**
+     * @dataProvider changedRecoverySources
+     */
     public function testRecoverySourceIsRevalidatedAfterCurrentRetirement(bool $bindingChanged): void
     {
         $source = $this->store->open(7, $this->descriptor(), $this->now);
@@ -397,14 +533,19 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
         $current = $this->store->open(7, $this->descriptor(), $this->now);
         $this->preserve($current, 1, 'submitted');
         $peer = $this->peer();
-        $this->beforeStatement('UPDATE', function () use ($peer, $source, $bindingChanged) {
-            if ($bindingChanged) {
-                $peer->setQuery('UPDATE #__autosave_drafts SET target_id = ' . $peer->quote('84')
-                    . ', row_version = row_version + 1 WHERE draft_id = ' . $peer->quote($source['draft_id']))->execute();
-            } else {
-                (new DraftStore($peer))->preserve(7, $source['draft_id'], 2, ['title' => 'later source'], $this->now, static fn ($row, $values) => $values);
+        $this->beforeStatement(
+            'UPDATE',
+            function () use ($peer, $source, $bindingChanged) {
+                if ($bindingChanged) {
+                    $peer->setQuery(
+                        'UPDATE #__autosave_drafts SET target_id = ' . $peer->quote('84')
+                        . ', row_version = row_version + 1 WHERE draft_id = ' . $peer->quote($source['draft_id'])
+                    )->execute();
+                } else {
+                    (new DraftStore($peer))->preserve(7, $source['draft_id'], 2, ['title' => 'later source'], $this->now, static fn ($row, $values) => $values);
+                }
             }
-        });
+        );
         $operation = fn () => $this->store->reconcile(
             7,
             $current['draft_id'],
@@ -438,38 +579,49 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
     {
         $draft = $this->store->open(7, $this->descriptor(), $this->now);
         $peer  = new DraftStore($this->peer());
-        $this->failure('revision_conflict', fn () => $this->store->preserve(
-            7,
-            $draft['draft_id'],
-            100,
-            ['title' => 'not acknowledged'],
-            $this->now,
-            function ($row, $values) use ($peer, $draft) {
-                $peer->preserve(7, $draft['draft_id'], $row['client_revision'] + 1, ['title' => 'peer work'], $this->now, static fn ($binding, $payload) => $payload);
-                return $values;
-            }
-        ));
+        $this->failure(
+            'revision_conflict',
+            fn () => $this->store->preserve(
+                7,
+                $draft['draft_id'],
+                100,
+                ['title' => 'not acknowledged'],
+                $this->now,
+                function ($row, $values) use ($peer, $draft) {
+                    $peer->preserve(7, $draft['draft_id'], $row['client_revision'] + 1, ['title' => 'peer work'], $this->now, static fn ($binding, $payload) => $payload);
+                    return $values;
+                }
+            )
+        );
         $row = $this->store->read(7, $draft['draft_id'], $this->now);
         $this->assertGreaterThan(0, $row['client_revision']);
         $this->assertLessThan(100, $row['client_revision']);
         $this->assertSame(['title' => 'peer work'], $row['payload']);
     }
 
-    public function testMaximumPayloadsAtFullCapacityRespectTheLogicalByteCeiling(): void
+    public function testDefaultMaximumPayloadRoundTripsAndOversizeKeepsTheAcknowledgedDraft(): void
     {
         $maximum = DraftStore::POLICY['max_payload_bytes'];
         $value   = str_repeat('x', $maximum - \strlen(json_encode(['title' => ''], JSON_THROW_ON_ERROR)));
+        $draft   = $this->store->open(7, $this->descriptor(), $this->now);
+        $this->preserve($draft, 1, $value);
+        $this->assertSame($maximum, (int) $this->db->setQuery('SELECT OCTET_LENGTH(payload) FROM #__autosave_drafts WHERE owner_id = 7')->loadResult());
+        $this->assertSame(['title' => $value], $this->store->read(7, $draft['draft_id'], $this->now)['payload']);
+        $this->failure('payload_too_large', fn () => $this->preserve($draft, 2, $value . 'x'));
+        $retained = $this->store->read(7, $draft['draft_id'], $this->now);
+        $this->assertSame(1, $retained['client_revision']);
+        $this->assertSame(['title' => $value], $retained['payload']);
+    }
+
+    public function testAllPopulatedOwnerSlotsRemainBounded(): void
+    {
         for ($index = 0; $index < DraftStore::MAX_OWNER_ROWS; $index++) {
             $draft = $this->store->open(7, $this->descriptor(), $this->now);
-            $this->preserve($draft, 1, $value);
+            $this->preserve($draft, 1, 'Draft ' . $index);
         }
-        $this->assertSame(
-            $maximum * DraftStore::MAX_OWNER_ROWS,
-            (int) $this->db->setQuery('SELECT SUM(OCTET_LENGTH(payload)) FROM #__autosave_drafts WHERE owner_id = 7')->loadResult()
-        );
-        $this->failure('payload_too_large', fn () => $this->preserve($draft, 2, $value . 'x'));
         $this->failure('draft_limit_reached', fn () => $this->store->open(7, $this->descriptor(), $this->now));
-        $this->assertSame(1, $this->store->read(7, $draft['draft_id'], $this->now)['client_revision']);
+        $this->assertSame(DraftStore::MAX_OWNER_ROWS, (int) $this->db->setQuery('SELECT COUNT(*) FROM #__autosave_drafts WHERE owner_id = 7 AND payload IS NOT NULL')->loadResult());
+        $this->assertSame(['title' => 'Draft ' . (DraftStore::MAX_OWNER_ROWS - 1)], $this->store->read(7, $draft['draft_id'], $this->now)['payload']);
     }
 
     public function testCallerTransactionIsNeitherUsedNorRolledBack(): void
@@ -482,7 +634,7 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
         $this->db->transactionStart();
         try {
             $this->failure('service_unavailable', fn () => $this->preserve($draft, 1, 'must not write'));
-            $this->failure('service_unavailable', fn () => $this->store->discard(7, $draft['draft_id'], $this->now));
+            $this->failure('service_unavailable', fn () => $this->store->discard(7, $draft['draft_id']));
             $this->failure('service_unavailable', fn () => $this->store->open(7, $this->descriptor(), $this->now));
             $this->assertTrue($connection->inTransaction());
             $this->assertSame(1, (int) $this->db->setQuery('SELECT 1')->loadResult());
@@ -498,7 +650,9 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
         return [['preserve'], ['discard'], ['purge'], ['reconcile'], ['open']];
     }
 
-    /** @dataProvider contendedOperations */
+    /**
+     * @dataProvider contendedOperations
+     */
     public function testStatementFailurePreservesIntegrityAndConnectionRecovery(string $operation): void
     {
         $draft = $this->store->open(7, $this->descriptor(), $this->now);
@@ -510,7 +664,7 @@ class DraftStoreTest extends IntegrationTestCase implements DBTestInterface
         $act        = function () use ($competing, $draft, $operation, $later) {
             return match ($operation) {
                 'preserve'  => $competing->preserve(7, $draft['draft_id'], 1, ['title' => 'peer'], $this->now, static fn ($row, $values) => $values),
-                'discard'   => $competing->discard(7, $draft['draft_id'], $this->now),
+                'discard'   => $competing->discard(7, $draft['draft_id']),
                 'purge'     => $competing->purge($later),
                 'open'      => $competing->open(7, $this->descriptor(), $later),
                 'reconcile' => $competing->reconcile(7, $draft['draft_id'], 1, 'com_content.article', '42', [], 'save', '42', null, $this->now),

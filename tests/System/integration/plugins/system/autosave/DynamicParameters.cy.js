@@ -11,15 +11,24 @@ describe('Installed dynamic draft parameters', () => {
   const openEditor = (component, listView, itemView, id, clientId, formId) => {
     // Enter through Joomla's native list so client state and edit-ID handling stay native.
     cy.visit(`/administrator/index.php?option=${component}&view=${listView}&client_id=${clientId}&filter=`);
-    cy.searchForItem(`id:${id}`);
+    cy.intercept({
+      method: 'POST', pathname: '**/administrator/index.php',
+      query: { option: component, view: listView },
+    }).as('parameterSearch');
+    cy.document().then((previousDocument) => {
+      cy.searchForItem(`id:${id}`);
+      cy.wait('@parameterSearch').its('response.statusCode').should('equal', 200);
+      cy.document().should((document) => expect(document, 'filtered list document').to.not.equal(previousDocument));
+    });
+    cy.get('#filter_search').should('have.value', `id:${id}`);
     cy.get(`a[href*="task=${itemView}.edit"][href*="id=${id}"]`).should('have.length', 1).click();
+    cy.get(`#${formId}`).should('be.visible');
     cy.location('search').should((search) => {
       const query = new URLSearchParams(search);
       expect(query.get('option')).to.equal(component);
       expect(query.get('view')).to.equal(itemView);
       expect(query.get('id')).to.equal(String(id));
     });
-    cy.get(`#${formId}`).should('be.visible');
   };
 
   const reveal = (selector) => {
@@ -57,6 +66,15 @@ describe('Installed dynamic draft parameters', () => {
     const username = `autosave-parameters-${Date.now()}-${Cypress._.random(10000, 99999)}`;
     cy.db_createUser({ username, email: `${username}@example.com`, group_id: 8, params: '{"editor":"none","allowTourAutoStart":0}' })
       .then((id) => { userId = Number(id); });
+    // Keep delayed dashboard session writes out of the editor's native edit-ID setup.
+    cy.intercept({
+      method: 'GET', pathname: '**/administrator/index.php',
+      query: { option: 'com_joomlaupdate', task: 'update.healthstatus' },
+    }, { body: { active: false, healthy: true } });
+    cy.intercept({
+      method: 'GET', pathname: '**/administrator/index.php',
+      query: { option: 'com_joomlaupdate', task: 'update.ajax' },
+    }, { body: [] });
     cy.doAdministratorLogin(username, 'test', false);
     cy.intercept('POST', '**/administrator/index.php*', (request) => {
       const task = new URL(request.url).searchParams.get('task');
@@ -68,11 +86,8 @@ describe('Installed dynamic draft parameters', () => {
   afterEach(() => {
     if (userId) cy.task('queryDB', `DELETE FROM #__autosave_drafts WHERE owner_id = ${userId}`);
     if (moduleId) {
-      cy.task('queryDB', `DELETE FROM #__modules_menu WHERE moduleid = ${moduleId}`);
-      cy.task('queryDB', `DELETE FROM #__modules WHERE id = ${moduleId}`);
       cy.task('queryDB', `DELETE FROM #__assets WHERE name = 'com_modules.module.${moduleId}'`);
     }
-    if (styleId) cy.task('queryDB', `DELETE FROM #__template_styles WHERE id = ${styleId}`);
   });
 
   [false, true].forEach((clearing) => {

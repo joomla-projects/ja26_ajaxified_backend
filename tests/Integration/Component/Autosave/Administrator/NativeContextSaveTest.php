@@ -1,60 +1,32 @@
 <?php
 
 /**
- * @package Joomla.IntegrationTest
+ * @package   Joomla.IntegrationTest
  * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license GNU General Public License version 2 or later; see LICENSE.txt
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Tests\Integration\Component\Autosave\Administrator;
 
-use Joomla\CMS\Application\CMSApplication;
 use Joomla\CMS\Autosave\AutosaveContextResolver;
 use Joomla\CMS\Autosave\DraftProviderInterface;
 use Joomla\CMS\Autosave\DraftService;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Language;
-use Joomla\CMS\Router\Router;
-use Joomla\CMS\Session\Session;
 use Joomla\CMS\Table\Table;
-use Joomla\CMS\User\User;
-use Joomla\Database\DatabaseInterface;
 use Joomla\Event\Dispatcher;
 use Joomla\Input\Input;
-use Joomla\Session\SessionInterface;
 use Joomla\Tests\Integration\IntegrationTestCase;
 use Joomla\Tests\Unit\Component\Autosave\Administrator\NativeContextDraftTest;
 use Psr\Log\NullLogger;
 
 class NativeContextSaveTest extends IntegrationTestCase implements \Joomla\Tests\Integration\DBTestInterface
 {
-    use \Joomla\Tests\Unit\Libraries\Cms\Autosave\NativeReadFixture;
+    use \Joomla\Tests\Integration\Component\Autosave\Administrator\NativeControllerFixture;
 
-    use \Joomla\Tests\Integration\Libraries\Cms\Autosave\DraftDatabaseFixture;
-
-    private DatabaseInterface $db;
-    private mixed $previousApplication;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->installNativeReadFixture();
-        $this->previousApplication = Factory::$application;
-        $this->db                  = $this->getDBDriver();
-        $this->initializeStore();
-        // Native success uses the real clock; these bindings must not age out in future CI runs.
-        $this->now = new \Joomla\CMS\Date\Date('now', 'UTC');
-    }
-
-    protected function tearDown(): void
-    {
-        Factory::$application = $this->previousApplication;
-        $this->restoreNativeReadFixture();
-        parent::tearDown();
-    }
-
-    /** @dataProvider outcomes */
+    /**
+     * @dataProvider outcomes
+     */
     public function testRealNativeControllerKeepsCanonicalOutcomeAndRetiresOnlyItsSubmission(string $component, string $entity, string $task, string $outcome): void
     {
         $context    = $component . '.' . strtolower($entity);
@@ -90,24 +62,13 @@ class NativeContextSaveTest extends IntegrationTestCase implements \Joomla\Tests
             'title'         => 'Native title', 'name' => 'Native name', 'created_by' => 7, 'created_user_id' => 7, 'alias' => 'native-alias', 'parent_id' => 1, 'catid' => 3,
             'context'       => 'com_content.article', 'extension' => 'com_content.article', 'workflow_id' => 12, 'tour_id' => 12,
             'menutype'      => 'draft-menu', 'client_id' => 0, 'type' => 'component', 'link' => 'index.php?option=com_content&view=article', 'params' => [], 'rules' => []];
-        $input = new Input(['option' => $component, $key => $source, 'id' => $source, 'extension' => 'com_content.article',
-            'context'                => 'com_content.article', 'workflow_id' => 12, 'tour_id' => 12, 'menutype' => 'draft-menu', 'task' => $nativeTask]);
+        $input = new Input(
+            ['option' => $component, $key => $source, 'id' => $source, 'extension' => 'com_content.article',
+            'context'                => 'com_content.article', 'workflow_id' => 12, 'tour_id' => 12, 'menutype' => 'draft-menu', 'task' => $nativeTask]
+        );
         $input->post->set('jform', $data);
-        $user        = $this->createMock(User::class);
-        $user->id    = 7;
-        $user->guest = false;
-        $user->method('authorise')->willReturn(true);
-        $session = $this->createMock(SessionInterface::class);
-        $session->method('get')->willReturnCallback(static fn ($key, $default = null) => $key === 'user' ? $user : $default);
-        $session->method('getToken')->willReturn('context-save-token');
-        $session->method('isNew')->willReturn(false);
         $states = [$component . '.edit.' . strtolower($entity) . '.id' => [42]];
-        $app    = $this->createMock(CMSApplication::class);
-        $app->method('getIdentity')->willReturn($user);
-        $app->method('getInput')->willReturn($input);
-        $app->method('getSession')->willReturn($session);
-        $app->method('getName')->willReturn('contextsave');
-        $app->method('getLanguage')->willReturn(new Language('en-GB', false));
+        [$app, $user] = $this->controllerApplication($input, true, $states);
         $document = new \Joomla\CMS\Document\HtmlDocument();
         if ($task === 'direct') {
             $document->setType('json');
@@ -115,16 +76,6 @@ class NativeContextSaveTest extends IntegrationTestCase implements \Joomla\Tests
         }
         $app->method('getDocument')->willReturn($document);
         $app->method('getLogger')->willReturn(new NullLogger());
-        $app->method('get')->willReturnCallback(static fn ($key, $default = null) => $key === 'secret' ? 'fixture-secret' : $default);
-        $app->method('getUserState')->willReturnCallback(static fn ($key, $default = null) => $states[$key] ?? $default);
-        $app->method('setUserState')->willReturnCallback(static function ($key, $value) use (&$states) {
-            $states[$key] = $value;
-            return null;
-        });
-        $app->method('getUserStateFromRequest')->willReturnCallback(static fn ($key, $request, $default = null, $type = 'none') => $input->get($request, $default, $type));
-        Factory::$application = $app;
-        Factory::getContainer()->set('ContextsaveRouter', new Router());
-        $input->server->set('HTTP_X_CSRF_TOKEN', Session::getFormToken());
 
         $descriptor = ['context' => $context, 'target' => $source === '' ? null : $source, 'scope' => $scope,
             'version'            => 1, 'revision' => 'rendered', 'values' => ['title' => 'Canonical'], 'fields' => ['title' => ['control' => 'text']], 'excluded' => []];

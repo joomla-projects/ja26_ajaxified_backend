@@ -893,7 +893,7 @@ CREATE TABLE IF NOT EXISTS `#__action_logs_users` (
 
 -- --------------------------------------------------------
 
--- Private recoverable draft instances. Canonical records remain native Joomla records.
+-- Private autosave drafts.
 CREATE TABLE IF NOT EXISTS `#__autosave_drafts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `draft_id` char(32) NOT NULL,

@@ -28,7 +28,7 @@ CREATE INDEX "#__users_email" ON "#__users" ("email");
 
 CREATE INDEX "#__users_email_lower" ON "#__users" (lower("email"));
 
--- Private recoverable draft instances. Canonical records remain native Joomla records.
+-- Private autosave drafts.
 CREATE TABLE IF NOT EXISTS "#__autosave_drafts" (
   "id" bigserial NOT NULL,
   "draft_id" char(32) NOT NULL,

@@ -1,10 +1,10 @@
 <?php
 
 /**
- * @package Joomla.Administrator
+ * @package    Joomla.Administrator
  * @subpackage com_users
- * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Users\Administrator\Autosave;
@@ -23,49 +23,50 @@ use Joomla\CMS\User\User;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Native Group scope, authority and selected values; no canonical persistence.
+ * Draft fields, scope and access checks for the Group form.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 final class GroupAutosaveProvider implements DraftProviderInterface
 {
     private const KEYS = ['title'];
 
     /**
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function __construct(private readonly MVCFactoryInterface $factory)
     {
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function getContext(): string
     {
         return 'com_users.group';
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function describe(Form $form, object $item, User $user): array
     {
-        $scope = [];
         $this->authorize($user, $item);
-        $keys = self::KEYS;
 
-        $descriptor = DraftProjection::descriptor(
+        return DraftProjection::descriptor(
             $form,
             $item,
             $this->getContext(),
             empty($item->id) ? null : (string) $item->id,
-            $scope,
-            $keys,
+            [],
+            self::KEYS,
             [(int) ($item->parent_id ?? 0)]
         );
-
-
-        return $descriptor;
     }
 
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     */
     public function read(array $binding, User $user, ?array $payload = null): array
     {
         $target = DraftModel::target($binding, $this->getContext());
@@ -80,12 +81,10 @@ final class GroupAutosaveProvider implements DraftProviderInterface
             throw new AutosaveException('target_not_found', 'The native record was not found.');
         }
 
-        $this->authorize($user, $item, $binding['scope']);
+        $this->authorize($user, $item);
         $form       = DraftModel::form($model, 'com_users', $item);
         $descriptor = $this->describe($form, $item, $user);
-        if ($descriptor['scope'] !== $binding['scope']) {
-            throw new AutosaveException('scope_conflict', 'The native identity or owning relation changed.');
-        }
+        DraftModel::assertScope($descriptor['scope'], $binding['scope'], 'The native identity or owning relation changed.');
         return $descriptor;
     }
 
@@ -101,8 +100,6 @@ final class GroupAutosaveProvider implements DraftProviderInterface
         if (!(empty($item->id) ? ($user->authorise('core.create', $component) || \count($user->getAuthorisedCategories($component, 'core.create')) > 0) : $user->authorise('core.edit', $component))) {
             throw new AutosaveException('forbidden', 'The native form cannot be edited by this user.');
         }
-        if (!empty($item->checked_out) && (int) $item->checked_out !== (int) $user->id) {
-            throw new AutosaveException('checkout_conflict', 'The record is checked out by another user.');
-        }
+        DraftModel::assertCheckout($item, $user, 'The record is checked out by another user.');
     }
 }

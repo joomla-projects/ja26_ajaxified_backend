@@ -92,7 +92,7 @@ describe('Native Article draft protection', () => {
       });
     });
     cy.scrollTo('top');
-    cy.get('#jform_alias').type('phase-two-status-fixture');
+    cy.get('#jform_alias').type('autosave-status-fixture');
     cy.get('[data-draft-state="preserving"]').should('be.visible').and('contain.text', 'Saving...');
     cy.wait('@preserveDraft').its('response.body.success').should('equal', true);
     cy.get('[data-draft-state="preserved"]').should('be.visible').and('contain.text', 'Saved')
@@ -124,7 +124,7 @@ describe('Native Article draft protection', () => {
     rememberInstance();
     cy.wait('@detectDraft');
     cy.get('[data-draft-recovery]').should('not.be.visible');
-    cy.get('#jform_alias').clear().type('phase-two-independent-creation');
+    cy.get('#jform_alias').clear().type('autosave-independent-creation');
     cy.wait('@preserveDraft').its('response.body.success').should('equal', true);
     cy.clickToolbarButton('Cancel');
     cy.visit('/administrator/index.php?option=com_content&task=article.add');
@@ -146,7 +146,7 @@ describe('Native Article draft protection', () => {
     cy.visit('/administrator/index.php?option=com_content&task=article.add');
     rememberInstance();
     cy.wait('@detectDraft');
-    cy.get('#jform_alias').clear().type('phase-two-reload-creation');
+    cy.get('#jform_alias').clear().type('autosave-reload-creation');
     cy.wait('@preserveDraft').its('response.body.success').should('equal', true);
     cy.reload();
     rememberInstance();
@@ -158,23 +158,23 @@ describe('Native Article draft protection', () => {
     cy.wait('@detectDraft').its('response.body.data.candidates').should('have.length', 1);
     cy.get('[data-draft-recovery]').should('be.visible');
     cy.get('[data-draft-action="review"]').click();
-    cy.get('[data-draft-comparison]').should('contain.text', 'phase-two-reload-creation');
+    cy.get('[data-draft-comparison]').should('contain.text', 'autosave-reload-creation');
     cy.get('[data-draft-action="restore"]').should('be.enabled').click();
     cy.wait('@preserveDraft').its('response.body.success').should('equal', true);
-    cy.get('#jform_alias').should('have.value', 'phase-two-reload-creation');
+    cy.get('#jform_alias').should('have.value', 'autosave-reload-creation');
   });
 
-  it('protects an incomplete creation without creating a canonical Article', () => {
+  it('protects an incomplete creation without creating a saved item Article', () => {
     cy.visit('/administrator/index.php?option=com_content&task=article.add');
     rememberInstance();
-    cy.get('#jform_alias').clear().type('phase-two-incomplete-draft');
+    cy.get('#jform_alias').clear().type('autosave-incomplete-draft');
     cy.wait('@preserveDraft').then(({ request, response }) => {
       expect(response.body.success).to.equal(true);
       expect(request.body.payload.title).to.equal('');
       expect(Object.keys(request.body.payload)).to.include('alias');
       expect(Object.keys(request.body.payload)).to.not.include('access');
     });
-    cy.task('queryDB', "SELECT COUNT(*) AS total FROM #__content WHERE alias = 'phase-two-incomplete-draft'")
+    cy.task('queryDB', "SELECT COUNT(*) AS total FROM #__content WHERE alias = 'autosave-incomplete-draft'")
       .then((rows) => expect(Number(rows[0].total)).to.equal(0));
   });
 

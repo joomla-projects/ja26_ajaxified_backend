@@ -3,8 +3,8 @@
 /**
  * Joomla! Content Management System
  *
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\CMS\Autosave;
@@ -17,14 +17,14 @@ use Joomla\Registry\Registry;
 // phpcs:enable PSR1.Files.SideEffects
 
 /**
- * Approved native controls and selected canonical values, never canonical validation.
+ * Select supported form fields and normalize draft values.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 final class DraftProjection
 {
     /**
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public static function describe(Form $form, array $keys): array
     {
@@ -61,9 +61,10 @@ final class DraftProjection
         return $fields;
     }
 
-    /** Dynamic values require an explicit safe declaration in the finalized native form. */
     /**
-     * @since  __DEPLOY_VERSION__
+     * List eligible fields in a form group, requiring explicit opt-in by default.
+     *
+     * @since __DEPLOY_VERSION__
      */
     public static function groupKeys(Form $form, string $group, bool $declaredOnly = true): array
     {
@@ -80,7 +81,7 @@ final class DraftProjection
     }
 
     /**
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public static function values(object $item, array $keys): array
     {
@@ -98,22 +99,25 @@ final class DraftProjection
     }
 
     /**
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public static function descriptor(Form $form, object $item, string $context, ?string $target, array $scope, array $keys, array $markers = []): array
     {
         $fields = self::describe($form, $keys);
         $values = self::values($item, array_keys($fields));
         return ['context' => $context, 'target' => $target, 'scope' => $scope, 'version' => 1, 'fields' => $fields,
-            'revision'    => $target === null ? null : hash('sha256', json_encode(
-                [$context, $target, $scope, $values, $markers],
-                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-            )),
+            'revision'    => $target === null ? null : hash(
+                'sha256',
+                json_encode(
+                    [$context, $target, $scope, $values, $markers],
+                    JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                )
+            ),
             'values' => $values, 'excluded' => array_values(array_diff($keys, array_keys($fields)))];
     }
 
     /**
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public static function normalize(mixed $payload, array $fields): array
     {

@@ -1,16 +1,16 @@
 <?php
 
 /**
- * @package     Joomla.Administrator
- * @subpackage  com_newsfeeds
+ * @package    Joomla.Administrator
+ * @subpackage com_newsfeeds
  *
- * @copyright   (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
- * @license     GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2008 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\Component\Newsfeeds\Administrator\View\Newsfeed;
 
-use Joomla\CMS\Autosave\DraftView;
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -28,73 +28,62 @@ use Joomla\Component\Newsfeeds\Administrator\Model\NewsfeedModel;
 /**
  * View to edit a newsfeed.
  *
- * @since  1.6
+ * @since 1.6
  */
 class HtmlView extends BaseHtmlView
 {
-    /**
-     * Whether draft controls are shown for this form.
-     *
-     * @var    boolean
-     * @since  __DEPLOY_VERSION__
-     */
-    public bool $autosaveEnabled = false;
+    use DraftViewTrait;
 
-    /**
-     * Layout ID for the draft status.
-     *
-     * @var    string
-     * @since  __DEPLOY_VERSION__
-     */
-    public string $autosaveStatusId = 'newsfeed-autosave-status';
     /**
      * The item object for the newsfeed
      *
-     * @var    \Joomla\Registry\Registry
+     * @var \Joomla\Registry\Registry
      *
-     * @since  1.6
+     * @since 1.6
      */
     protected $item;
 
     /**
      * The form object for the newsfeed
      *
-     * @var    \Joomla\CMS\Form\Form
+     * @var \Joomla\CMS\Form\Form
      *
-     * @since  1.6
+     * @since 1.6
      */
     protected $form;
 
     /**
      * The model state of the newsfeed
      *
-     * @var   \Joomla\Registry\Registry
+     * @var \Joomla\Registry\Registry
      *
-     * @since  1.6
+     * @since 1.6
      */
     protected $state;
 
     /**
      * Array of fieldsets not to display
      *
-     * @var    string[]
+     * @var string[]
      *
-     * @since  5.2.0
+     * @since 5.2.0
      */
     public $ignore_fieldsets = [];
 
     /**
      * Execute and display a template script.
      *
-     * @param   string  $tpl  The name of the template file to parse; automatically searches through the template paths.
+     * @param string $tpl The name of the template file to parse; automatically searches through the template paths.
      *
-     * @return  void
+     * @return void
      *
-     * @since   1.6
+     * @since 1.6
      */
     public function display($tpl = null)
     {
-        /** @var NewsfeedModel $model */
+        /**
+ * @var NewsfeedModel $model
+*/
         $model = $this->getModel();
         $model->setUseExceptions(true);
 
@@ -134,43 +123,25 @@ class HtmlView extends BaseHtmlView
             $this->addModalToolbar();
         }
 
-        $this->prepareAutosave();
+        $this->prepareAutosave(
+            [
+            'context'   => 'com_newsfeeds.newsfeed',
+            'formId'    => 'newsfeed-form',
+            'statusId'  => 'newsfeed-autosave-status',
+            'saveTasks' => ['newsfeed.apply', 'newsfeed.save', 'newsfeed.save2new', 'newsfeed.save2copy', 'newsfeed.editAssociations'],
+            ]
+        );
+        $this->addAutosaveStatus();
 
         parent::display($tpl);
     }
 
     /**
-     * Configure optional drafts only for supported native edit layouts.
-     *
-     * @return  void
-     *
-     * @since   __DEPLOY_VERSION__
-     */
-    private function prepareAutosave(): void
-    {
-        if (!\in_array($this->getLayout(), ['edit', 'modal'], true)) {
-            return;
-        }
-        try {
-            $this->autosaveEnabled = Factory::getContainer()->get(DraftView::class)->configure(Factory::getApplication(), $this->getDocument(), $this->getCurrentUser(), $this->form, $this->item, [
-                'context'   => 'com_newsfeeds.newsfeed', 'formId' => 'newsfeed-form', 'statusId' => $this->autosaveStatusId,
-                'saveTasks' => ['newsfeed.apply', 'newsfeed.save', 'newsfeed.save2new', 'newsfeed.save2copy', 'newsfeed.editAssociations'],
-            ]);
-        } catch (\Throwable) {
-            // Draft setup is optional; keep the form and its save actions available.
-            $this->autosaveEnabled = false;
-        }
-        if ($this->autosaveEnabled) {
-            DraftView::addStatus($this->getDocument()->getToolbar(), $this->autosaveStatusId);
-        }
-    }
-
-    /**
      * Add the page title and toolbar.
      *
-     * @return  void
+     * @return void
      *
-     * @since   1.6
+     * @since 1.6
      */
     protected function addToolbar()
     {
@@ -235,11 +206,11 @@ class HtmlView extends BaseHtmlView
     /**
      * Add the modal toolbar.
      *
-     * @return  void
+     * @return void
      *
-     * @since   5.1.0
+     * @since 5.1.0
      *
-     * @throws  \Exception
+     * @throws \Exception
      */
     protected function addModalToolbar()
     {

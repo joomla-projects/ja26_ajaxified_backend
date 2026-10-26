@@ -3,7 +3,7 @@
  * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
-import DraftRuntime, { creationRecovery } from './drafts.es6.js';
+import DraftRuntime, { creationRecovery, requestDraft } from './drafts.es6.js';
 import { JoomlaEditor } from 'editor-api';
 import JoomlaDialog from 'joomla.dialog';
 import { availableControl, readControl, restoreControl } from './draft-controls.es6.js';
@@ -11,6 +11,135 @@ import { availableControl, readControl, restoreControl } from './draft-controls.
 const sameValue = (left, right) => (Array.isArray(left) && Array.isArray(right)
   ? left.length === right.length && left.every((value, index) => value === right[index])
   : left === right);
+
+/** Mount controls for discarding an owner's drafts at capacity. */
+function mountQuotaControls(form, configuration, section, onState) {
+  if (!section) return () => {};
+  const find = (selector) => section.querySelector(selector);
+  const select = find('[data-draft-quota-entries]');
+  const button = find('[data-draft-quota-discard]');
+  const details = find('[data-draft-quota-details]');
+  const unavailable = find('[data-draft-quota-unavailable]');
+  const success = find('[data-draft-quota-success]');
+  const stale = find('[data-draft-quota-stale]');
+  const transport = {
+    binding: configuration,
+    fetcher: (url, options) => globalThis.fetch(url, options),
+    csrfToken: () => Joomla.getOptions('csrf.token'),
+    timeout: 15000,
+    requests: new Set(),
+    destroyed: false,
+  };
+  const entries = new Map();
+  let busy = false;
+  let dates;
+  section.hidden = false;
+  success.hidden = true;
+  stale.hidden = true;
+  select.replaceChildren();
+  try {
+    dates = new Intl.DateTimeFormat(configuration.locale, {
+      dateStyle: 'medium', timeStyle: 'short', timeZone: configuration.timeZone,
+    });
+    if (!Array.isArray(configuration.quota) || typeof configuration.endpoint !== 'string') {
+      throw new Error('Missing private allocation metadata');
+    }
+    configuration.quota.forEach((entry) => {
+      if (!entry || typeof entry.draft_id !== 'string' || !/^[a-f0-9]{32}$/.test(entry.draft_id) || entries.has(entry.draft_id)
+        || typeof entry.context !== 'string' || entry.context.length > 255
+        || (entry.target_id !== null && (typeof entry.target_id !== 'string' || entry.target_id.length > 255))
+        || typeof entry.has_preserved_values !== 'boolean' || typeof entry.has_save_marker !== 'boolean'
+        || ['created_at', 'updated_at', 'expires_at'].some((key) => typeof entry[key] !== 'string'
+          || !Number.isFinite(Date.parse(entry[key])))) throw new Error('Invalid private allocation metadata');
+      entries.set(entry.draft_id, entry);
+      const option = form.ownerDocument.createElement('option');
+      option.value = entry.draft_id;
+      option.textContent = entry.context + ' / ' + (entry.target_id ?? section.dataset.newItem)
+        + ' / ' + dates.format(new Date(entry.updated_at));
+      select.append(option);
+    });
+  } catch (error) {
+    entries.clear();
+    select.replaceChildren();
+  }
+  unavailable.hidden = entries.size > 0;
+
+  const update = () => {
+    const entry = entries.get(select.value);
+    select.disabled = busy || !entries.size || transport.destroyed;
+    button.disabled = busy || !entry || transport.destroyed;
+    section.setAttribute('aria-busy', String(busy));
+    details.hidden = !entry;
+    if (!entry) return;
+    ['created', 'updated', 'expires'].forEach((key) => {
+      const time = find('[data-draft-quota-' + key + ']');
+      time.dateTime = entry[key + '_at'];
+      time.textContent = dates.format(new Date(entry[key + '_at']));
+    });
+    find('[data-draft-quota-values]').hidden = !entry.has_preserved_values;
+    find('[data-draft-quota-no-values]').hidden = entry.has_preserved_values;
+    find('[data-draft-quota-saved]').hidden = !entry.has_save_marker;
+  };
+  const selected = () => {
+    success.hidden = true;
+    stale.hidden = true;
+    onState({ state: 'unavailable', code: 'draft_limit_reached' });
+    update();
+  };
+  const remove = (id) => {
+    entries.delete(id);
+    Array.from(select.options).find((option) => option.value === id)?.remove();
+  };
+  const discard = async () => {
+    if (busy || transport.destroyed || !form.isConnected || !entries.has(select.value)) return;
+    const id = select.value;
+    busy = true;
+    success.hidden = true;
+    stale.hidden = true;
+    update();
+    try {
+      if (!await JoomlaDialog.confirm(button.dataset.confirmMessage, button.dataset.confirmTitle)
+        || transport.destroyed || !form.isConnected) return;
+      const result = await requestDraft('discard', { draft_id: id }, transport);
+      if (transport.destroyed || !form.isConnected) return;
+      if (result?.discarded !== true) {
+        throw Object.assign(new Error('Invalid discard acknowledgement'), { code: 'service_unavailable' });
+      }
+      remove(id);
+      success.hidden = false;
+      onState({ state: 'unavailable', code: 'draft_limit_reached' });
+    } catch (error) {
+      if (transport.destroyed || !form.isConnected) return;
+      if (error.code === 'draft_not_found') {
+        remove(id);
+        stale.hidden = false;
+        onState({ state: 'unavailable', code: 'draft_limit_reached' });
+      } else {
+        onState({ state: 'unavailable', code: error.code || 'service_unavailable' });
+      }
+    } finally {
+      busy = false;
+      if (!transport.destroyed && form.isConnected) update();
+    }
+  };
+  const dispose = () => {
+    if (transport.destroyed) return;
+    transport.destroyed = true;
+    busy = false;
+    transport.requests.forEach((controller) => controller.abort());
+    transport.requests.clear();
+    select.removeEventListener('change', selected);
+    button.removeEventListener('click', discard);
+    form.ownerDocument.defaultView.removeEventListener('pagehide', dispose);
+    onState({ state: 'unavailable', code: 'disposed_form' });
+    update();
+  };
+  select.addEventListener('change', selected);
+  button.addEventListener('click', discard);
+  form.ownerDocument.defaultView.addEventListener('pagehide', dispose);
+  update();
+  return dispose;
+}
 
 /**
  * Native controls and explicit recovery UI. Only opaque creation references use history state.
@@ -34,7 +163,6 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
   let recoveryRevision = null;
   let recoveredSnapshot = null;
   let actionRevision = 0;
-  let nextPage = null;
   let creation = null;
   let initialized = false;
 
@@ -57,6 +185,9 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
 
   if (!configuration.available) {
     render({ state: 'unavailable', code: configuration.errorCode });
+    if (configuration.errorCode === 'draft_limit_reached') {
+      return mountQuotaControls(form, configuration, node('[data-draft-quota]'), render);
+    }
     return () => {};
   }
 
@@ -129,6 +260,18 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
     }
   };
 
+  const release = (dispose) => {
+    try {
+      dispose?.();
+    } catch (error) {
+      if (typeof globalThis.reportError === 'function') {
+        globalThis.reportError(error);
+      } else {
+        queueMicrotask(() => { throw error; });
+      }
+    }
+  };
+
   const observeEditor = (record) => {
     const element = currentElement(record.descriptor);
     const editor = editors.get(record.descriptor.id);
@@ -145,8 +288,9 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
       eligible = false;
     }
     if (eligible && record.available && record.element === element && record.editor === editor && record.dispose) return;
-    record.dispose?.();
+    const dispose = record.dispose;
     record.dispose = null;
+    release(dispose);
     record.element = element;
     record.editor = editor;
     record.available = false;
@@ -307,11 +451,11 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
   };
   listen(select, 'change', resetReview);
 
-  const refresh = async (append = false) => {
+  const refresh = async () => {
     const token = actionRevision;
-    const result = await runtime.candidates(append ? nextPage : null);
+    const result = await runtime.candidates();
     if (destroyed || token !== actionRevision) return;
-    if (!append) select.replaceChildren();
+    select.replaceChildren();
     result.candidates.forEach((candidate) => {
       const option = form.ownerDocument.createElement('option');
       option.value = candidate.draft_id;
@@ -320,12 +464,8 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
       }).format(new Date(candidate.updated_at));
       select.appendChild(option);
     });
-    nextPage = result.next ?? null;
-    node('[data-draft-action="more"]').hidden = nextPage === null;
-    if (!append) {
-      resetReview();
-      showRecovery(select.options.length > 0);
-    }
+    resetReview();
+    showRecovery(select.options.length > 0);
   };
 
   const confirm = (button) => JoomlaDialog.confirm(button.dataset.confirmMessage, button.dataset.confirmTitle);
@@ -341,8 +481,6 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
       if (action === 'retry') {
         if (runtime.failed || runtime.pending) await runtime.retry();
         else await refresh();
-      } else if (action === 'more' && nextPage !== null) {
-        await refresh(true);
       } else if (action === 'keep') {
         showRecovery(false);
         resetReview();
@@ -436,8 +574,12 @@ export default function mountDraftForm(form, configuration, editors = JoomlaEdit
     destroyed = true;
     actionRevision += 1;
     runtime.destroy();
-    Object.values(fields).forEach((record) => record.dispose?.());
-    disposers.forEach((release) => release());
+    Object.values(fields).forEach((record) => {
+      const dispose = record.dispose;
+      record.dispose = null;
+      release(dispose);
+    });
+    disposers.forEach(release);
   };
   listen(globalThis.window, 'pagehide', (event) => {
     if (event.persisted) {

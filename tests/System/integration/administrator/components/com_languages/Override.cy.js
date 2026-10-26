@@ -73,7 +73,7 @@ describe('Native Language Override draft protection', () => {
     cy.get('#jform_override').should('have.value', 'Protected native override');
   });
 
-  it('keeps canonical values on reopening and retires a recovered source after a native key rename', () => {
+  it('keeps saved item values on reopening and retires a recovered source after a native key rename', () => {
     open();
     remember();
     cy.wait('@detectOverrideDraft');

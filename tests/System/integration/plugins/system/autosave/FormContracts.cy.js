@@ -11,14 +11,14 @@ describe('Draft binding on the real native Article form', () => {
   let holdPreserve;
   let releasePreserve;
 
-  const remount = async (fields, prepare = () => {}) => {
+  const remount = async (fields, prepare = () => {}, overrides = {}) => {
     application.dispatchEvent(new application.Event('pagehide'));
     const configuration = application.Joomla.getOptions('com_autosave.forms')['item-form'];
     const form = application.document.getElementById('item-form');
     prepare(form);
 
     const { default: mount } = await application.Function('url', 'return import(url)')(new URL('media/com_autosave/js/draft-form.js', application.Joomla.getOptions('system.paths').rootFull).href);
-    disposers.push(mount(form, { ...configuration, fields }));
+    disposers.push(mount(form, { ...configuration, fields, ...overrides }));
   };
 
   beforeEach(() => {
@@ -73,6 +73,161 @@ describe('Draft binding on the real native Article form', () => {
     if (releasePreserve) releasePreserve();
     disposers.forEach((dispose) => dispose());
     if (userId) cy.task('queryDB', `DELETE FROM #__autosave_drafts WHERE owner_id = ${userId}`);
+  });
+
+  describe('Owner-only controls when allocation is full', () => {
+    let entries;
+    let confirmation;
+    let historyBefore;
+
+    beforeEach(() => {
+      entries = [
+        {
+          draft_id: 'a'.repeat(32), context: 'com_content.article', target_id: '42',
+          created_at: '2026-10-16T00:00:00Z', updated_at: '2026-10-16T00:01:00Z', expires_at: '2026-10-23T00:01:00Z',
+          has_preserved_values: true, has_save_marker: false,
+        },
+        {
+          draft_id: 'b'.repeat(32), context: 'com_modules.module', target_id: null,
+          created_at: '2026-10-16T00:00:00Z', updated_at: '2026-10-16T00:02:00Z', expires_at: '2026-10-17T00:02:00Z',
+          has_preserved_values: false, has_save_marker: true,
+        },
+      ];
+      cy.then(async () => {
+        const { default: dialog } = await application.Function('return import("joomla.dialog")')();
+        confirmation = cy.stub(dialog, 'confirm').resolves(true);
+        historyBefore = JSON.stringify(application.history.state);
+        await remount({}, () => {}, { available: false, errorCode: 'draft_limit_reached', quota: entries });
+      });
+      cy.get('[data-draft-quota]').should('be.visible');
+      cy.get('#jform_title').type('Local work at full quota');
+    });
+
+    it('discards just the confirmed identity, keeps local values and does not restart protection', () => {
+      cy.intercept('POST', '**/administrator/index.php*task=draft.discard*', {
+        body: { success: true, data: { discarded: true } },
+      }).as('quotaDiscard');
+      cy.get('[data-draft-quota-entries] option').should('have.length', 2);
+      cy.get('[data-draft-quota-values]').should('be.visible');
+      cy.get('[data-draft-quota-entries]').select(entries[1].draft_id);
+      cy.get('[data-draft-quota-no-values]').should('be.visible');
+      cy.get('[data-draft-quota-saved]').should('be.visible');
+      cy.get('[data-draft-quota-entries]').select(entries[0].draft_id);
+      cy.get('[data-draft-quota-discard]').click();
+      cy.wait('@quotaDiscard').then(({ request }) => {
+        expect(request.body).to.deep.equal({ draft_id: entries[0].draft_id });
+        expect(request.headers['x-csrf-token']).to.equal(application.Joomla.getOptions('csrf.token'));
+        expect(confirmation).to.have.been.calledOnce;
+        expect(confirmation.firstCall.args[0]).to.include('since this list was shown');
+      });
+      cy.get('[data-draft-quota-entries] option').should('have.length', 1);
+      cy.get('[data-draft-quota-success]').should('be.visible');
+      cy.get('[data-draft-state="unavailable"]').should('be.visible');
+      cy.tick(60000);
+      cy.get('#jform_title').should('have.value', 'Local work at full quota');
+      cy.get('[data-draft-metadata]').should('not.exist');
+      cy.then(() => {
+        expect(writes).to.have.length(0);
+        expect(JSON.stringify(application.history.state)).to.equal(historyBefore);
+        const form = application.document.getElementById('item-form');
+        form.elements.namedItem('task').value = 'article.save';
+        const event = new application.Event('submit', { bubbles: true, cancelable: true });
+        form.dispatchEvent(event);
+        expect(event.defaultPrevented).to.equal(false);
+      });
+    });
+
+    it('does nothing when the owner cancels confirmation', () => {
+      let requests = 0;
+      cy.intercept('POST', '**/administrator/index.php*task=draft.discard*', (request) => {
+        requests += 1;
+        request.reply({ success: true, data: { discarded: true } });
+      });
+      cy.then(() => {
+        confirmation.resolves(false);
+      });
+      cy.get('[data-draft-quota-discard]').click();
+      cy.get('[data-draft-quota-discard]').should('not.be.disabled');
+      cy.get('[data-draft-quota-entries] option').should('have.length', 2);
+      cy.get('#jform_title').should('have.value', 'Local work at full quota');
+      cy.then(() => expect(requests).to.equal(0));
+    });
+
+    it('reports a stale identity without claiming that a deletion freed space', () => {
+      cy.intercept('POST', '**/administrator/index.php*task=draft.discard*', {
+        statusCode: 404, body: { success: false, data: { code: 'draft_not_found' } },
+      }).as('quotaDiscard');
+      cy.get('[data-draft-quota-discard]').click();
+      cy.wait('@quotaDiscard');
+      cy.get('[data-draft-quota-stale]').should('be.visible');
+      cy.get('[data-draft-quota-success]').should('not.be.visible');
+      cy.get('[data-draft-quota-entries] option').should('have.length', 1);
+      cy.get('#jform_title').should('have.value', 'Local work at full quota');
+    });
+
+    [
+      ['invalid_csrf_token', 403, 'authentication_required'],
+      ['authentication_required', 401, 'authentication_required'],
+      ['transport_failure', 503, 'transport_failure'],
+    ].forEach(([code, statusCode, feedback]) => {
+      it(`keeps selection and local editing after ${code}`, () => {
+        cy.intercept('POST', '**/administrator/index.php*task=draft.discard*', {
+          statusCode, body: { success: false, data: { code } },
+        }).as('quotaDiscard');
+        cy.get('[data-draft-quota-discard]').click();
+        cy.wait('@quotaDiscard');
+        cy.get(`[data-draft-error~="${feedback}"]`).should('be.visible');
+        cy.get('[data-draft-quota-entries]').should('have.value', entries[0].draft_id);
+        cy.get('[data-draft-quota-entries] option').should('have.length', 2);
+        cy.get('[data-draft-quota-success]').should('not.be.visible');
+        cy.get('#jform_title').type(' still editable').should('have.value', 'Local work at full quota still editable');
+      });
+    });
+
+    [undefined, []].forEach((quota) => {
+      it(`keeps native editing available with ${quota ? 'empty' : 'missing'} metadata`, () => {
+        cy.then(() => remount({}, () => {}, { available: false, errorCode: 'draft_limit_reached', quota }));
+        cy.get('[data-draft-quota-unavailable]').should('be.visible');
+        cy.get('[data-draft-quota-entries]').should('be.disabled');
+        cy.get('[data-draft-quota-entries] option').should('have.length', 0);
+        cy.get('[data-draft-quota-discard]').should('be.disabled');
+        cy.get('#jform_title').type(' still editable').should('have.value', 'Local work at full quota still editable');
+        cy.tick(60000);
+        cy.then(() => expect(writes).to.have.length(0));
+      });
+    });
+
+    it('aborts a departing form and ignores a late successful discard acknowledgement', () => {
+      let signal;
+      let release;
+      let parsed = false;
+      cy.then(() => {
+        cy.stub(application, 'fetch').callsFake((url, options) => {
+          signal = options.signal;
+          return new Promise((resolve) => {
+            release = () => resolve({
+              ok: true,
+              json: async () => {
+                parsed = true;
+                return { success: true, data: { discarded: true } };
+              },
+            });
+          });
+        });
+      });
+      cy.get('[data-draft-quota-discard]').click();
+      cy.wrap(null).should(() => expect(release).to.be.a('function'));
+      cy.then(() => {
+        application.dispatchEvent(new application.Event('pagehide'));
+        expect(signal.aborted).to.equal(true);
+        release();
+      });
+      cy.wrap(null).should(() => expect(parsed).to.equal(true));
+      cy.get('[data-draft-quota-discard]').should('be.disabled');
+      cy.get('[data-draft-quota-entries] option').should('have.length', 2);
+      cy.get('[data-draft-quota-success]').should('not.be.visible');
+      cy.get('#jform_title').should('have.value', 'Local work at full quota');
+    });
   });
 
   ['untouched', 'early typing', 'early undo'].forEach((mode) => {
@@ -163,6 +318,57 @@ describe('Draft binding on the real native Article form', () => {
       expect(request.body.client_revision).to.be.greaterThan(writes[0].client_revision);
     });
     cy.get('[data-draft-state="preserved"]').should('be.visible');
+  });
+
+  it('continues editor rebinding when a provider-returned disposer throws', () => {
+    let api;
+    let previous;
+    let replacement;
+    let cleanup;
+    let reported;
+    const failure = new Error('Editor disposer failed');
+    cy.then(async () => {
+      api = (await application.Function('return import("editor-api")')()).JoomlaEditor;
+      reported = cy.stub(application, 'reportError');
+      const configuration = application.Joomla.getOptions('com_autosave.forms')['item-form'];
+      await remount({ articletext: configuration.fields.articletext }, () => {
+        previous = api.get('jform_articletext');
+        const subscribe = previous.subscribeChange;
+        cy.stub(previous, 'subscribeChange').callsFake((callback) => {
+          const off = subscribe.call(previous, callback);
+          cleanup = cy.spy(() => {
+            off();
+            throw failure;
+          });
+          return cleanup;
+        });
+      });
+    });
+    cy.wait('@detect');
+    cy.then(() => {
+      replacement = new previous.constructor(previous.getRawInstance(), previous.getType(), previous.getId());
+      disposers.push(() => {
+        api.unregister(replacement);
+        api.register(previous);
+      });
+      expect(api.register(replacement)).to.equal(api);
+      api.unregister(previous);
+      expect(api.get(previous.getId())).to.equal(replacement);
+      expect(cleanup).to.have.been.calledOnce;
+      expect(reported).to.have.been.calledOnce;
+      expect(reported.firstCall.args[0]).to.equal(failure);
+    });
+    cy.get('#jform_articletext').type('Work after failed disposal');
+    cy.tick(650);
+    cy.wait('@preserve').its('request.body.payload.articletext').should('equal', 'Work after failed disposal');
+    cy.get('[data-draft-state="preserved"]').should('be.visible');
+    cy.then(() => previous.notifyChange());
+    cy.tick(650);
+    cy.then(() => {
+      expect(writes).to.have.length(1);
+      expect(cleanup).to.have.been.calledOnce;
+      expect(reported).to.have.been.calledOnce;
+    });
   });
 
   it('resumes from a real same-ID editor replacement and ignores the removed decorator', () => {
@@ -393,6 +599,76 @@ describe('Draft binding on the real native Article form', () => {
     cy.get('#item-form').then((form) => form[0].remove());
     cy.tick(650);
     cy.get('[data-draft-state="unavailable"]').should('be.visible');
+    cy.then(() => expect(writes).to.have.length(0));
+  });
+
+  it('releases other fields and form listeners when one editor disposer fails', () => {
+    let firstCleanup;
+    let secondCleanup;
+    let lifecycleCleanup;
+    let removeListener;
+    let reported;
+    const failure = new Error('Editor disposer failed');
+    cy.then(async () => {
+      const { JoomlaEditor: api } = await application.Function('return import("editor-api")')();
+      const configuration = application.Joomla.getOptions('com_autosave.forms')['item-form'];
+      reported = cy.stub(application, 'reportError');
+      await remount({
+        articletext: configuration.fields.articletext, title: { ...configuration.fields.title, control: 'editor' },
+      }, (form) => {
+        const original = form.querySelector('#jform_title');
+        const wrapper = application.document.createElement('joomla-editor-none');
+        const textarea = application.document.createElement('textarea');
+        textarea.id = original.id;
+        textarea.name = original.name;
+        textarea.value = original.value;
+        wrapper.append(textarea);
+        original.replaceWith(wrapper);
+        const first = api.get('jform_articletext');
+        const second = api.get('jform_title');
+        expect(second.getElement()).to.equal(textarea);
+        [first, second].forEach((provider, index) => {
+          const subscribe = provider.subscribeChange;
+          cy.stub(provider, 'subscribeChange').callsFake((callback) => {
+            const off = subscribe.call(provider, callback);
+            const cleanup = cy.spy(() => {
+              off();
+              if (index === 0) throw failure;
+            });
+            if (index === 0) firstCleanup = cleanup;
+            else secondCleanup = cleanup;
+            return cleanup;
+          });
+        });
+        const subscribeLifecycle = api.subscribeLifecycle;
+        cy.stub(api, 'subscribeLifecycle').callsFake((callback) => {
+          const off = subscribeLifecycle.call(api, callback);
+          lifecycleCleanup = cy.spy(() => off());
+          return lifecycleCleanup;
+        });
+        removeListener = cy.spy(form, 'removeEventListener');
+      });
+    });
+    cy.wait('@detect');
+    cy.get('#jform_title').type('Pending local work');
+    cy.then(() => {
+      const dispose = disposers[0];
+      expect(() => dispose()).to.not.throw();
+      dispose();
+      expect(firstCleanup).to.have.been.calledOnce;
+      expect(secondCleanup).to.have.been.calledOnce;
+      expect(lifecycleCleanup).to.have.been.calledOnce;
+      expect(removeListener).to.have.been.calledWith('input');
+      expect(removeListener).to.have.been.calledWith('change');
+      expect(removeListener).to.have.been.calledWith('submit');
+      expect(reported).to.have.been.calledOnce;
+      expect(reported.firstCall.args[0]).to.equal(failure);
+    });
+    cy.tick(60000);
+    cy.get('#jform_title').type(' after disposal').should('have.value', 'Pending local work after disposal');
+    cy.tick(60000);
+    cy.get('[data-draft-state="unavailable"]').should('be.visible');
+    cy.get('[data-draft-metadata]').should('not.exist');
     cy.then(() => expect(writes).to.have.length(0));
   });
 

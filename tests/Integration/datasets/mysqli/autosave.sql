@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS `#__users` (
   KEY `email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
--- Private recoverable draft instances. Canonical records remain native Joomla records.
+-- Private autosave drafts.
 CREATE TABLE IF NOT EXISTS `#__autosave_drafts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `draft_id` char(32) NOT NULL,

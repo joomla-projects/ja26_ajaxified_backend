@@ -3,8 +3,8 @@
 /**
  * Joomla! Content Management System
  *
- * @copyright  (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
- * @license    GNU General Public License version 2 or later; see LICENSE.txt
+ * @copyright (C) 2026 Open Source Matters, Inc. <https://www.joomla.org>
+ * @license   GNU General Public License version 2 or later; see LICENSE.txt
  */
 
 namespace Joomla\CMS\Autosave;
@@ -22,6 +22,8 @@ use Joomla\CMS\Toolbar\Button\InlinehelpButton;
 use Joomla\CMS\Toolbar\Button\SeparatorButton;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\CMS\User\User;
+use Joomla\CMS\WebAsset\Exception\UnknownAssetException;
+use Joomla\CMS\WebAsset\Exception\UnsatisfiedDependencyException;
 use Joomla\CMS\WebAsset\WebAssetManager;
 use Joomla\Registry\Registry;
 
@@ -32,14 +34,14 @@ use Joomla\Registry\Registry;
 /**
  * Draft controls and toolbar status for administrator forms.
  *
- * @since  __DEPLOY_VERSION__
+ * @since __DEPLOY_VERSION__
  */
 final class DraftView
 {
     /**
      * Constructor.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function __construct(private readonly DraftService $drafts, private readonly AutosaveContextResolver $resolver)
     {
@@ -48,16 +50,16 @@ final class DraftView
     /**
      * Prepare draft controls without changing the form values.
      *
-     * @param   CMSApplicationInterface  $application  The native administrator application.
-     * @param   HtmlDocument             $document     The native edit document.
-     * @param   User                     $user         The authenticated native editor.
-     * @param   Form                     $form         The prepared edit form.
-     * @param   object                   $item         The saved item, separate from form values.
-     * @param   array                    $integration  Context, form/status IDs and save tasks.
+     * @param CMSApplicationInterface $application The native administrator application.
+     * @param HtmlDocument            $document    The native edit document.
+     * @param User                    $user        The authenticated native editor.
+     * @param Form                    $form        The prepared edit form.
+     * @param object                  $item        The saved item, separate from form values.
+     * @param array                   $integration Context, form/status IDs and save tasks.
      *
-     * @return  boolean  Whether optional draft controls can be mounted.
+     * @return boolean  Whether optional draft controls can be mounted.
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public function configure(
         CMSApplicationInterface $application,
@@ -86,8 +88,12 @@ final class DraftView
             $assets->useScript('com_autosave.draft-form');
             Text::script('JYES');
             Text::script('JNO');
-        } catch (\Throwable) {
-            // Without the optional assets, continue the native view without mounting draft controls.
+        } catch (UnknownAssetException | UnsatisfiedDependencyException) {
+            // Render the form without draft controls when assets are unavailable.
+            return false;
+        } catch (\Throwable $exception) {
+            $this->logFailure($application, 'Optional draft assets could not be prepared.', $exception);
+
             return false;
         }
         $configuration = [
@@ -112,7 +118,7 @@ final class DraftView
                 'excluded'    => $descriptor['excluded'],
                 'unsupported' => $descriptor['unsupported'] ?? [],
                 'locale'      => $application->getLanguage()->getTag(),
-                'timeZone'    => (string) $user->getParam('timezone', $application->get('offset', 'UTC')),
+                'timeZone'    => $user->getTimezone()->getName(),
                 'endpoint'    => Route::_('index.php?option=com_ajax&plugin=autosave&group=system&format=json', false),
             ];
             foreach ($configuration['fields'] as &$field) {
@@ -122,8 +128,23 @@ final class DraftView
             $configuration['available'] = true;
         } catch (AutosaveException $exception) {
             $configuration['errorCode'] = $exception->getErrorCode();
-        } catch (\Throwable) {
+            if ($exception->getErrorCode() === 'draft_limit_reached') {
+                try {
+                    $configuration += [
+                        'quota'    => $this->drafts->allocations($user),
+                        'locale'   => $application->getLanguage()->getTag(),
+                        'timeZone' => $user->getTimezone()->getName(),
+                        'endpoint' => Route::_('index.php?option=com_ajax&plugin=autosave&group=system&format=json', false),
+                    ];
+                } catch (AutosaveException) {
+                    // Keep the quota warning if allocation metadata is unavailable.
+                } catch (\Throwable $exception) {
+                    $this->logFailure($application, 'Optional draft allocation metadata could not be listed.', $exception);
+                }
+            }
+        } catch (\Throwable $exception) {
             $configuration['errorCode'] = 'service_unavailable';
+            $this->logFailure($application, 'Optional draft form setup failed.', $exception);
         }
 
         $forms[$integration['formId']] = $configuration;
@@ -133,14 +154,26 @@ final class DraftView
     }
 
     /**
+     * Log the failed operation and exception class.
+     */
+    private function logFailure(CMSApplicationInterface $application, string $message, \Throwable $exception): void
+    {
+        try {
+            $application->getLogger()->warning($message, ['exception_class' => $exception::class]);
+        } catch (\Throwable) {
+            // Continue rendering if logging fails.
+        }
+    }
+
+    /**
      * Place compact status after native actions and before utility buttons.
      *
-     * @param   Toolbar  $toolbar  The native edit toolbar.
-     * @param   string   $id       The status layout ID.
+     * @param Toolbar $toolbar The native edit toolbar.
+     * @param string  $id      The status layout ID.
      *
-     * @return  void
+     * @return void
      *
-     * @since  __DEPLOY_VERSION__
+     * @since __DEPLOY_VERSION__
      */
     public static function addStatus(Toolbar $toolbar, string $id): void
     {
