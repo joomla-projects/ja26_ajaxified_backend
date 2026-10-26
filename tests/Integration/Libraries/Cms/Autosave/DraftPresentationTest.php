@@ -10,7 +10,6 @@ namespace Joomla\Tests\Integration\Libraries\Cms\Autosave;
 
 use Joomla\CMS\Application\CMSApplication;
 use Joomla\CMS\Factory;
-use Joomla\CMS\Language\Language;
 use Joomla\CMS\Toolbar\ContainerAwareToolbarFactory;
 use Joomla\CMS\Toolbar\Toolbar;
 use Joomla\DI\Container;
@@ -48,7 +47,7 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $application->method('getClientId')->willReturn(1);
         $application->method('getInput')->willReturn(new Input());
         $application->method('getLanguage')->willReturn(Factory::getLanguage());
-        $logger = $this->createMock(LoggerInterface::class);
+        $logger  = $this->createMock(LoggerInterface::class);
         $warning = $logger->expects($available ? $this->never() : $this->once())->method('warning')->with(
             'Optional draft form setup failed.',
             ['exception_class' => \RuntimeException::class]
@@ -132,17 +131,17 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $this->db = $this->getDBDriver();
         $this->initializeStore();
         $descriptor = [
-            'context' => 'com_content.article', 'target' => '42', 'scope' => [], 'version' => 1,
+            'context'  => 'com_content.article', 'target' => '42', 'scope' => [], 'version' => 1,
             'revision' => 'saved item', 'values' => ['title' => 'Saved'],
-            'fields' => ['title' => ['control' => 'text', 'label' => 'Title']], 'excluded' => [],
+            'fields'   => ['title' => ['control' => 'text', 'label' => 'Title']], 'excluded' => [],
         ];
         $now = new \Joomla\CMS\Date\Date('now', 'UTC');
         for ($index = 0; $index < \Joomla\CMS\Autosave\DraftStore::MAX_OWNER_ROWS; $index++) {
             $this->store->open(7, $descriptor, $now);
         }
         $app      = Factory::getApplication();
-        $logger = $this->createMock(LoggerInterface::class);
-        $warning = $logger->expects($metadataFails ? $this->once() : $this->never())->method('warning')->with(
+        $logger   = $this->createMock(LoggerInterface::class);
+        $warning  = $logger->expects($metadataFails ? $this->once() : $this->never())->method('warning')->with(
             'Optional draft allocation metadata could not be listed.',
             ['exception_class' => \RuntimeException::class]
         );
@@ -156,8 +155,8 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $component = new \Joomla\Tests\Unit\Libraries\Cms\Autosave\Stub\ResolverTestCapableComponent([$descriptor['context'] => true]);
         $component->setAutosaveProvider($descriptor['context'], $provider);
         $app->method('bootComponent')->willReturn($component);
-        $resolver = new \Joomla\CMS\Autosave\AutosaveContextResolver($app, static fn (): bool => true);
-        $helper   = new \Joomla\CMS\Autosave\DraftView(new \Joomla\CMS\Autosave\DraftService($resolver, $this->store), $resolver);
+        $resolver    = new \Joomla\CMS\Autosave\AutosaveContextResolver($app, static fn (): bool => true);
+        $helper      = new \Joomla\CMS\Autosave\DraftView(new \Joomla\CMS\Autosave\DraftService($resolver, $this->store), $resolver);
         $user        = $this->createMock(\Joomla\CMS\User\User::class);
         $user->id    = 7;
         $user->guest = false;
@@ -290,9 +289,9 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $this->db = $this->getDBDriver();
         $this->initializeStore();
         [$app, $user, $dispatcher, $document] = $this->nativeViewApplication($component, $layout);
-        $toolbar = $document->getToolbar('toolbar');
-        $context = $component . '.' . strtolower($entity);
-        $prefix  = 'Joomla\\Component\\' . ucfirst(substr($component, 4)) . '\\Administrator\\';
+        $toolbar                              = $document->getToolbar('toolbar');
+        $context                              = $component . '.' . strtolower($entity);
+        $prefix                               = 'Joomla\\Component\\' . ucfirst(substr($component, 4)) . '\\Administrator\\';
         if (!$assetsAvailable) {
             $registry = $document->getWebAssetManager()->getRegistry();
             self::primeAutosaveAssetRegistry($registry);
@@ -306,8 +305,8 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $provider->method('getContext')->willReturn($context);
         $provider->method('describe')->willReturn(
             ['context' => $context, 'target' => '42', 'scope' => [], 'version' => 1,
-            'revision'                                       => 'canonical snapshot', 'values' => ['title' => 'Canonical'],
-            'fields'                                         => ['title' => ['id' => 'jform_title', 'name' => 'jform[title]', 'control' => 'text', 'label' => 'Title']], 'excluded' => []]
+            'revision' => 'canonical snapshot', 'values' => ['title' => 'Canonical'],
+            'fields'   => ['title' => ['id' => 'jform_title', 'name' => 'jform[title]', 'control' => 'text', 'label' => 'Title']], 'excluded' => []]
         );
         $class     = $prefix . 'Extension\\' . ucfirst(substr($component, 4)) . 'Component';
         $extension = new $class($this->createMock(\Joomla\CMS\Dispatcher\ComponentDispatcherFactoryInterface::class));
@@ -384,7 +383,7 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $this->db = $this->getDBDriver();
         $this->initializeStore();
         [$app, $user, $dispatcher, $document] = $this->nativeViewApplication($component, 'edit');
-        $logger = $this->createMock(LoggerInterface::class);
+        $logger                               = $this->createMock(LoggerInterface::class);
         $logger->expects($serviceAvailable ? $this->never() : $this->once())->method('warning')->with(
             'Optional draft view setup failed.',
             ['exception_class' => \RuntimeException::class]
@@ -398,12 +397,12 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
                 $this->assertSame('Local validation-error value', $form->getValue('title'));
                 $this->assertSame('Saved', $item->title);
                 $scope = match ($context) {
-                    'com_categories.category' => ['draftExtension' => 'com_content'],
-                    'com_fields.field', 'com_fields.group' => ['draftContext' => 'com_content.article'],
-                    'com_languages.override' => ['client' => 'administrator', 'language' => 'en-GB'],
+                    'com_categories.category'                                                => ['draftExtension' => 'com_content'],
+                    'com_fields.field', 'com_fields.group'                                   => ['draftContext' => 'com_content.article'],
+                    'com_languages.override'                                                 => ['client' => 'administrator', 'language' => 'en-GB'],
                     'com_workflow.workflow', 'com_workflow.stage', 'com_workflow.transition' => ['draftExtension' => 'com_content.article'],
-                    'com_guidedtours.step' => ['tour_id' => 12],
-                    default => [],
+                    'com_guidedtours.step'                                                   => ['tour_id' => 12],
+                    default                                                                  => [],
                 };
                 foreach ($scope as $property => $value) {
                     $this->assertSame($value, $item->$property);
@@ -425,13 +424,13 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $resolver = new \Joomla\CMS\Autosave\AutosaveContextResolver($app, static fn (): bool => true);
         $this->registerDraftService(new \Joomla\CMS\Autosave\DraftService($resolver, $this->store), $serviceAvailable, $resolver);
         $prefix = 'Joomla\\Component\\' . ucfirst(substr($component, 4)) . '\\Administrator\\';
-        $form = new \Joomla\CMS\Form\Form('shared.native.form');
+        $form   = new \Joomla\CMS\Form\Form('shared.native.form');
         $form->load('<form><fieldset><field name="title" type="text"/></fieldset></form>');
         $form->bind(['title' => 'Local validation-error value']);
         $item = (object) ['id' => 42, 'title' => 'Saved', 'name' => 'Saved', 'alias' => 'saved', 'catid' => 3, 'language' => '*',
-            'workflow_id' => 12, 'tour_id' => 12, 'context' => 'com_content.article', 'client_id' => 0,
-            'extension' => 'com_content.article', 'type' => 'text', 'key' => 'COM_EXAMPLE', 'lang_id' => 42,
-            'filter_id' => 42, 'xml' => new \SimpleXMLElement('<extension/>')];
+            'workflow_id'      => 12, 'tour_id' => 12, 'context' => 'com_content.article', 'client_id' => 0,
+            'extension'        => 'com_content.article', 'type' => 'text', 'key' => 'COM_EXAMPLE', 'lang_id' => 42,
+            'filter_id'        => 42, 'xml' => new \SimpleXMLElement('<extension/>')];
         $state = new \Joomla\Registry\Registry(
             [
             'category' => ['extension' => 'com_content', 'component' => 'com_content'],
@@ -542,7 +541,7 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         (new \ReflectionMethod($class, 'prepareAutosave'))->invoke(
             $view,
             [
-            'context' => $component . '.' . strtolower($entity), 'formId' => 'non-edit-form',
+            'context'  => $component . '.' . strtolower($entity), 'formId' => 'non-edit-form',
             'statusId' => 'non-edit-status', 'saveTasks' => [],
             ]
         );
@@ -589,7 +588,7 @@ class DraftPresentationTest extends IntegrationTestCase implements \Joomla\Tests
         $document = $this->document();
         $app->method('getDocument')->willReturn($document);
         Factory::$document = $document;
-        $factory = new ContainerAwareToolbarFactory();
+        $factory           = new ContainerAwareToolbarFactory();
         $factory->setContainer(new Container());
         $document->setToolbar('toolbar', new Toolbar('toolbar', $factory));
         self::registerSourceAssetManifests($document->getWebAssetManager()->getRegistry(), ['system', 'com_autosave', $component]);

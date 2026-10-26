@@ -100,7 +100,7 @@ class DraftLayoutTest extends UnitTestCase
     {
         $application = Factory::getApplication();
         $application->expects($this->never())->method('bootComponent');
-        $logger = $this->createMock(LoggerInterface::class);
+        $logger  = $this->createMock(LoggerInterface::class);
         $warning = $logger->expects($this->once())->method('warning')->with(
             'Optional draft assets could not be prepared.',
             ['exception_class' => \Joomla\CMS\WebAsset\Exception\InvalidActionException::class]
@@ -342,7 +342,7 @@ class DraftLayoutTest extends UnitTestCase
 
     public function testSharedStatusStaysAfterActionsWhenNativeToolbarHasNoDivider(): void
     {
-        [, $toolbar] = $this->toolbarView();
+        [, $toolbar]      = $this->toolbarView();
         $save             = $toolbar->save('field.save');
         $close            = $toolbar->cancel('field.cancel');
         $inline           = $toolbar->inlinehelp();

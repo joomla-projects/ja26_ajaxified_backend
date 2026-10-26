@@ -41,10 +41,10 @@ class ArticleControllerAutosaveTest extends IntegrationTestCase implements \Joom
     ): void {
         $input = new Input(['option' => 'com_content', 'id' => $source]);
         $input->post->set('jform', ['title' => 'Native title', 'alias' => '', 'catid' => '2', 'articletext' => 'Native body']);
-        $states = [];
+        $states       = [];
         [$app, $user] = $this->controllerApplication($input, true, $states);
-        $logger = $this->createMock(LoggerInterface::class);
-        $warning = $logger->expects($outcome === 'unavailable' ? $this->once() : $this->never())->method('warning')->with(
+        $logger       = $this->createMock(LoggerInterface::class);
+        $warning      = $logger->expects($outcome === 'unavailable' ? $this->once() : $this->never())->method('warning')->with(
             'Optional draft reconciliation failed.',
             ['exception_class' => \RuntimeException::class]
         );
@@ -127,7 +127,7 @@ class ArticleControllerAutosaveTest extends IntegrationTestCase implements \Joom
         $input = new Input(['id' => 42]);
         $input->post->set('autosave', ['draft_id' => str_repeat('a', 32), 'revision' => '1']);
         $input->post->set('jform', ['title' => 'Private local form value']);
-        $logger = $this->createMock(LoggerInterface::class);
+        $logger  = $this->createMock(LoggerInterface::class);
         $warning = $logger->expects($failure === 'domain' ? $this->never() : $this->once())->method('warning')->with(
             'Optional draft save preparation failed.',
             ['exception_class' => \RuntimeException::class]

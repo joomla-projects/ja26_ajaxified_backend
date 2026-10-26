@@ -55,7 +55,7 @@ trait NativeReadFixture
                 }
                 if (str_contains($query, '#__usergroups')) {
                     return [1 => (object) ['id' => 1, 'parent_id' => 0, 'title' => 'Public', 'lft' => 1, 'rgt' => 4],
-                    42    => (object) ['id' => 42, 'parent_id' => 1, 'title' => 'Protected group', 'lft' => 2, 'rgt' => 3]];
+                    42        => (object) ['id' => 42, 'parent_id' => 1, 'title' => 'Protected group', 'lft' => 2, 'rgt' => 3]];
                 }
 
                 throw new \LogicException('Unexpected native read in the unit fixture: ' . $query);

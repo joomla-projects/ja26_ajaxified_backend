@@ -12,7 +12,6 @@ use Joomla\CMS\Autosave\AutosaveContextResolver;
 use Joomla\CMS\Autosave\DraftProviderInterface;
 use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Form\Form;
-use Joomla\CMS\Language\Language;
 use Joomla\CMS\Table\Table;
 use Joomla\Event\Dispatcher;
 use Joomla\Input\Input;
@@ -64,12 +63,12 @@ class NativeContextSaveTest extends IntegrationTestCase implements \Joomla\Tests
             'menutype'      => 'draft-menu', 'client_id' => 0, 'type' => 'component', 'link' => 'index.php?option=com_content&view=article', 'params' => [], 'rules' => []];
         $input = new Input(
             ['option' => $component, $key => $source, 'id' => $source, 'extension' => 'com_content.article',
-            'context'                => 'com_content.article', 'workflow_id' => 12, 'tour_id' => 12, 'menutype' => 'draft-menu', 'task' => $nativeTask]
+            'context' => 'com_content.article', 'workflow_id' => 12, 'tour_id' => 12, 'menutype' => 'draft-menu', 'task' => $nativeTask]
         );
         $input->post->set('jform', $data);
-        $states = [$component . '.edit.' . strtolower($entity) . '.id' => [42]];
+        $states       = [$component . '.edit.' . strtolower($entity) . '.id' => [42]];
         [$app, $user] = $this->controllerApplication($input, true, $states);
-        $document = new \Joomla\CMS\Document\HtmlDocument();
+        $document     = new \Joomla\CMS\Document\HtmlDocument();
         if ($task === 'direct') {
             $document->setType('json');
             $app->method('getTemplate')->willReturn((object) ['id' => 42]);

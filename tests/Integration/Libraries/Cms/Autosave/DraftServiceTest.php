@@ -261,7 +261,7 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
         $this->service->reconcile(
             $this->user,
             ['draft_id' => $fresh['draft_id'], 'revision' => '1',
-            'source_id'                                    => $source['draft_id'], 'source_revision' => '1'],
+            'source_id' => $source['draft_id'], 'source_revision' => '1'],
             'com_content.article',
             '42',
             [],
@@ -312,8 +312,8 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
         $fresh = $this->open();
         $found = $this->service->execute(
             'detect',
-            ['draft_id' => $fresh['draft_id'],
-            'creation_id'                                      => $source['draft_id'], 'acknowledged_id' => $source['draft_id']],
+            ['draft_id'   => $fresh['draft_id'],
+            'creation_id' => $source['draft_id'], 'acknowledged_id' => $source['draft_id']],
             $this->user,
             $this->now
         );
@@ -331,8 +331,8 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
         $fresh   = $this->open();
         $found   = $this->service->execute(
             'detect',
-            ['draft_id' => $fresh['draft_id'],
-            'creation_id'                                        => $pending['draft_id'], 'acknowledged_id' => $acknowledged['draft_id']],
+            ['draft_id'   => $fresh['draft_id'],
+            'creation_id' => $pending['draft_id'], 'acknowledged_id' => $acknowledged['draft_id']],
             $this->user,
             $this->now
         );
@@ -349,8 +349,8 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
         $fresh = $this->open();
         $found = $this->service->execute(
             'detect',
-            ['draft_id' => $fresh['draft_id'],
-            'creation_id'                                      => $pending['draft_id'], 'acknowledged_id' => $acknowledged['draft_id']],
+            ['draft_id'   => $fresh['draft_id'],
+            'creation_id' => $pending['draft_id'], 'acknowledged_id' => $acknowledged['draft_id']],
             $this->user,
             $this->now
         );
@@ -387,8 +387,8 @@ class DraftServiceTest extends IntegrationTestCase implements \Joomla\Tests\Inte
         $this->user->id = 7;
         $found          = $this->service->execute(
             'detect',
-            ['draft_id' => $fresh['draft_id'],
-            'creation_id'                                               => $otherOwner['draft_id']],
+            ['draft_id'   => $fresh['draft_id'],
+            'creation_id' => $otherOwner['draft_id']],
             $this->user,
             $this->now
         );

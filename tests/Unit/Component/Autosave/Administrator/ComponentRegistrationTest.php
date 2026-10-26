@@ -60,22 +60,22 @@ class ComponentRegistrationTest extends UnitTestCase
     public static function components(): array
     {
         return [
-            'Banners' => ['Banners', ['Client', 'Banner']],
-            'Categories' => ['Categories', ['Category']],
-            'Contact' => ['Contact', ['Contact']],
-            'Content' => ['Content', ['Article']],
-            'Fields' => ['Fields', ['Group', 'Field']],
-            'Finder' => ['Finder', ['Filter']],
+            'Banners'     => ['Banners', ['Client', 'Banner']],
+            'Categories'  => ['Categories', ['Category']],
+            'Contact'     => ['Contact', ['Contact']],
+            'Content'     => ['Content', ['Article']],
+            'Fields'      => ['Fields', ['Group', 'Field']],
+            'Finder'      => ['Finder', ['Filter']],
             'Guidedtours' => ['Guidedtours', ['Tour', 'Step']],
-            'Languages' => ['Languages', ['Language', 'Override']],
-            'Menus' => ['Menus', ['Menu', 'Item']],
-            'Modules' => ['Modules', ['Module']],
-            'Newsfeeds' => ['Newsfeeds', ['Newsfeed']],
-            'Redirect' => ['Redirect', ['Link']],
-            'Tags' => ['Tags', ['Tag']],
-            'Templates' => ['Templates', ['Style']],
-            'Users' => ['Users', ['Group', 'Level', 'Note']],
-            'Workflow' => ['Workflow', ['Workflow', 'Stage', 'Transition']],
+            'Languages'   => ['Languages', ['Language', 'Override']],
+            'Menus'       => ['Menus', ['Menu', 'Item']],
+            'Modules'     => ['Modules', ['Module']],
+            'Newsfeeds'   => ['Newsfeeds', ['Newsfeed']],
+            'Redirect'    => ['Redirect', ['Link']],
+            'Tags'        => ['Tags', ['Tag']],
+            'Templates'   => ['Templates', ['Style']],
+            'Users'       => ['Users', ['Group', 'Level', 'Note']],
+            'Workflow'    => ['Workflow', ['Workflow', 'Stage', 'Transition']],
         ];
     }
 }

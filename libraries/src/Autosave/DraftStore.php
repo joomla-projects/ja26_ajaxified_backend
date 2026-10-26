@@ -379,7 +379,7 @@ final class DraftStore
             }
             if (
                 $alreadyRetired
-                && (                $row['context'] !== $context || $row['result_id'] !== $result
+                && ($row['context'] !== $context || $row['result_id'] !== $result
                 || $row['target_id'] !== ($task === 'save2copy' ? $source : $result)
                 || $row['scope'] !== ($task === 'save2copy' ? $scope : ($resultScope ?? $scope)))
             ) {

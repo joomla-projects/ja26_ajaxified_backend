@@ -33,7 +33,7 @@ class AutosavePluginTest extends IntegrationTestCase implements \Joomla\Tests\In
 
     private DatabaseInterface $db;
     private mixed $previousLog;
-    private array $entries = [];
+    private array $entries    = [];
     private bool $loggerFails = false;
 
     protected function setUp(): void
@@ -41,9 +41,9 @@ class AutosavePluginTest extends IntegrationTestCase implements \Joomla\Tests\In
         parent::setUp();
         $this->db = $this->getDBDriver();
         $this->initializeStore();
-        $this->now = new Date('now', 'UTC');
+        $this->now         = new Date('now', 'UTC');
         $this->previousLog = (new \ReflectionProperty(Log::class, 'instance'))->getValue();
-        $logger = $this->getMockBuilder(Log::class)->disableOriginalConstructor()->onlyMethods(['addLogEntry'])->getMock();
+        $logger            = $this->getMockBuilder(Log::class)->disableOriginalConstructor()->onlyMethods(['addLogEntry'])->getMock();
         $logger->method('addLogEntry')->willReturnCallback(
             function (LogEntry $entry): void {
                 $this->entries[] = $entry;
@@ -82,10 +82,10 @@ class AutosavePluginTest extends IntegrationTestCase implements \Joomla\Tests\In
                 $this->db->insertObject('#__users', $user);
             }
             $row = (object) [
-                'draft_id' => bin2hex(random_bytes(16)), 'owner_id' => $owner, 'owner_slot' => $index % DraftStore::MAX_OWNER_ROWS,
-                'context' => 'com_content.article', 'target_id' => null, 'scope' => '[]', 'schema_version' => 1,
+                'draft_id'          => bin2hex(random_bytes(16)), 'owner_id' => $owner, 'owner_slot' => $index % DraftStore::MAX_OWNER_ROWS,
+                'context'           => 'com_content.article', 'target_id' => null, 'scope' => '[]', 'schema_version' => 1,
                 'baseline_revision' => null, 'fields' => '{"title":{"control":"text"}}',
-                'created_at' => $this->now->toSql(), 'updated_at' => $this->now->toSql(), 'expires_at' => '2000-01-01 00:00:00',
+                'created_at'        => $this->now->toSql(), 'updated_at' => $this->now->toSql(), 'expires_at' => '2000-01-01 00:00:00',
             ];
             $this->db->insertObject('#__autosave_drafts', $row);
         }
@@ -98,7 +98,7 @@ class AutosavePluginTest extends IntegrationTestCase implements \Joomla\Tests\In
         $app->method('getLanguage')->willReturn($language);
         $plugin = new Autosave([], $store ?? $this->store);
         $plugin->setApplication($app);
-        $task = $this->createStub(Task::class);
+        $task              = $this->createStub(Task::class);
         $task->logCategory = 'autosave-cleanup-test';
         $task->method('get')->willReturnMap(
             [
@@ -157,7 +157,7 @@ class AutosavePluginTest extends IntegrationTestCase implements \Joomla\Tests\In
     public function testReportsStorageFailureThroughNativeScheduler(bool $loggerFails): void
     {
         $this->loggerFails = $loggerFails;
-        $db = $this->createMock(DatabaseInterface::class);
+        $db                = $this->createMock(DatabaseInterface::class);
         $db->method('createQuery')->willThrowException(new \RuntimeException('Private SQL and credentials'));
         $this->assertSame(Status::KNOCKOUT, $this->runTask(new DraftStore($db)));
         $this->assertCount(1, $this->entries);

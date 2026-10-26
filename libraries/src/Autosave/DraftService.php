@@ -340,7 +340,7 @@ final class DraftService
                     foreach ($scope as $name => $value) {
                         if (
                             $binding['scope'][$name] !== $value
-                            && ($source === null                            ? (!\in_array($name, $completedScopeKeys, true) || !\in_array($binding['scope'][$name], ['', '0', null], true))                            : !\in_array($name, $changedScopeKeys, true))
+                            && ($source === null ? (!\in_array($name, $completedScopeKeys, true) || !\in_array($binding['scope'][$name], ['', '0', null], true)) : !\in_array($name, $changedScopeKeys, true))
                         ) {
                             $compatible = false;
                         }

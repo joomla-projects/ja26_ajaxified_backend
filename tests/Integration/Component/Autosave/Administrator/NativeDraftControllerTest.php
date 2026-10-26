@@ -47,7 +47,7 @@ class NativeDraftControllerTest extends IntegrationTestCase implements \Joomla\T
             ? ['title' => 'Native title', 'parent_id' => '1', 'extension' => 'com_content']
             : ['key' => $result, 'override' => 'Native value', 'both' => '1'];
         $input->post->set('jform', $data);
-        $states = [];
+        $states       = [];
         [$app, $user] = $this->controllerApplication($input, $outcome !== 'denied', $states);
         $app->method('getLogger')->willReturn(new NullLogger());
 
@@ -76,10 +76,10 @@ class NativeDraftControllerTest extends IntegrationTestCase implements \Joomla\T
         $model->method('getName')->willReturn($kind);
         $model->method('getState')->willReturnCallback(
             static fn ($key, $default = null) => match ($key) {
-            'category.id'     => (int) $result,
-            'filter.client'   => 'site',
-            'filter.language' => 'en-GB',
-            default           => $default,
+                'category.id'     => (int) $result,
+                'filter.client'   => 'site',
+                'filter.language' => 'en-GB',
+                default           => $default,
             }
         );
         $form = new Form('native.' . $kind . '.save', ['control' => 'jform']);
@@ -91,7 +91,7 @@ class NativeDraftControllerTest extends IntegrationTestCase implements \Joomla\T
         $model->expects(\in_array($outcome, ['denied', 'validation'], true) ? $this->never() : $this->once())->method('save')->willReturn($outcome !== 'model');
         $model->method('getItem')->willReturn(
             (object) ['id' => (int) $result, 'title' => 'Native title',
-            'extension'                                      => 'com_content', 'params' => [], 'metadata' => [], 'key' => $result]
+            'extension'    => 'com_content', 'params' => [], 'metadata' => [], 'key' => $result]
         );
         if ($kind === 'category') {
             $table = $this->createMock(Table::class);
