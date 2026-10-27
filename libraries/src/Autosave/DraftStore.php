@@ -550,6 +550,16 @@ final class DraftStore
             ->bind(':draft', $id)->bind(':owner', $owner, ParameterType::INTEGER)->bind(':version', $version, ParameterType::INTEGER);
     }
 
+    private function deleteExpired(array $row, Date $now): int
+    {
+        $this->assertAutocommit();
+        $instant = $now->toSql();
+        $query   = $this->mutation($row)->delete($this->db->quoteName('#__autosave_drafts'))
+            ->where($this->db->quoteName('expires_at') . ' <= :now')->bind(':now', $instant);
+        $this->db->setQuery($query)->execute();
+        return $this->db->getAffectedRows();
+    }
+
     private function recycle(array $row, array $old, Date $now): bool
     {
         $this->assertAutocommit();
