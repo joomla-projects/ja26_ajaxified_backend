@@ -445,22 +445,24 @@ final class DraftStore
             return 0;
         }
 
+        $this->assertAutocommit();
         $instant = $now->toSql();
-        $query   = $this->db->createQuery()->select($this->db->quoteName(['draft_id', 'owner_id', 'row_version']))
+        $query   = $this->db->createQuery()->select($this->db->quoteName('draft_id'))
             ->from($this->db->quoteName('#__autosave_drafts'))
             ->where($this->db->quoteName('expires_at') . ' <= :now')
             ->order($this->db->quoteName('expires_at'))->bind(':now', $instant);
-        $expired = $this->db->setQuery($query, 0, $limit)->loadAssocList();
-        $count   = 0;
+        $ids = $this->db->setQuery($query, 0, $limit)->loadColumn();
 
-        foreach ($expired as $row) {
-            if ($deadline !== null && hrtime(true) >= $deadline) {
-                break;
-            }
-            $count += $this->deleteExpired($row, $now);
+        if ($ids === [] || ($deadline !== null && hrtime(true) >= $deadline)) {
+            return 0;
         }
 
-        return $count;
+        $delete = $this->db->createQuery()->delete($this->db->quoteName('#__autosave_drafts'))
+            ->whereIn($this->db->quoteName('draft_id'), $ids, ParameterType::STRING)
+            ->where($this->db->quoteName('expires_at') . ' <= :now')->bind(':now', $instant);
+        $this->db->setQuery($delete)->execute();
+
+        return $this->db->getAffectedRows();
     }
 
     /**
@@ -546,16 +548,6 @@ final class DraftStore
             ->where($this->db->quoteName('owner_id') . ' = :owner')
             ->where($this->db->quoteName('row_version') . ' = :version')
             ->bind(':draft', $id)->bind(':owner', $owner, ParameterType::INTEGER)->bind(':version', $version, ParameterType::INTEGER);
-    }
-
-    private function deleteExpired(array $row, Date $now): int
-    {
-        $this->assertAutocommit();
-        $instant = $now->toSql();
-        $query   = $this->mutation($row)->delete($this->db->quoteName('#__autosave_drafts'))
-            ->where($this->db->quoteName('expires_at') . ' <= :now')->bind(':now', $instant);
-        $this->db->setQuery($query)->execute();
-        return $this->db->getAffectedRows();
     }
 
     private function recycle(array $row, array $old, Date $now): bool
