@@ -10,12 +10,14 @@
 
 namespace Joomla\Component\Users\Administrator\Helper;
 
+use Joomla\CMS\Access\Access;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Helper\UserGroupsHelper;
 use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Object\CMSObject;
+use Joomla\CMS\User\User;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -28,6 +30,31 @@ use Joomla\CMS\Object\CMSObject;
  */
 class UsersHelper extends ContentHelper
 {
+    /**
+     * Whether the user may edit a view level containing protected administrator groups.
+     *
+     * @param   User   $user   The current user.
+     * @param   array  $rules  The view level's group IDs.
+     *
+     * @return  boolean
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public static function canEditViewLevel(User $user, array $rules): bool
+    {
+        if ($user->authorise('core.admin')) {
+            return true;
+        }
+
+        foreach ($rules as $group) {
+            if (Access::checkGroup((int) $group, 'core.admin')) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /**
      * @var    CMSObject  A cache for the available actions.
      * @since  1.6

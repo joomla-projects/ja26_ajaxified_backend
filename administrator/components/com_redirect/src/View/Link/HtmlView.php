@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Redirect\Administrator\View\Link;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -30,6 +31,8 @@ use Joomla\Component\Redirect\Administrator\Model\LinkModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The active item
      *
@@ -79,6 +82,15 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task');
 
         $this->addToolbar();
+        $this->prepareAutosave(
+            [
+            'context'   => 'com_redirect.link',
+            'formId'    => 'link-form',
+            'statusId'  => 'link-autosave-status',
+            'saveTasks' => ['link.apply', 'link.save', 'link.save2new', 'link.save2copy'],
+            ]
+        );
+        $this->addAutosaveStatus();
         parent::display($tpl);
     }
 

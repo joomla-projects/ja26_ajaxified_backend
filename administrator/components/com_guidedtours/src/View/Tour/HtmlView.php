@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Guidedtours\Administrator\View\Tour;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -28,6 +29,8 @@ use Joomla\Component\Guidedtours\Administrator\Model\TourModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The \JForm object
      *
@@ -81,6 +84,15 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task');
 
         $this->addToolbar();
+        $this->prepareAutosave(
+            [
+            'context'   => 'com_guidedtours.tour',
+            'formId'    => 'guidedtours-form',
+            'statusId'  => 'tour-autosave-status',
+            'saveTasks' => ['tour.apply', 'tour.save', 'tour.save2new', 'tour.save2copy'],
+            ]
+        );
+        $this->addAutosaveStatus();
 
         parent::display($tpl);
     }

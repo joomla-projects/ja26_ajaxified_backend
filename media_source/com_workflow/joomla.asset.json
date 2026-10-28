@@ -33,7 +33,7 @@
       }
     },
     {
-      "name" : "com_workflow.workflowgraphclient",
+      "name": "com_workflow.workflowgraphclient",
       "type": "style",
       "uri": "com_workflow/workflow-graph-client.min.css"
     },

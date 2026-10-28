@@ -2,7 +2,7 @@
 <form>
 	<fields name="fieldparams">
 		<fieldset name="fieldparams">
-			<field
+			<field autosave="true"
 				name="multiple"
 				type="list"
 				label="PLG_FIELDS_INTEGER_PARAMS_MULTIPLE_LABEL"
@@ -14,21 +14,21 @@
 				<option value="0">JNO</option>
 			</field>
 
-			<field
+			<field autosave="true"
 				name="first"
 				type="number"
 				label="PLG_FIELDS_INTEGER_PARAMS_FIRST_LABEL"
 				filter="integer"
 			/>
 
-			<field
+			<field autosave="true"
 				name="last"
 				type="number"
 				label="PLG_FIELDS_INTEGER_PARAMS_LAST_LABEL"
 				filter="integer"
 			/>
 
-			<field
+			<field autosave="true"
 				name="step"
 				type="number"
 				label="PLG_FIELDS_INTEGER_PARAMS_STEP_LABEL"

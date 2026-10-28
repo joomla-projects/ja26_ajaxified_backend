@@ -11,6 +11,7 @@
 namespace Joomla\Component\Workflow\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
@@ -62,7 +63,7 @@ class WorkflowController extends FormController
 
         // If extension is not set try to get it from input or throw an exception
         if (empty($this->extension)) {
-            $extension = $this->input->getCmd('extension');
+            $extension = $this->input->getCmd('extension', '');
 
             $parts = explode('.', $extension);
 
@@ -238,5 +239,6 @@ class WorkflowController extends FormController
                 $table->save($transition);
             }
         }
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_workflow.workflow', $this->getTask(), 'id', []);
     }
 }

@@ -10,7 +10,9 @@
 
 namespace Joomla\Component\Banners\Administrator\Controller;
 
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Versioning\VersionableControllerTrait;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -33,4 +35,16 @@ class ClientController extends FormController
      * @since  1.6
      */
     protected $text_prefix = 'COM_BANNERS_CLIENT';
+    /**
+     * Reconcile private drafts after the authoritative native success hook.
+     *
+     * @inheritDoc
+     * @since  __DEPLOY_VERSION__
+     */
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_banners.client', $this->getTask(), 'id', []);
+    }
 }

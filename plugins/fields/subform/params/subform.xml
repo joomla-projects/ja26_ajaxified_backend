@@ -8,7 +8,7 @@
 	<fields name="fieldparams">
 		<fieldset name="fieldparams">
 
-			<field
+			<field autosave="true"
 				name="repeat"
 				type="radio"
 				label="PLG_FIELDS_SUBFORM_PARAMS_REPEAT_LABEL"
@@ -18,7 +18,7 @@
 				<option value="0">JNO</option>
 				<option value="1">JYES</option>
 			</field>
-			<field
+			<field autosave="true"
 				name="max_rows"
 				type="number"
 				label="PLG_FIELDS_SUBFORM_PARAMS_MAX_ROWS_LABEL"

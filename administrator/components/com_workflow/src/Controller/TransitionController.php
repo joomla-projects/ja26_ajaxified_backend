@@ -11,9 +11,11 @@
 namespace Joomla\Component\Workflow\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Router\Route;
 use Joomla\Input\Input;
 
@@ -78,7 +80,7 @@ class TransitionController extends FormController
 
         // If extension is not set try to get it from input or throw an exception
         if (empty($this->extension)) {
-            $extension = $this->input->getCmd('extension');
+            $extension = $this->input->getCmd('extension', '');
 
             $parts = explode('.', $extension);
 
@@ -157,7 +159,7 @@ class TransitionController extends FormController
     protected function getRedirectToItemAppend($recordId = null, $urlVar = 'id')
     {
         $append = parent::getRedirectToItemAppend($recordId);
-        $append .= '&workflow_id=' . $this->workflowId . '&extension=' . $this->extension;
+        $append .= '&workflow_id=' . $this->workflowId . '&extension=' . $this->extension . ($this->section ? '.' . $this->section : '');
 
         return $append;
     }
@@ -172,7 +174,7 @@ class TransitionController extends FormController
     protected function getRedirectToListAppend()
     {
         $append = parent::getRedirectToListAppend();
-        $append .= '&workflow_id=' . $this->workflowId . '&extension=' . $this->extension;
+        $append .= '&workflow_id=' . $this->workflowId . '&extension=' . $this->extension . ($this->section ? '.' . $this->section : '');
 
         return $append;
     }
@@ -227,5 +229,17 @@ class TransitionController extends FormController
             $this->setRedirect(Route::_($return, false));
         }
         return $result;
+    }
+    /**
+     * Reconcile private drafts after the authoritative native success hook.
+     *
+     * @inheritDoc
+     * @since  __DEPLOY_VERSION__
+     */
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_workflow.transition', $this->getTask(), 'id', []);
     }
 }

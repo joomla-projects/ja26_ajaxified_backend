@@ -59,6 +59,16 @@ $tmpl    = $input->get('tmpl');
 $tmpl    = $tmpl ? '&tmpl=' . $tmpl : '';
 ?>
 <form action="<?php echo Route::_('index.php?option=com_content&layout=' . $layout . $tmpl . '&id=' . (int) $this->item->id); ?>" method="post" name="adminForm" id="item-form" aria-label="<?php echo Text::_('COM_CONTENT_FORM_TITLE_' . ((int) $this->item->id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="form-validate">
+    <?php
+    if ($this->autosaveEnabled) {
+        if ($input->getCmd('tmpl') === 'component' && !$isModal) {
+            echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'status', 'id' => $this->autosaveStatusId]);
+        }
+        echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'feedback']);
+        echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'recovery']);
+    }
+    ?>
+
     <?php echo LayoutHelper::render('joomla.edit.title_alias', $this); ?>
 
     <div class="main-card">

@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Tags\Administrator\View\Tag;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -30,6 +31,8 @@ use Joomla\Component\Tags\Administrator\Model\TagModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The Form object
      *
@@ -96,8 +99,16 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form
             ->addControlField('task');
-
         $this->addToolbar();
+        $this->prepareAutosave(
+            [
+            'context'   => 'com_tags.tag',
+            'formId'    => 'item-form',
+            'statusId'  => 'tag-autosave-status',
+            'saveTasks' => ['tag.apply', 'tag.save', 'tag.save2new', 'tag.save2copy'],
+            ]
+        );
+        $this->addAutosaveStatus();
 
         parent::display($tpl);
     }

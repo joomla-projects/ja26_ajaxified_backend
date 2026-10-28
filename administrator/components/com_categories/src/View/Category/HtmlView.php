@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Categories\Administrator\View\Category;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -34,6 +35,8 @@ use Joomla\Component\Categories\Administrator\Model\CategoryModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The Form object
      *
@@ -145,12 +148,27 @@ class HtmlView extends BaseHtmlView
             ->addControlField('return', $input->getBase64('return', ''))
             ->addControlField('forcedLanguage', $forcedLanguage);
 
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $item                  = clone $this->item;
+            $item->draftExtension  = (string) $this->state->get('category.extension');
+
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_categories.category',
+                'formId'    => 'item-form',
+                'statusId'  => 'category-autosave-status',
+                'saveTasks' => ['category.apply', 'category.save', 'category.save2new', 'category.save2copy', 'category.save2menulist', 'category.save2menublog', 'category.editAssociations'],
+                'item'      => $item,
+                ]
+            );
+        }
         if ($this->getLayout() !== 'modal') {
             $this->addToolbar();
         } else {
             $this->addModalToolbar();
         }
 
+        $this->addAutosaveStatus();
         parent::display($tpl);
     }
 

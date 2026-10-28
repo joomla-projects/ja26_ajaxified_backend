@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Newsfeeds\Administrator\Controller;
 
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Router\Route;
@@ -160,5 +161,6 @@ class NewsfeedController extends FormController
 
             $this->setRedirect(Route::_($return, false));
         }
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_newsfeeds.newsfeed', $this->getTask(), 'id', []);
     }
 }

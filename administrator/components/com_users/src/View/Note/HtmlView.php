@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Users\Administrator\View\Note;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -31,6 +32,8 @@ use Joomla\Component\Users\Administrator\Model\NoteModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The edit form.
      *
@@ -75,7 +78,6 @@ class HtmlView extends BaseHtmlView
         $this->state = $model->getState();
         $this->item  = $model->getItem();
         $this->form  = $model->getForm();
-
         // Check for errors.
         if (\count($errors = $model->getErrors())) {
             throw new GenericDataException(implode("\n", $errors), 500);
@@ -85,8 +87,26 @@ class HtmlView extends BaseHtmlView
         $this->form
             ->addControlField('task');
 
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $item                  = clone $this->item;
+            if (empty($item->id)) {
+                $item->user_id = (int) $this->form->getValue('user_id', null, 0);
+                $item->catid   = (int) $this->form->getValue('catid', null, 0);
+            }
+
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_users.note',
+                'formId'    => 'note-form',
+                'statusId'  => 'note-autosave-status',
+                'saveTasks' => ['note.apply', 'note.save', 'note.save2new', 'note.save2copy'],
+                'item'      => $item,
+                ]
+            );
+        }
         parent::display($tpl);
         $this->addToolbar();
+        $this->addAutosaveStatus();
     }
 
     /**

@@ -13,6 +13,7 @@ defined('_JEXEC') or die;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\Layout\LayoutHelper;
 use Joomla\CMS\Router\Route;
 
 /** @var \Joomla\Component\Redirect\Administrator\View\Link\HtmlView $this */
@@ -25,6 +26,10 @@ $wa->useScript('keepalive')
 ?>
 
 <form action="<?php echo Route::_('index.php?option=com_redirect&id=' . (int) $this->item->id); ?>" method="post" name="adminForm" id="link-form" aria-label="<?php echo Text::_('COM_REDIRECT_FORM_' . ((int) $this->item->id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="form-validate">
+    <?php if ($this->autosaveEnabled) : ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'feedback', 'id' => $this->autosaveStatusId]); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'recovery', 'id' => $this->autosaveStatusId]); ?>
+    <?php endif; ?>
     <fieldset class="main-card mt-3">
         <?php echo HTMLHelper::_('uitab.startTabSet', 'myTab', ['active' => 'basic', 'recall' => true, 'breakpoint' => 768]); ?>
 

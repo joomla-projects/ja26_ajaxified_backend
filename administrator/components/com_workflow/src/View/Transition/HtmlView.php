@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Workflow\Administrator\View\Transition;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -29,6 +30,8 @@ use Joomla\Component\Workflow\Administrator\Model\TransitionModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The model state
      *
@@ -144,6 +147,26 @@ class HtmlView extends BaseHtmlView
 
         // Set the toolbar
         $this->addToolbar();
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $item                  = clone $this->item;
+            $item->draftExtension  = (string) $this->state->get('filter.extension');
+            if (empty($item->id)) {
+                $item->workflow_id = Factory::getApplication()->getInput()->getInt('workflow_id');
+            }
+            $this->form->addControlField('workflow_id', (string) $item->workflow_id);
+            $this->form->addControlField('extension', $item->draftExtension);
+
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_workflow.transition',
+                'formId'    => 'workflow-form',
+                'statusId'  => 'transition-autosave-status',
+                'saveTasks' => ['transition.apply', 'transition.save', 'transition.save2new', 'transition.save2copy'],
+                'item'      => $item,
+                ]
+            );
+            $this->addAutosaveStatus();
+        }
 
         // Display the template
         parent::display($tpl);

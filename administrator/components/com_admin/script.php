@@ -16,6 +16,8 @@ use Joomla\CMS\Installer\Installer;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Table\Asset;
+use Joomla\Component\Scheduler\Administrator\Table\TaskTable;
+use Joomla\Database\DatabaseInterface;
 use Joomla\Database\ParameterType;
 use Joomla\Filesystem\File;
 use Joomla\Filesystem\Folder;
@@ -1063,9 +1065,6 @@ class JoomlaInstallerScript
             '/libraries/vendor/symfony/validator/Test/ConstraintValidatorTestCase.php',
             '/libraries/vendor/symfony/var-dumper/Test/VarDumperTestTrait.php',
             // From 6.1.0-alpha3 to 6.1.0-beta1
-            '/media/vendor/tinymce/langs/cy.js',
-            '/media/vendor/tinymce/langs/cy.min.js',
-            '/media/vendor/tinymce/langs/cy.min.js.gz',
             '/media/vendor/tinymce/langs/dv.js',
             '/media/vendor/tinymce/langs/dv.min.js',
             '/media/vendor/tinymce/langs/dv.min.js.gz',
@@ -1287,6 +1286,9 @@ class JoomlaInstallerScript
             '/media/vendor/tinymce/langs/bs.min.js.gz',
             // From 6.2.0-beta1 to 6.2.0-beta2
             '/administrator/components/com_content/src/Service/PreviewTokenService.php',
+            // From 6.2.0-beta2 to 6.2.0-beta3
+            '/media/vendor/tinymce/langs/cy.min.js',
+            '/media/vendor/tinymce/langs/cy.min.js.gz',
         ];
 
         $folders = [
@@ -1430,7 +1432,7 @@ class JoomlaInstallerScript
     }
 
     /**
-     * Method to create assets for newly installed components
+     * Method to create assets for newly installed components and tasks
      *
      * @param   Installer  $installer  The class calling this method
      *
@@ -1463,6 +1465,27 @@ class JoomlaInstallerScript
 
                 // Install failed, roll back changes
                 $installer->abort(Text::sprintf('JLIB_INSTALLER_ABORT_COMP_INSTALL_ROLLBACK', $asset->getError(true)));
+
+                return false;
+            }
+        }
+
+        // TaskTable maintains the asset hierarchy and preserves existing task values and rules.
+        $db      = Factory::getContainer()->get(DatabaseInterface::class);
+        $taskIds = $db->setQuery(
+            $db->createQuery()
+                ->select($db->quoteName('id'))
+                ->from($db->quoteName('#__scheduler_tasks'))
+                ->where($db->quoteName('type') . ' = ' . $db->quote('autosave.cleanup'))
+        )->loadColumn();
+
+        foreach ($taskIds as $taskId) {
+            $task = new TaskTable($db);
+
+            if (!$task->load($taskId) || !$task->store()) {
+                $error = new \RuntimeException('Unable to update the autosave cleanup task asset.');
+                $this->collectError(__METHOD__, $error);
+                $installer->abort(Text::sprintf('JLIB_INSTALLER_ABORT_COMP_INSTALL_ROLLBACK', $error->getMessage()));
 
                 return false;
             }

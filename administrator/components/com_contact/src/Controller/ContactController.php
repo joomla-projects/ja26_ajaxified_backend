@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Contact\Administrator\Controller;
 
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Router\Route;
@@ -154,6 +155,7 @@ class ContactController extends FormController
 
             $this->setRedirect(Route::_($return, false));
         }
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_contact.contact', $this->getTask(), 'id', []);
     }
 
     /**

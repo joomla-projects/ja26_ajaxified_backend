@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Newsfeeds\Administrator\View\Newsfeed;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -31,6 +32,8 @@ use Joomla\Component\Newsfeeds\Administrator\Model\NewsfeedModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The item object for the newsfeed
      *
@@ -117,6 +120,16 @@ class HtmlView extends BaseHtmlView
         } else {
             $this->addModalToolbar();
         }
+
+        $this->prepareAutosave(
+            [
+            'context'   => 'com_newsfeeds.newsfeed',
+            'formId'    => 'newsfeed-form',
+            'statusId'  => 'newsfeed-autosave-status',
+            'saveTasks' => ['newsfeed.apply', 'newsfeed.save', 'newsfeed.save2new', 'newsfeed.save2copy', 'newsfeed.editAssociations'],
+            ]
+        );
+        $this->addAutosaveStatus();
 
         parent::display($tpl);
     }

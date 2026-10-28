@@ -10,7 +10,9 @@
 
 namespace Joomla\Component\Languages\Administrator\Controller;
 
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -36,5 +38,17 @@ class LanguageController extends FormController
     protected function getRedirectToItemAppend($recordId = null, $key = 'lang_id')
     {
         return parent::getRedirectToItemAppend($recordId, $key);
+    }
+    /**
+     * Reconcile private drafts after the authoritative native success hook.
+     *
+     * @inheritDoc
+     * @since  __DEPLOY_VERSION__
+     */
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_languages.language', $this->getTask(), 'lang_id', ['lang_code'], ['lang_code']);
     }
 }

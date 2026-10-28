@@ -576,7 +576,8 @@ class FieldModel extends AdminModel
             'field',
             [
                 'control'   => 'jform',
-                'load_data' => true,
+                'load_data' => $loadData,
+                'data'      => $data,
             ]
         );
 
@@ -585,7 +586,7 @@ class FieldModel extends AdminModel
             $data['context'] = $context;
         }
 
-        $fieldId  = $jinput->get('id');
+        $fieldId  = (int) $this->getState('field.id', $jinput->getInt('id'));
         $assetKey = $this->state->get('field.component') . '.field.' . $fieldId;
 
         if (!$this->getCurrentUser()->authorise('core.edit.state', $assetKey)) {
@@ -997,9 +998,11 @@ class FieldModel extends AdminModel
     public function validate($form, $data, $group = null)
     {
         // Check if the values are unique. This should only apply for list, checkboxes and radio custom field types
-        if (\in_array($data['type'], ['list', 'checkboxes', 'radio'])
+        if (
+            \in_array($data['type'], ['list', 'checkboxes', 'radio'])
             && !empty($data['fieldparams']['options'])
-            && \is_array($data['fieldparams']['options'])) {
+            && \is_array($data['fieldparams']['options'])
+        ) {
             $tmpValues = [];
             foreach ($data['fieldparams']['options'] as $option) {
                 $tmpValues[] = $option['value'];
