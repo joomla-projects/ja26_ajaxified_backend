@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Fields\Administrator\Helper;
 
+use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Event\CustomFields\AfterPrepareFieldEvent;
 use Joomla\CMS\Event\CustomFields\BeforePrepareFieldEvent;
 use Joomla\CMS\Event\CustomFields\GetTypesEvent;
@@ -20,11 +21,13 @@ use Joomla\CMS\Fields\FieldsServiceInterface;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Form\FormHelper;
 use Joomla\CMS\Language\Multilanguage;
+use Joomla\CMS\Language\Text;
 use Joomla\CMS\Layout\LayoutHelper;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\Component\Fields\Administrator\Model\FieldModel;
 use Joomla\Component\Fields\Administrator\Model\FieldsModel;
 use Joomla\Database\ParameterType;
+use Joomla\Database\QueryInterface;
 use Joomla\Event\DispatcherInterface;
 
 // phpcs:disable PSR1.Files.SideEffects
@@ -256,6 +259,153 @@ class FieldsHelper
         }
 
         return $fields;
+    }
+
+    /**
+     * Returns fields which can be used as administrator list filters.
+     *
+     * getFields() shares a request-static model and may retain the language of an earlier item lookup.
+     *
+     * @param   string  $context  The custom-field context.
+     *
+     * @return  array
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public static function getFilterFields(string $context): array
+    {
+        $filterFields = [];
+
+        if (!ComponentHelper::getParams(strstr($context, '.', true))->get('custom_fields_enable', 1)) {
+            return $filterFields;
+        }
+
+        foreach (self::getFields($context) as $field) {
+            if (
+                \in_array($field->type, ['list', 'radio', 'checkboxes'], true)
+                && $field->params->get('show_in_admin_list_filter')
+            ) {
+                $filterFields[(int) $field->id] = $field;
+            }
+        }
+
+        return $filterFields;
+    }
+
+    /**
+     * Returns non-empty scalar selections for one custom-field filter.
+     *
+     * @param   mixed  $value  The selection read from the known list model state key.
+     *
+     * @return  array
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public static function getListFilterValues($value): array
+    {
+        return array_values(array_filter(
+            \is_array($value) ? $value : [$value],
+            static fn ($value) => \is_scalar($value) && $value !== ''
+        ));
+    }
+
+    /**
+     * Adds opted-in selection fields to an administrator list filter form.
+     *
+     * @param   string  $context  The custom-field context.
+     * @param   Form    $form     The filter form.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public static function prepareFilterForm(string $context, Form $form): void
+    {
+        $fields = self::getFilterFields($context);
+
+        if (!$fields) {
+            return;
+        }
+
+        /** @var DispatcherInterface $dispatcher */
+        $dispatcher = Factory::getContainer()->get(DispatcherInterface::class);
+        PluginHelper::importPlugin('fields', null, true, $dispatcher);
+
+        foreach ($fields as $field) {
+            $name = 'customfield_' . (int) $field->id;
+
+            $filterField         = clone $field;
+            $filterField->params = clone $field->params;
+            // Keep viewable fields available without inheriting the group's edit read-only setting.
+            $filterField->params->set('display_readonly', '1');
+            // Editable In controls edit forms; opted-in site fields also provide administrator filters.
+            $filterField->params->set('show_on', '2');
+
+            $xml      = new \DOMDocument('1.0', 'UTF-8');
+            $fieldset = $xml->appendChild($xml->createElement('fieldset'));
+            $dispatcher->dispatch('onCustomFieldsPrepareDom', new PrepareDomEvent('onCustomFieldsPrepareDom', [
+                'subject'  => $filterField,
+                'fieldset' => $fieldset,
+                'form'     => $form,
+            ]));
+
+            $node = $fieldset->firstChild;
+
+            if (!$node instanceof \DOMElement) {
+                continue;
+            }
+
+            $node->setAttribute('name', $name);
+            $node->setAttribute('type', 'list');
+            $node->setAttribute('multiple', 'true');
+            $node->setAttribute('layout', 'joomla.form.field.list-fancy-select');
+            $node->setAttribute('class', 'js-select-submit-on-change');
+            // A filter selection is optional even when the edit field is required.
+            $node->setAttribute('required', 'false');
+            // Edit permissions must not disable a filter the user is allowed to view.
+            $node->removeAttribute('disabled');
+            // An edit field's read-only setting must not prevent filtering.
+            $node->removeAttribute('readonly');
+            // Edit-form dependencies do not apply to independent list filters.
+            $node->removeAttribute('showon');
+            $node->setAttribute('hint', '- ' . Text::_($node->getAttribute('label')) . ' -');
+
+            // An edit default must not select a list filter on first load.
+            if ($default = $node->getElementsByTagName('default')->item(0)) {
+                $node->removeChild($default);
+            }
+
+            $form->setField(simplexml_import_dom($node), 'filter');
+        }
+    }
+
+    /**
+     * Adds a correlated custom-field value filter to a list query.
+     *
+     * @param   QueryInterface  $query             The host list query.
+     * @param   integer         $fieldId           The custom-field ID.
+     * @param   array           $values            The selected option values.
+     * @param   string          $itemIdExpression  The host item ID cast to a string by the caller.
+     *
+     * @return  void
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public static function applyListFilter(QueryInterface $query, int $fieldId, array $values, string $itemIdExpression): void
+    {
+        if (!$values) {
+            return;
+        }
+
+        $fieldParameter  = $query->bindArray([$fieldId], ParameterType::INTEGER)[0];
+        $valueParameters = $query->bindArray(array_values($values), ParameterType::STRING);
+
+        $query->where(
+            'EXISTS (SELECT 1 FROM ' . $query->quoteName('#__fields_values', 'fv')
+            . ' WHERE ' . $query->quoteName('fv.field_id') . ' = ' . $fieldParameter
+            . ' AND ' . $query->quoteName('fv.item_id') . ' = ' . $itemIdExpression
+            . ' AND ' . $query->quoteName('fv.value') . ' IN (' . implode(',', $valueParameters) . '))'
+        );
     }
 
     /**
