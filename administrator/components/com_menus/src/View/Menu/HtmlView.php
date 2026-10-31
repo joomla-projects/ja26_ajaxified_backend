@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Menus\Administrator\View\Menu;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -30,6 +31,8 @@ use Joomla\Component\Menus\Administrator\Model\MenuModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The Form object
      *
@@ -86,8 +89,27 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form->addControlField('task');
 
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $item                  = clone $this->item;
+            if (empty($item->id)) {
+                $item->client_id = (int) $this->state->get('client_id', 0);
+                $item->menutype  = (string) $this->form->getValue('menutype', null, '');
+            }
+            $this->form->addControlField('client_id', (string) $item->client_id);
+
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_menus.menu',
+                'formId'    => 'item-form',
+                'statusId'  => 'menu-autosave-status',
+                'saveTasks' => ['menu.apply', 'menu.save', 'menu.save2new', 'menu.save2copy'],
+                'item'      => $item,
+                ]
+            );
+        }
         parent::display($tpl);
         $this->addToolbar();
+        $this->addAutosaveStatus();
     }
 
     /**

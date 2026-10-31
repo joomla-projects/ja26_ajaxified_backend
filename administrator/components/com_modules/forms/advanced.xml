@@ -4,7 +4,7 @@
 		<fieldset
 			name="advanced">
 
-			<field
+			<field autosave="true"
 				name="module_tag"
 				type="moduletag"
 				label="COM_MODULES_FIELD_MODULE_TAG_LABEL"
@@ -12,7 +12,7 @@
 				validate="options"
 			/>
 
-			<field
+			<field autosave="true"
 				name="bootstrap_size"
 				type="integer"
 				label="COM_MODULES_FIELD_BOOTSTRAP_SIZE_LABEL"
@@ -21,7 +21,7 @@
 				step="1"
 			/>
 
-			<field
+			<field autosave="true"
 				name="header_tag"
 				type="headertag"
 				label="COM_MODULES_FIELD_HEADER_TAG_LABEL"
@@ -29,7 +29,7 @@
 				validate="options"
 			/>
 
-			<field
+			<field autosave="true"
 				name="header_class"
 				type="textarea"
 				label="COM_MODULES_FIELD_HEADER_CLASS_LABEL"

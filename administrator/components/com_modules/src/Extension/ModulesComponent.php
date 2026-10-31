@@ -12,6 +12,8 @@ namespace Joomla\Component\Modules\Administrator\Extension;
 
 use Joomla\CMS\Association\AssociationServiceInterface;
 use Joomla\CMS\Association\AssociationServiceTrait;
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Extension\BootableExtensionInterface;
 use Joomla\CMS\Extension\MVCComponent;
 use Joomla\CMS\HTML\HTMLRegistryAwareTrait;
@@ -28,10 +30,16 @@ use Psr\Container\ContainerInterface;
  *
  * @since  4.0.0
  */
-class ModulesComponent extends MVCComponent implements BootableExtensionInterface, AssociationServiceInterface
+class ModulesComponent extends MVCComponent implements BootableExtensionInterface, AssociationServiceInterface, AutosaveServiceInterface
 {
     use AssociationServiceTrait;
+    use AutosaveServiceTrait;
     use HTMLRegistryAwareTrait;
+
+    public function getAutosaveContexts(): array
+    {
+        return ['com_modules.module' => true];
+    }
 
     /**
      * Booting the extension. This is the function to set up the environment of the extension like

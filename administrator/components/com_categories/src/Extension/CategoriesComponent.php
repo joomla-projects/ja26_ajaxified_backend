@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Categories\Administrator\Extension;
 
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Extension\BootableExtensionInterface;
 use Joomla\CMS\Extension\MVCComponent;
 use Joomla\CMS\HTML\HTMLRegistryAwareTrait;
@@ -25,9 +27,15 @@ use Psr\Container\ContainerInterface;
  *
  * @since  4.0.0
  */
-class CategoriesComponent extends MVCComponent implements BootableExtensionInterface
+class CategoriesComponent extends MVCComponent implements BootableExtensionInterface, AutosaveServiceInterface
 {
+    use AutosaveServiceTrait;
     use HTMLRegistryAwareTrait;
+
+    public function getAutosaveContexts(): array
+    {
+        return ['com_categories.category' => true];
+    }
 
     /**
      * Booting the extension. This is the function to set up the environment of the extension like

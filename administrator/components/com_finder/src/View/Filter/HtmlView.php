@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Finder\Administrator\View\Filter;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -30,6 +31,8 @@ use Joomla\Component\Finder\Administrator\Model\FilterModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The filter object
      *
@@ -117,6 +120,17 @@ class HtmlView extends BaseHtmlView
 
         // Configure the toolbar.
         $this->addToolbar();
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_finder.filter',
+                'formId'    => 'adminForm',
+                'statusId'  => 'filter-autosave-status',
+                'saveTasks' => ['filter.apply', 'filter.save', 'filter.save2new', 'filter.save2copy'],
+                ]
+            );
+            $this->addAutosaveStatus();
+        }
 
         parent::display($tpl);
     }

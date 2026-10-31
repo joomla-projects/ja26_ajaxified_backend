@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Content\Administrator\View\Article;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -28,6 +29,8 @@ use Joomla\Component\Content\Site\Helper\RouteHelper;
  */
 class HtmlView extends FormView
 {
+    use DraftViewTrait;
+
     /**
      * Pagebreak TOC alias
      *
@@ -115,6 +118,15 @@ class HtmlView extends FormView
             ->addControlField('task')
             ->addControlField('return', $input->getBase64('return', ''))
             ->addControlField('forcedLanguage', $forcedLanguage);
+
+        $this->prepareAutosave(
+            [
+            'context'   => 'com_content.article',
+            'formId'    => 'item-form',
+            'statusId'  => 'article-autosave-status',
+            'saveTasks' => ['article.apply', 'article.save', 'article.save2new', 'article.save2copy', 'article.save2menu', 'article.editAssociations'],
+            ]
+        );
     }
 
     /**
@@ -133,6 +145,7 @@ class HtmlView extends FormView
         }
         if ($this->getLayout() === 'modal') {
             $this->addModalToolbar();
+            $this->addAutosaveStatus();
 
             return;
         }
@@ -145,6 +158,7 @@ class HtmlView extends FormView
         $this->toolbarTitle = Text::_('COM_CONTENT_PAGE_' . ($checkedOut ? 'VIEW_ARTICLE' : ($isNew ? 'ADD_ARTICLE' : 'EDIT_ARTICLE')));
 
         parent::addToolbar();
+        $this->addAutosaveStatus();
     }
 
     /**

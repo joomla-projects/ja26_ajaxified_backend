@@ -12,6 +12,8 @@ namespace Joomla\Component\Newsfeeds\Administrator\Extension;
 
 use Joomla\CMS\Association\AssociationServiceInterface;
 use Joomla\CMS\Association\AssociationServiceTrait;
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Categories\CategoryServiceInterface;
 use Joomla\CMS\Categories\CategoryServiceTrait;
 use Joomla\CMS\Component\Router\RouterServiceInterface;
@@ -38,14 +40,21 @@ class NewsfeedsComponent extends MVCComponent implements
     CategoryServiceInterface,
     AssociationServiceInterface,
     RouterServiceInterface,
-    TagServiceInterface
+    TagServiceInterface,
+    AutosaveServiceInterface
 {
+    use AutosaveServiceTrait;
     use AssociationServiceTrait;
     use HTMLRegistryAwareTrait;
     use RouterServiceTrait;
     use CategoryServiceTrait, TagServiceTrait {
         CategoryServiceTrait::getTableNameForSection insteadof TagServiceTrait;
         CategoryServiceTrait::getStateColumnForSection insteadof TagServiceTrait;
+    }
+
+    public function getAutosaveContexts(): array
+    {
+        return ['com_newsfeeds.newsfeed' => true];
     }
 
     /**

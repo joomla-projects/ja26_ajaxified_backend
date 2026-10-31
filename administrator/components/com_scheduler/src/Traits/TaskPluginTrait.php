@@ -205,7 +205,7 @@ trait TaskPluginTrait
 
         // If we're unable to find a routineId, it might be in the form input.
         if (empty($routineId)) {
-            $app       = $this->getApplication() ?? ($this->app ?? Factory::getApplication());
+            $app       = $this->getApplication() ?? Factory::getApplication();
             $form      = $app->getInput()->get('jform', []);
             $routineId = ArrayHelper::getValue($form, 'type', '', 'STRING');
         }
@@ -237,7 +237,7 @@ trait TaskPluginTrait
         ];
 
         if (!$langLoaded) {
-            $app = $this->getApplication() ?? ($this->app ?? Factory::getApplication());
+            $app = $this->getApplication() ?? Factory::getApplication();
             $app->getLanguage()->load('com_scheduler', JPATH_ADMINISTRATOR);
             $langLoaded = true;
         }

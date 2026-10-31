@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Users\Administrator\View\Level;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -30,6 +31,8 @@ use Joomla\Component\Users\Administrator\Model\LevelModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The Form object
      *
@@ -79,6 +82,17 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task');
 
         $this->addToolbar();
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_users.level',
+                'formId'    => 'level-form',
+                'statusId'  => 'level-autosave-status',
+                'saveTasks' => ['level.apply', 'level.save', 'level.save2new', 'level.save2copy'],
+                ]
+            );
+            $this->addAutosaveStatus();
+        }
         parent::display($tpl);
     }
 

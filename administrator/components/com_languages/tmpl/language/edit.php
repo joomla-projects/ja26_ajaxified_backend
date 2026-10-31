@@ -12,6 +12,7 @@ defined('_JEXEC') or die;
 
 use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\Layout\LayoutHelper;
 use Joomla\CMS\Router\Route;
 
 /** @var \Joomla\Component\Languages\Administrator\View\Language\HtmlView $this */
@@ -27,6 +28,10 @@ $wa->useScript('keepalive')
 <h2><?php echo $this->escape($this->form->getValue('title', null, Text::_('COM_LANGUAGES_LANGUAGE_NEW_LANGUAGE_TITLE'))); ?></h2>
 
 <form action="<?php echo Route::_('index.php?option=com_languages&view=language&layout=edit&lang_id=' . (int) $this->item->lang_id); ?>" method="post" name="adminForm" id="language-form" aria-label="<?php echo Text::_('COM_LANGUAGES_LANGUAGE_FORM_' . ((int) $this->item->lang_id === 0 ? 'NEW' : 'EDIT'), true); ?>" class="main-card form-validate">
+    <?php if ($this->autosaveEnabled) : ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'feedback', 'id' => $this->autosaveStatusId]); ?>
+        <?php echo LayoutHelper::render('joomla.autosave.draft', ['part' => 'recovery', 'id' => $this->autosaveStatusId]); ?>
+    <?php endif; ?>
 
     <?php echo HTMLHelper::_('uitab.startTabSet', 'myTab', ['active' => 'details', 'recall' => true, 'breakpoint' => 768]); ?>
 

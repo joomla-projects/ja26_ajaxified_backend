@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Contact\Administrator\View\Contact;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -27,6 +28,8 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
  */
 class HtmlView extends FormView
 {
+    use DraftViewTrait;
+
     /**
      * Set to true, if saving to menu should be supported
      *
@@ -96,6 +99,15 @@ class HtmlView extends FormView
         $this->form
             ->addControlField('task')
             ->addControlField('forcedLanguage', $forcedLanguage);
+
+        $this->prepareAutosave(
+            [
+            'context'   => 'com_contact.contact',
+            'formId'    => 'contact-form',
+            'statusId'  => 'contact-autosave-status',
+            'saveTasks' => ['contact.apply', 'contact.save', 'contact.save2new', 'contact.save2copy', 'contact.save2menu', 'contact.editAssociations'],
+            ]
+        );
     }
 
     /**
@@ -109,11 +121,13 @@ class HtmlView extends FormView
     {
         if ($this->getLayout() === 'modal') {
             $this->addModalToolbar();
+            $this->addAutosaveStatus();
 
             return;
         }
 
         parent::addToolbar();
+        $this->addAutosaveStatus();
 
         return;
     }

@@ -12,6 +12,7 @@ namespace Joomla\Component\Menus\Administrator\Controller;
 
 use Joomla\CMS\Application\ApplicationHelper;
 use Joomla\CMS\Application\CMSWebApplicationInterface;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Filter\InputFilter;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
@@ -181,6 +182,8 @@ class MenuController extends FormController
                 break;
         }
 
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_menus.menu', $this->getTask(), 'id', ['menutype'], ['menutype']);
         return true;
     }
 

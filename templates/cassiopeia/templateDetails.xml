@@ -51,7 +51,7 @@
 	<config>
 		<fields name="params">
 			<fieldset name="advanced">
-				<field
+				<field autosave="true"
 					name="brand"
 					type="radio"
 					label="TPL_CASSIOPEIA_BRAND_LABEL"
@@ -63,7 +63,7 @@
 					<option value="1">JYES</option>
 				</field>
 
-				<field
+				<field autosave="true"
 					name="logoFile"
 					type="media"
 					schemes="http,https,ftp,ftps,data,file"
@@ -74,7 +74,7 @@
 					showon="brand:1"
 				/>
 
-				<field
+				<field autosave="true"
 					name="siteTitle"
 					type="text"
 					default=""
@@ -83,7 +83,7 @@
 					showon="brand:1"
 				/>
 
-				<field
+				<field autosave="true"
 					name="siteDescription"
 					type="text"
 					default=""
@@ -112,7 +112,7 @@
 					</group>
 				</field>
 
-				<field
+				<field autosave="true"
 					name="systemFontBody"
 					type="list"
 					label="TPL_CASSIOPEIA_FONT_SYSTEM_BODY"
@@ -137,7 +137,7 @@
 					<option value="'Segoe Print', 'Bradley Hand', Chilanka, TSCu_Comic, casual, cursive">TPL_CASSIOPEIA_FONT_SYSTEM_STACK_SYSTEM_HANDWRITTEN</option>
 				</field>
 
-				<field
+				<field autosave="true"
 					name="systemFontHeading"
 					type="list"
 					label="TPL_CASSIOPEIA_FONT_SYSTEM_HEADING"
@@ -169,7 +169,7 @@
 					class="alert alert-warning"
 				/>
 
-				<field
+				<field autosave="true"
 					name="colorName"
 					type="filelist"
 					label="TPL_CASSIOPEIA_COLOR_NAME_LABEL"
@@ -186,7 +186,7 @@
 					<option value="colors_alternative">TPL_CASSIOPEIA_COLOR_NAME_ALTERNATIVE</option>
 				</field>
 
-				<field
+				<field autosave="true"
 					name="fluidContainer"
 					type="radio"
 					layout="joomla.form.field.radio.switcher"
@@ -197,7 +197,7 @@
 					<option value="1">TPL_CASSIOPEIA_FLUID</option>
 				</field>
 
-				<field
+				<field autosave="true"
 					name="stickyHeader"
 					type="radio"
 					label="TPL_CASSIOPEIA_STICKY_LABEL"
@@ -209,7 +209,7 @@
 					<option value="1">JYES</option>
 				</field>
 
-				<field
+				<field autosave="true"
 					name="backTop"
 					type="radio"
 					label="TPL_CASSIOPEIA_BACKTOTOP_LABEL"

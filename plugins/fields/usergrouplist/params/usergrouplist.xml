@@ -2,7 +2,7 @@
 <form>
 	<fields name="fieldparams">
 		<fieldset name="fieldparams">
-			<field
+			<field autosave="true"
 				name="multiple"
 				type="list"
 				label="PLG_FIELDS_USERGROUPLIST_PARAMS_MULTIPLE_LABEL"

@@ -11,7 +11,9 @@
 namespace Joomla\Component\Users\Administrator\Controller;
 
 use Joomla\CMS\Access\Access;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -70,5 +72,17 @@ class GroupController extends FormController
         }
 
         return parent::allowEdit($data, $key);
+    }
+    /**
+     * Reconcile private drafts after the authoritative native success hook.
+     *
+     * @inheritDoc
+     * @since  __DEPLOY_VERSION__
+     */
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_users.group', $this->getTask(), 'id', []);
     }
 }

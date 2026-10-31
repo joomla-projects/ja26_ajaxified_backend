@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Languages\Administrator\View\Override;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -29,6 +30,8 @@ use Joomla\Component\Languages\Administrator\Model\OverrideModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The form to use for the view.
      *
@@ -99,9 +102,28 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form
             ->addControlField('task')
-            ->addControlField('id', $this->item->key);
+            ->addControlField('id', $this->item->key)
+            ->addControlField('filter_client', $this->state->get('filter.client') === 'administrator' ? 1 : 0)
+            ->addControlField('filter_language', $this->state->get('filter.language'));
+
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $item                  = clone $this->item;
+            $item->client          = (string) $this->state->get('filter.client');
+            $item->language        = (string) $this->state->get('filter.language');
+
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_languages.override',
+                'formId'    => 'override-form',
+                'statusId'  => 'override-autosave-status',
+                'saveTasks' => ['override.apply', 'override.save', 'override.save2new'],
+                'item'      => $item,
+                ]
+            );
+        }
 
         $this->addToolbar();
+        $this->addAutosaveStatus();
         parent::display($tpl);
     }
 

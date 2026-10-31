@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Tags\Administrator\Extension;
 
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Component\Router\RouterServiceInterface;
 use Joomla\CMS\Component\Router\RouterServiceTrait;
 use Joomla\CMS\Extension\MVCComponent;
@@ -23,7 +25,13 @@ use Joomla\CMS\Extension\MVCComponent;
  *
  * @since  4.0.0
  */
-class TagsComponent extends MVCComponent implements RouterServiceInterface
+class TagsComponent extends MVCComponent implements RouterServiceInterface, AutosaveServiceInterface
 {
+    use AutosaveServiceTrait;
     use RouterServiceTrait;
+
+    public function getAutosaveContexts(): array
+    {
+        return ['com_tags.tag' => true];
+    }
 }
