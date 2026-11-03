@@ -11,9 +11,11 @@
 namespace Joomla\Component\Templates\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSWebApplicationInterface;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
 // phpcs:disable PSR1.Files.SideEffects
 \defined('_JEXEC') or die;
@@ -145,5 +147,17 @@ class StyleController extends FormController
         }
 
         return parent::save($key, $urlVar);
+    }
+    /**
+     * Reconcile private drafts after the authoritative native success hook.
+     *
+     * @inheritDoc
+     * @since  __DEPLOY_VERSION__
+     */
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_templates.style', $this->getTask(), 'id', []);
     }
 }

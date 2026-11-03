@@ -18,6 +18,7 @@ use Joomla\CMS\Extension\Service\Provider\MVCFactory;
 use Joomla\CMS\Extension\Service\Provider\RouterFactory;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Finder\Administrator\Autosave\FilterAutosaveProvider;
 use Joomla\Component\Finder\Administrator\Extension\FinderComponent;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
@@ -50,6 +51,8 @@ return new class () implements ServiceProviderInterface {
                 $component->setMVCFactory($container->get(MVCFactoryInterface::class));
                 $component->setRouterFactory($container->get(RouterFactoryInterface::class));
                 $component->setRegistry($container->get(Registry::class));
+                $autosaveProvider = new FilterAutosaveProvider($container->get(MVCFactoryInterface::class));
+                $component->setAutosaveProvider($autosaveProvider->getContext(), $autosaveProvider);
 
                 return $component;
             }

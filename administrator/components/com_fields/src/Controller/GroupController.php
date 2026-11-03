@@ -11,6 +11,7 @@
 namespace Joomla\Component\Fields\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
@@ -172,6 +173,7 @@ class GroupController extends FormController
             $registry->loadArray($item->params);
             $item->params = (string) $registry;
         }
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_fields.group', $this->getTask(), 'id', []);
     }
 
     /**

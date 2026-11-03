@@ -107,7 +107,8 @@ trait FormBehaviorTrait
             // Get the data for the form.
             $data = $this->loadFormData();
         } else {
-            $data = [];
+            // Explicit caller data can prepare dynamic forms without loading session/default data.
+            $data = $options['data'] ?? [];
         }
 
         // Allow for additional modification of the form, and events to be triggered.

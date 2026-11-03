@@ -7,7 +7,7 @@
 	/>
 	<fields name="params" label="COM_FIELDS_FIELD_BASIC_LABEL">
 		<fieldset name="renderoptions">
-			<field
+			<field autosave="true"
 				name="display_frontend"
 				type="radio"
 				label="PLG_FIELDS_NOTE_PARAMS_DISPLAY_FRONTEND_LABEL"
@@ -22,13 +22,13 @@
 	</fields>
 	<fields name="fieldparams">
 		<fieldset name="fieldparams">
-			<field
+			<field autosave="true"
 				name="label"
 				type="text"
 				label="PLG_FIELDS_NOTE_PARAMS_LABEL_LABEL"
 			/>
 
-			<field
+			<field autosave="true"
 				name="description"
 				type="editor"
 				label="PLG_FIELDS_NOTE_PARAMS_DESCRIPTION_LABEL"
@@ -36,7 +36,7 @@
 				buttons="false"
 			/>
 
-			<field
+			<field autosave="true"
 				name="class"
 				type="text"
 				label="PLG_FIELDS_NOTE_PARAMS_CLASS_LABEL"
@@ -44,7 +44,7 @@
 				default="alert alert-info"
 			/>
 
-			<field
+			<field autosave="true"
 				name="heading"
 				type="list"
 				label="PLG_FIELDS_NOTE_PARAMS_HEADING_LABEL"
@@ -58,7 +58,7 @@
 				<option value="h6">JH6</option>
 			</field>
 
-			<field
+			<field autosave="true"
 				name="close"
 				type="text"
 				label="PLG_FIELDS_NOTE_PARAMS_CLOSE_LABEL"

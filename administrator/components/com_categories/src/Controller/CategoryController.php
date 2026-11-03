@@ -11,6 +11,7 @@
 namespace Joomla\Component\Categories\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSApplication;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
@@ -289,6 +290,18 @@ class CategoryController extends FormController
                 . '&layout=modalreturn&from-task=save';
 
             $this->setRedirect(Route::_($return, false));
+        }
+        $resultId = (int) $model->getState('category.id');
+        if ($resultId > 0) {
+            DraftService::reconcileNativeSave(
+                $this->app,
+                $this->input,
+                'com_categories.category',
+                $this->input->getInt('id') > 0 ? (string) $this->input->getInt('id') : null,
+                ['extension' => (string) $item->extension],
+                $this->getTask(),
+                (string) $resultId
+            );
         }
     }
 }

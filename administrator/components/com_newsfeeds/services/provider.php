@@ -21,6 +21,7 @@ use Joomla\CMS\Extension\Service\Provider\MVCFactory;
 use Joomla\CMS\Extension\Service\Provider\RouterFactory;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Newsfeeds\Administrator\Autosave\NewsfeedAutosaveProvider;
 use Joomla\Component\Newsfeeds\Administrator\Extension\NewsfeedsComponent;
 use Joomla\Component\Newsfeeds\Administrator\Helper\AssociationsHelper;
 use Joomla\DI\Container;
@@ -60,6 +61,8 @@ return new class () implements ServiceProviderInterface {
                 $component->setCategoryFactory($container->get(CategoryFactoryInterface::class));
                 $component->setAssociationExtension($container->get(AssociationExtensionInterface::class));
                 $component->setRouterFactory($container->get(RouterFactoryInterface::class));
+                $provider = new NewsfeedAutosaveProvider($container->get(MVCFactoryInterface::class));
+                $component->setAutosaveProvider($provider->getContext(), $provider);
 
                 return $component;
             }

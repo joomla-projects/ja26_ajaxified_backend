@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Banners\Administrator\View\Client;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
@@ -32,6 +33,8 @@ use Joomla\Component\Banners\Administrator\Model\ClientModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The Form object
      *
@@ -94,6 +97,16 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form
             ->addControlField('task');
+
+        $this->prepareAutosave(
+            [
+            'context'   => 'com_banners.client',
+            'formId'    => 'client-form',
+            'statusId'  => 'client-autosave-status',
+            'saveTasks' => ['client.apply', 'client.save', 'client.save2new', 'client.save2copy'],
+            ]
+        );
+        $this->addAutosaveStatus();
 
         parent::display($tpl);
     }

@@ -2,7 +2,7 @@
 <form>
 	<fields name="fieldparams">
 		<fieldset name="fieldparams">
-			<field
+			<field autosave="true"
 				name="showtime"
 				type="radio"
 				label="PLG_FIELDS_CALENDAR_PARAMS_SHOWTIME_LABEL"

@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Languages\Administrator\View\Language;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -29,6 +30,8 @@ use Joomla\Component\Languages\Administrator\Model\LanguageModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The active item
      *
@@ -82,6 +85,15 @@ class HtmlView extends BaseHtmlView
             ->addControlField('task');
 
         $this->addToolbar();
+        $this->prepareAutosave(
+            [
+            'context'   => 'com_languages.language',
+            'formId'    => 'language-form',
+            'statusId'  => 'language-autosave-status',
+            'saveTasks' => ['language.apply', 'language.save', 'language.save2new', 'language.save2copy'],
+            ]
+        );
+        $this->addAutosaveStatus();
         parent::display($tpl);
     }
 

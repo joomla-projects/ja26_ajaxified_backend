@@ -24,7 +24,7 @@
 	<config>
 		<fields name="params">
 			<fieldset name="options" label="COM_MODULES_BASIC_FIELDSET_LABEL">
-				<field
+				<field autosave="true"
 					name="prepare_content"
 					type="radio"
 					layout="joomla.form.field.radio.switcher"
@@ -37,7 +37,7 @@
 					<option value="1">JYES</option>
 				</field>
 
-				<field
+				<field autosave="true"
 					name="backgroundimage"
 					type="media"
 					schemes="http,https,ftp,ftps,data,file"
@@ -47,7 +47,7 @@
 				/>
 			</fieldset>
 			<fieldset name="advanced">
-				<field
+				<field autosave="true"
 					name="layout"
 					type="modulelayout"
 					label="JFIELD_ALT_LAYOUT_LABEL"
@@ -55,7 +55,7 @@
 					validate="moduleLayout"
 				/>
 
-				<field
+				<field autosave="true"
 					name="moduleclass_sfx"
 					type="textarea"
 					label="COM_MODULES_FIELD_MODULECLASS_SFX_LABEL"
@@ -63,7 +63,7 @@
 					validate="CssIdentifier"
 				/>
 
-				<field
+				<field autosave="true"
 					name="cache"
 					type="list"
 					label="COM_MODULES_FIELD_CACHING_LABEL"
@@ -75,7 +75,7 @@
 					<option value="0">COM_MODULES_FIELD_VALUE_NOCACHING</option>
 				</field>
 
-				<field
+				<field autosave="true"
 					name="cache_time"
 					type="number"
 					label="COM_MODULES_FIELD_CACHE_TIME_LABEL"

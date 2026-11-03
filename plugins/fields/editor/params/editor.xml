@@ -2,7 +2,7 @@
 <form>
 	<fields name="fieldparams">
 		<fieldset name="fieldparams">
-			<field
+			<field autosave="true"
 				name="buttons"
 				type="list"
 				label="PLG_FIELDS_EDITOR_PARAMS_SHOW_BUTTONS_LABEL"
@@ -23,19 +23,19 @@
 				layout="joomla.form.field.list-fancy-select"
 			/>
 
-			<field
+			<field autosave="true"
 				name="width"
 				type="text"
 				label="PLG_FIELDS_EDITOR_PARAMS_WIDTH_LABEL"
 			/>
 
-			<field
+			<field autosave="true"
 				name="height"
 				type="text"
 				label="PLG_FIELDS_EDITOR_PARAMS_HEIGHT_LABEL"
 			/>
 
-			<field
+			<field autosave="true"
 				name="filter"
 				type="list"
 				label="PLG_FIELDS_TEXT_PARAMS_FILTER_LABEL"

@@ -2,7 +2,7 @@
 <form>
 	<fields name="fieldparams">
 		<fieldset name="fieldparams">
-			<field
+			<field autosave="true"
 				name="min"
 				type="number"
 				label="PLG_FIELDS_NUMBER_PARAMS_MIN_LABEL"
@@ -10,7 +10,7 @@
 				filter="float"
 			/>
 
-			<field
+			<field autosave="true"
 				name="max"
 				type="number"
 				label="PLG_FIELDS_NUMBER_PARAMS_MAX_LABEL"
@@ -18,7 +18,7 @@
 				filter="float"
 			/>
 
-			<field
+			<field autosave="true"
 				name="step"
 				type="number"
 				label="PLG_FIELDS_NUMBER_PARAMS_STEP_LABEL"
@@ -26,7 +26,7 @@
 				filter="float"
 			/>
 
-			<field
+			<field autosave="true"
 				name="currency"
 				type="radio"
 				label="PLG_FIELDS_NUMBER_PARAMS_CURRENCY_LABEL"
@@ -38,7 +38,7 @@
 				<option value="1">JYES</option>
 			</field>
 
-			<field
+			<field autosave="true"
 				name="symbol"
 				type="text"
 				label="PLG_FIELDS_NUMBER_PARAMS_SYMBOL_LABEL"
@@ -46,7 +46,7 @@
 				showon="currency:1"
 			/>
 
-			<field
+			<field autosave="true"
 				name="position"
 				type="list"
 				label="PLG_FIELDS_NUMBER_PARAMS_POSITION_LABEL"
@@ -58,7 +58,7 @@
 				<option value="1">PLG_FIELDS_NUMBER_PARAMS_POSITION_OPTION_AFTER</option>
 			</field>
 
-			<field
+			<field autosave="true"
 				name="decimals"
 				type="int"
 				label="PLG_FIELDS_NUMBER_PARAMS_DECIMALS_LABEL"

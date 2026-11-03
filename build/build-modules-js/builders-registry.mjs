@@ -20,6 +20,7 @@ export const builders = [
   'cache',
   'com_actionlogs',
   'com_admin',
+  'com_autosave',
   'com_associations',
   'com_banners',
   'com_cache',

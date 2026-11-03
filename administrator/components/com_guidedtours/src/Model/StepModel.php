@@ -252,7 +252,7 @@ class StepModel extends AdminModel
                 $result->description_translation = Text::_($result->description);
             } else {
                 // Creating a new step so we get the tour id from the session data
-                $tourId = $app->getUserState('com_guidedtours.tour_id');
+                $tourId = $this->getState('step.tour_id', $app->getUserState('com_guidedtours.tour_id'));
                 $tour   = $tourModel->getItem($tourId);
 
                 // Sets step language to parent tour language

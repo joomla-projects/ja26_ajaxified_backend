@@ -10,6 +10,8 @@
 
 namespace Joomla\Component\Redirect\Administrator\Extension;
 
+use Joomla\CMS\Autosave\AutosaveServiceInterface;
+use Joomla\CMS\Autosave\AutosaveServiceTrait;
 use Joomla\CMS\Extension\BootableExtensionInterface;
 use Joomla\CMS\Extension\MVCComponent;
 use Joomla\CMS\HTML\HTMLRegistryAwareTrait;
@@ -25,9 +27,24 @@ use Psr\Container\ContainerInterface;
  *
  * @since  4.0.0
  */
-class RedirectComponent extends MVCComponent implements BootableExtensionInterface
+class RedirectComponent extends MVCComponent implements BootableExtensionInterface, AutosaveServiceInterface
 {
+    use AutosaveServiceTrait;
     use HTMLRegistryAwareTrait;
+
+    /**
+     * Returns valid exact contexts for Autosave.
+     *
+     * @return  array<string, mixed>
+     *
+     * @since   __DEPLOY_VERSION__
+     */
+    public function getAutosaveContexts(): array
+    {
+        return [
+            'com_redirect.link' => true,
+        ];
+    }
 
     /**
      * Booting the extension. This is the function to set up the environment of the extension like

@@ -16,6 +16,8 @@ use Joomla\CMS\Installer\Installer;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Table\Asset;
+use Joomla\Component\Scheduler\Administrator\Table\TaskTable;
+use Joomla\Database\DatabaseInterface;
 use Joomla\Database\ParameterType;
 use Joomla\Filesystem\File;
 use Joomla\Filesystem\Folder;
@@ -1430,7 +1432,7 @@ class JoomlaInstallerScript
     }
 
     /**
-     * Method to create assets for newly installed components
+     * Method to create assets for newly installed components and tasks
      *
      * @param   Installer  $installer  The class calling this method
      *
@@ -1463,6 +1465,27 @@ class JoomlaInstallerScript
 
                 // Install failed, roll back changes
                 $installer->abort(Text::sprintf('JLIB_INSTALLER_ABORT_COMP_INSTALL_ROLLBACK', $asset->getError(true)));
+
+                return false;
+            }
+        }
+
+        // TaskTable maintains the asset hierarchy and preserves existing task values and rules.
+        $db      = Factory::getContainer()->get(DatabaseInterface::class);
+        $taskIds = $db->setQuery(
+            $db->createQuery()
+                ->select($db->quoteName('id'))
+                ->from($db->quoteName('#__scheduler_tasks'))
+                ->where($db->quoteName('type') . ' = ' . $db->quote('autosave.cleanup'))
+        )->loadColumn();
+
+        foreach ($taskIds as $taskId) {
+            $task = new TaskTable($db);
+
+            if (!$task->load($taskId) || !$task->store()) {
+                $error = new \RuntimeException('Unable to update the autosave cleanup task asset.');
+                $this->collectError(__METHOD__, $error);
+                $installer->abort(Text::sprintf('JLIB_INSTALLER_ABORT_COMP_INSTALL_ROLLBACK', $error->getMessage()));
 
                 return false;
             }

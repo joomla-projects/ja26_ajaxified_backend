@@ -17,6 +17,8 @@ use Joomla\CMS\Extension\Service\Provider\ComponentDispatcherFactory;
 use Joomla\CMS\Extension\Service\Provider\MVCFactory;
 use Joomla\CMS\HTML\Registry;
 use Joomla\CMS\MVC\Factory\MVCFactoryInterface;
+use Joomla\Component\Menus\Administrator\Autosave\ItemAutosaveProvider;
+use Joomla\Component\Menus\Administrator\Autosave\MenuAutosaveProvider;
 use Joomla\Component\Menus\Administrator\Extension\MenusComponent;
 use Joomla\Component\Menus\Administrator\Helper\AssociationsHelper;
 use Joomla\DI\Container;
@@ -52,6 +54,10 @@ return new class () implements ServiceProviderInterface {
                 $component->setRegistry($container->get(Registry::class));
                 $component->setMVCFactory($container->get(MVCFactoryInterface::class));
                 $component->setAssociationExtension($container->get(AssociationExtensionInterface::class));
+                $autosaveProvider = new MenuAutosaveProvider($container->get(MVCFactoryInterface::class));
+                $component->setAutosaveProvider($autosaveProvider->getContext(), $autosaveProvider);
+                $itemProvider = new ItemAutosaveProvider($container->get(MVCFactoryInterface::class));
+                $component->setAutosaveProvider($itemProvider->getContext(), $itemProvider);
 
                 return $component;
             }

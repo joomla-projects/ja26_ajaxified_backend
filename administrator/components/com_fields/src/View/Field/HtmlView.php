@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Fields\Administrator\View\Field;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
 use Joomla\CMS\Language\Text;
@@ -30,6 +31,8 @@ use Joomla\Filesystem\Path;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * @var     \Joomla\CMS\Form\Form
      *
@@ -81,6 +84,27 @@ class HtmlView extends BaseHtmlView
         // Add form control fields
         $this->form
             ->addControlField('task');
+
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $item                  = clone $this->item;
+            $item->draftContext    = (string) $this->state->get('field.context');
+            if (empty($item->id)) {
+                $item->context = $item->draftContext;
+                $item->type    = (string) $this->form->getValue('type', null, '');
+            }
+            $this->form->addControlField('context', $item->context);
+
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_fields.field',
+                'formId'    => 'item-form',
+                'statusId'  => 'field-autosave-status',
+                'saveTasks' => ['field.apply', 'field.save', 'field.save2new', 'field.save2copy'],
+                'item'      => $item,
+                ]
+            );
+            $this->addAutosaveStatus();
+        }
 
         parent::display($tpl);
     }

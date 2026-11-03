@@ -11,8 +11,10 @@
 namespace Joomla\Component\Finder\Administrator\Controller;
 
 use Joomla\CMS\Application\CMSWebApplicationInterface;
+use Joomla\CMS\Autosave\DraftService;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\Router\Route;
 use Joomla\Utilities\ArrayHelper;
 
@@ -226,5 +228,17 @@ class FilterController extends FormController
         $this->postSaveHook($model, $validData);
 
         return true;
+    }
+    /**
+     * Reconcile private drafts after the authoritative native success hook.
+     *
+     * @inheritDoc
+     * @since  __DEPLOY_VERSION__
+     */
+    protected function postSaveHook(BaseDatabaseModel $model, $validData = [])
+    {
+        parent::postSaveHook($model, $validData);
+
+        DraftService::reconcileNativeModelSave($this->app, $this->input, $model, 'com_finder.filter', $this->getTask(), 'filter_id', []);
     }
 }

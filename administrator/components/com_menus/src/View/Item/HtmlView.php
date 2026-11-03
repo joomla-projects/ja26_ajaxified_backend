@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Menus\Administrator\View\Item;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Helper\ContentHelper;
@@ -31,6 +32,8 @@ use Joomla\Component\Menus\Administrator\Model\ItemModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The Form object
      *
@@ -140,6 +143,18 @@ class HtmlView extends BaseHtmlView
             $this->addToolbar();
         } else {
             $this->addModalToolbar();
+        }
+
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_menus.item',
+                'formId'    => 'item-form',
+                'statusId'  => 'item-autosave-status',
+                'saveTasks' => ['item.apply', 'item.save', 'item.save2new', 'item.save2copy', 'item.editAssociations'],
+                ]
+            );
+            $this->addAutosaveStatus();
         }
 
         parent::display($tpl);

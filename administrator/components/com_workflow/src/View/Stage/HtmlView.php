@@ -10,6 +10,7 @@
 
 namespace Joomla\Component\Workflow\Administrator\View\Stage;
 
+use Joomla\CMS\Autosave\DraftViewTrait;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -29,6 +30,8 @@ use Joomla\Component\Workflow\Administrator\Model\StageModel;
  */
 class HtmlView extends BaseHtmlView
 {
+    use DraftViewTrait;
+
     /**
      * The model state
      *
@@ -106,7 +109,26 @@ class HtmlView extends BaseHtmlView
 
         // Set the toolbar
         $this->addToolbar();
+        if (\in_array($this->getLayout(), ['edit', 'modal'], true)) {
+            $item                  = clone $this->item;
+            $item->draftExtension  = (string) $this->state->get('filter.extension');
+            if (empty($item->id)) {
+                $item->workflow_id = Factory::getApplication()->getInput()->getInt('workflow_id');
+            }
+            $this->form->addControlField('workflow_id', (string) $item->workflow_id);
+            $this->form->addControlField('extension', $item->draftExtension);
 
+            $this->prepareAutosave(
+                [
+                'context'   => 'com_workflow.stage',
+                'formId'    => 'workflow-form',
+                'statusId'  => 'stage-autosave-status',
+                'saveTasks' => ['stage.apply', 'stage.save', 'stage.save2new', 'stage.save2copy'],
+                'item'      => $item,
+                ]
+            );
+            $this->addAutosaveStatus();
+        }
         // Display the template
         parent::display($tpl);
     }
